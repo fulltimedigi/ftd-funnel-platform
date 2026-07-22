@@ -30,11 +30,28 @@ import { createSheetsSink, registerSink as registerSheetsEventSink } from "../an
 import { registerSink as registerGa4Sink } from "../analytics/ga4-sink.js";
 import { createResilientSink } from "./leadQueue.js";
 import * as analytics from "./analytics.js";
+import { validateConfig, formatValidationErrors } from "./validateConfig.js";
 
-export async function boot({ configUrl, mountEl }) {
+export async function boot({ configUrl, mountEl, schemaUrl }) {
   const res = await fetch(configUrl);
   const config = await res.json();
-  return createFunnel(config, mountEl);
+
+  // Executable schema: load the sibling _schema.json (or an override) and run it.
+  // If the schema can't be fetched, validation is skipped honestly — the funnel
+  // still boots, but we say so rather than pretend it was validated.
+  let schema = null;
+  const sUrl = schemaUrl || (typeof configUrl === "string" ? configUrl.replace(/[^/]+$/, "_schema.json") : null);
+  if (sUrl) {
+    try {
+      const sres = await fetch(sUrl);
+      if (sres && sres.ok) schema = await sres.json();
+      else console.warn("[ftd] schema not loaded — config validation skipped.");
+    } catch {
+      console.warn("[ftd] schema fetch failed — config validation skipped.");
+    }
+  }
+
+  return createFunnel(config, mountEl, { schema });
 }
 
 /**
@@ -59,6 +76,19 @@ function loadTheme(name) {
 
 export function createFunnel(config, mountEl, deps = {}) {
   const state = State.createState(config.id);
+
+  // Executable schema (ADR-0009): if a schema is supplied, validate the config and
+  // surface violations honestly. Non-blocking — the funnel still renders (the
+  // decision core + trust gate catch fatal cases), but the contract breach is
+  // logged and exposed via api.getValidation(). No schema → validation skipped.
+  let validation = null;
+  if (deps.schema) {
+    validation = validateConfig(config, deps.schema);
+    if (!validation.valid) {
+      console.warn(`[ftd] config "${config.id}" failed schema validation:\n${formatValidationErrors(validation)}`);
+    }
+  }
+
   // Injected transport (tests) is used raw; the default production Sheets sink is
   // wrapped in an offline outbox so a mid-submit network drop never loses the lead
   // and stranded leads are retried at boot / when the network returns (ADR-0006).
@@ -303,6 +333,8 @@ export function createFunnel(config, mountEl, deps = {}) {
     getState: () => state,
     getResolved: () => lastResolved,
     getTheme: () => theme,
+    // Schema-validation result ({valid, errors}), or null if no schema was supplied.
+    getValidation: () => validation,
     // test/drive handle for the lead form (null unless on the lead step)
     getLeadHandle: () =>
       leadHandle && {
