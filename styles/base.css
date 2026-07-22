@@ -140,3 +140,14 @@ body {
   color: var(--text-muted); font-family: inherit; font-size: 13px; text-decoration: underline; cursor: pointer;
 }
 .ftd-privacy { text-align: center; color: var(--text-muted); font-size: 12px; margin: 12px 0 0; }
+
+/* ─── Personas result layout (strengths / gaps / next-steps) ─── */
+.ftd-persona-section { margin: 16px 0; padding: 14px 16px; background: var(--surface, #fff); border-radius: var(--radius, 12px); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.06)); }
+.ftd-persona-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ftd-persona-icon { font-size: 20px; line-height: 1; }
+.ftd-persona-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text, #111); }
+.ftd-persona-list { margin: 0; padding-inline-start: 1.25rem; display: grid; gap: 6px; }
+.ftd-persona-item { color: var(--text-muted, #444); font-size: 14px; line-height: 1.5; }
+.ftd-persona-section.ftd-strengths { border-inline-start: 3px solid var(--success, #1a9d6a); }
+.ftd-persona-section.ftd-gaps { border-inline-start: 3px solid var(--warning, #d9820a); }
+.ftd-persona-section.ftd-actions { border-inline-start: 3px solid var(--primary, #4338ca); }

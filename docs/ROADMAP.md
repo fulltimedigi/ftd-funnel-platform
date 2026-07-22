@@ -16,7 +16,7 @@ Merge the two engines into one clean, tested engine (see ADR-0003).
 - [x] Port production **analytics** (working sheets + GA4 sinks) replacing v0 stubs; lifecycle events wired in `index.js` (ADR-0007).
 - [x] Port production **i18n-rtl** (Arabic numerals, LTR-forcing) replacing v0 stubs; real `rtl.css` wired into the shells (ADR-0008).
 - [x] Make the **JSON schema executable** at boot (dependency-free validator; ran it, fixed the primary-vs-contextual `becauseTemplate` drift it exposed) — ADR-0009.
-- [ ] Build the **`personas`** result layout (currently falls back).
+- [x] Build the **`personas`** result layout (strengths/gaps/next-steps; no longer falls back to tracks) — ADR-0010.
 - [ ] Fix carried bugs: mount-selector restart, `track-based` mode, missing theme, GA4 CSP.
 - [ ] Merge production's backend `Code.gs` (per-funnel isolation).
 - **Exit:** one engine, all strengths, no known bugs, `npm test` green, one demo funnel boots & renders.
