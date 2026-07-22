@@ -14,7 +14,7 @@ Merge the two engines into one clean, tested engine (see ADR-0003).
 - [x] Port production **lead capture** loop (offline outbox → POST → honest failure; retried at boot / on reconnect) — ADR-0006.
 - [x] Port production **error monitor** (PII masking) — Node-safe, test-covered (ADR-0005).
 - [x] Port production **analytics** (working sheets + GA4 sinks) replacing v0 stubs; lifecycle events wired in `index.js` (ADR-0007).
-- [ ] Port production **i18n-rtl** (numerals, LTR-forcing) replacing v0 stubs; ship real `rtl.css`.
+- [x] Port production **i18n-rtl** (Arabic numerals, LTR-forcing) replacing v0 stubs; real `rtl.css` wired into the shells (ADR-0008).
 - [ ] Make the **JSON schema executable** at boot (fix the "decorative schema" gap in both).
 - [ ] Build the **`personas`** result layout (currently falls back).
 - [ ] Fix carried bugs: mount-selector restart, `track-based` mode, missing theme, GA4 CSP.

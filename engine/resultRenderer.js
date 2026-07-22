@@ -22,6 +22,7 @@
 
 import { el } from "./dom.js";
 import { buildRecommendations } from "./recommend.js";
+import { localizeNum, formatPercent } from "./i18n-rtl.js";
 
 /* ----------------------------------------------------------- helpers */
 
@@ -83,11 +84,11 @@ function traitsBlock(primary) {
   return el("div", { class: "ftd-traits" }, primary.traits.map((t) => el("span", { class: "ftd-trait", text: t })));
 }
 
-function blendBlock(primary, secondary, proportion) {
+function blendBlock(primary, secondary, proportion, lang) {
   if (!secondary) return null;
   return el("p", {
     class: "ftd-blend",
-    text: `أنت في الأساس ${primary.name} (${proportion.primaryPct}%)، مع لمسة من ${secondary.name} (${proportion.secondaryPct}%).`,
+    text: `أنت في الأساس ${primary.name} (${formatPercent(proportion.primaryPct, lang)})، مع لمسة من ${secondary.name} (${formatPercent(proportion.secondaryPct, lang)}).`,
   });
 }
 
@@ -119,12 +120,13 @@ function renderTracks(ctx) {
   const archById = new Map((config.archetypes || []).map((a) => [a.id, a]));
   const extras = primary?.resultExtras || {};
   const copy = resultCopy(config);
+  const lang = config.lang;
 
   const children = [
     heroCard(primary, copy.eyebrow || "نتيجتك"),
     primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
     traitsBlock(primary),
-    blendBlock(primary, secondary, proportion),
+    blendBlock(primary, secondary, proportion, lang),
   ];
 
   // Details
@@ -163,7 +165,7 @@ function renderTracks(ctx) {
     return el("div", { class: "ftd-bar-row" }, [
       el("span", { class: "ftd-bar-name", text: (a?.icon ? a.icon + " " : "") + (a?.name || id) }),
       el("div", { class: "ftd-bar-track" }, [el("div", { class: "ftd-bar-fill", style: `width:${pct}%` })]),
-      el("span", { class: "ftd-bar-val", text: String(v) }),
+      el("span", { class: "ftd-bar-val", text: localizeNum(v, lang) }),
     ]);
   });
   children.push(
@@ -201,6 +203,7 @@ function renderCommerce(ctx) {
   const copy = resultCopy(config);
   const rcopy = copy; // result-scoped copy aliases below
   const recs = primary?.recommendations || {};
+  const lang = config.lang;
 
   // Decision-table funnels carry the Step-8 explanation engine (signal-gated
   // why/why-not, variant-correct recommendation). Generic funnels keep the
@@ -211,7 +214,7 @@ function renderCommerce(ctx) {
     heroCard(primary, copy.eyebrow || "بروفايلك"),
     primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
     traitsBlock(primary),
-    blendBlock(primary, secondary, proportion),
+    blendBlock(primary, secondary, proportion, lang),
   ];
 
   // Signature recommendation: variant-resolved for decision funnels.

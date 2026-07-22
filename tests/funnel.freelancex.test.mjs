@@ -98,13 +98,13 @@ check("hero renders headline", () => {
   assert.equal(api.getView(), "hero");
   assert.ok(root.textContent.includes("محتار تبدأ منين"));
 });
-check("start shows Q1 with progress '1 / 6'", () => {
+check("start shows Q1 with progress '١ / ٦' (Arabic-Indic numerals, lang=ar)", () => {
   const root = document.createElement("main");
   const api = createFunnel(config, root);
   api.start();
   assert.equal(api.getView(), "question");
   assert.ok(root.textContent.includes("كم وقت تقدر")); // Q1 text
-  assert.ok(root.textContent.includes("1 / 6")); // progress counter
+  assert.ok(root.textContent.includes("١ / ٦")); // progress counter, localized
   assert.ok(root.textContent.includes("الوقت")); // contextual label
 });
 

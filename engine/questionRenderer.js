@@ -18,7 +18,7 @@ import { el } from "./dom.js";
 import { renderProgress } from "./progress.js";
 
 export function renderQuestion(question, ctx) {
-  const { selectedOptionId, onSelect, onNext, onBack, isFirst, isLast, current, total, label } = ctx;
+  const { selectedOptionId, onSelect, onNext, onBack, isFirst, isLast, current, total, label, lang } = ctx;
 
   const options = (question.options || []).map((o) => {
     const selected = o.id === selectedOptionId;
@@ -40,7 +40,7 @@ export function renderQuestion(question, ctx) {
   });
 
   return el("section", { class: "ftd-screen ftd-question" }, [
-    renderProgress(current, total, label),
+    renderProgress(current, total, label, lang),
     !isFirst ? el("button", { class: "ftd-back", type: "button", onClick: onBack, text: "→ رجوع" }) : null,
     el("div", { class: "ftd-q-head" }, [
       question.label ? el("p", { class: "ftd-q-label", text: question.label }) : null,

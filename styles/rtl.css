@@ -1,11 +1,78 @@
 /*
- * styles/rtl.css — RTL-specific corrections.
+ * styles/rtl.css — RTL-specific corrections (ADR-0008).
+ * ---------------------------------------------------------------------------
+ * Loaded after base.css. Applies only when the root has dir="rtl" (Arabic is
+ * the default). base.css lays out with logical properties; this file holds the
+ * few direction-specific fixes dir="rtl" alone doesn't solve — chiefly the
+ * CRITICAL LTR email/phone inputs and mixed Arabic/Latin bidi.
  *
- * Responsibility (SPEC §7, §5): Arabic RTL is first-class. Hold the few
- * direction-specific fixes that dir="rtl" alone doesn't solve (badge/checkmark
- * positioning, LTR email/phone fields, logo direction).
- *
- * STATUS: foundation stub. To be added during build.
+ * Selectors target this engine's real `ftd-` class names (not the production
+ * engine's), so they actually match the rendered DOM.
  */
 
-/* TODO(v0.1): RTL corrections; .ltr-field { direction: ltr; } etc. */
+/* ─── CRITICAL: email & phone inputs stay LTR inside an RTL page ───
+   Also set inline via leadCapture.js / i18n-rtl.js; reinforced here for
+   resilience (e.g. if JS LTR-forcing hasn't run yet). */
+input[type="email"],
+input[type="tel"],
+input[name="email"],
+input[name="phone"],
+.ftd-input[dir="ltr"],
+[data-ltr] {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+/* ─── Step counter & blend line: keep numerals + separators clean ───
+   "١ / ٦" and "٦٤٪ … · ٣٦٪ …" render correctly regardless of surrounding
+   bidi context. */
+[dir="rtl"] .ftd-progress-step,
+[dir="rtl"] .ftd-blend {
+  unicode-bidi: plaintext;
+}
+
+/* ─── Score-distribution row: label · track · value ordering in RTL ─── */
+[dir="rtl"] .ftd-bar-row,
+[dir="rtl"] .ftd-progress-row {
+  flex-direction: row-reverse;
+}
+[dir="rtl"] .ftd-bar-val {
+  unicode-bidi: plaintext;
+}
+
+/* ─── Hero chips flow ─── */
+[dir="rtl"] .ftd-chips {
+  flex-direction: row-reverse;
+}
+
+/* ─── Option row: icon/label/description read right-to-left ─── */
+[dir="rtl"] .ftd-opt {
+  text-align: right;
+}
+
+/* ─── Mixed content: a Latin secondary name embedded in Arabic ─── */
+.ftd-card-name2 {
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* ─── Price fields often mix currency + Latin digits ─── */
+.ftd-price-orig,
+.ftd-price-sale {
+  unicode-bidi: plaintext;
+}
+
+/* ─── Lead form: labels, status and privacy text align to the right ─── */
+[dir="rtl"] .ftd-label,
+[dir="rtl"] .ftd-lead-status,
+[dir="rtl"] .ftd-privacy {
+  text-align: right;
+}
+
+/* ─── Detail rows: accent border on the reading (right) side ─── */
+[dir="rtl"] .ftd-detail {
+  border-right: 3px solid var(--primary, currentColor);
+  border-left: none;
+  padding-right: 1rem;
+  padding-left: 0;
+}

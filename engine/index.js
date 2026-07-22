@@ -137,6 +137,7 @@ export function createFunnel(config, mountEl, deps = {}) {
         current,
         total,
         label,
+        lang: config.lang,
         onSelect: selectOption,
         onNext: goNext,
         onBack: goBack,
