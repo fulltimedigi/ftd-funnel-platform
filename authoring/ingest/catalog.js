@@ -66,6 +66,7 @@ export function buildCatalog(lists, opts = {}) {
   for (const p of products) byMethod[p.method] = (byMethod[p.method] || 0) + 1;
 
   const withPrice = products.filter((p) => typeof p.price === "number").length;
+  const avgConf = products.length ? products.reduce((s, p) => s + (p.confidence || 0), 0) / products.length : 0;
   const report = {
     total: all.length,
     usable: products.length,
@@ -74,6 +75,7 @@ export function buildCatalog(lists, opts = {}) {
     byMethod,
     withPrice,
     coverage: products.length ? Math.round((withPrice / products.length) * 100) : 0, // % priced
+    avgConfidence: Math.round(avgConf * 100) / 100,
     thin: products.length < thinThreshold,
   };
   return { products, report };

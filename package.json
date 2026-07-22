@@ -27,6 +27,7 @@
     "test:backend": "node tests/backend.test.mjs",
     "test:ingest": "node tests/ingest.compliance.test.mjs",
     "test:ingest-extract": "node tests/ingest.extract.test.mjs",
-    "test:ingest-pipeline": "node tests/ingest.pipeline.test.mjs"
+    "test:ingest-pipeline": "node tests/ingest.pipeline.test.mjs",
+    "ingest": "node authoring/ingest/run.mjs"
   }
 }

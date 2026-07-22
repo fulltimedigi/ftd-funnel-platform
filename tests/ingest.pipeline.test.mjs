@@ -13,6 +13,7 @@ const { parseSitemap, looksLikeProductUrl } = await import("../authoring/ingest/
 const { buildCatalog } = await import("../authoring/ingest/catalog.js");
 const { makeProduct } = await import("../authoring/ingest/product.js");
 const { ingestCatalog } = await import("../authoring/ingest/index.js");
+const { formatReport } = await import("../authoring/ingest/report.js");
 
 let passed = 0;
 function check(name, fn) {
@@ -91,6 +92,10 @@ await (async () => {
     assert.ok(!calls.includes("https://shop.example/products.json?limit=250&page=2"), "no page 2 after a short page");
     assert.ok(res.notes.some((n) => /skipping sitemap/i.test(n)));
     assert.ok(res.products.every((p) => /^https:\/\/shop\.example\/products\//.test(p.url)), "real product URLs");
+    // human-readable report reflects the real numbers
+    const rep = formatReport(res);
+    assert.ok(rep.includes("Usable products : 3"));
+    assert.ok(rep.includes("shopify=3"));
   });
 
   console.log("\ningest — JSON-LD + sitemap path, with dedupe across methods:");

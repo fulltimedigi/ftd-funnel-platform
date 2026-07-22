@@ -26,10 +26,11 @@ Merge the two engines into one clean, tested engine (see ADR-0003).
 Brand URL → a structured, **real** product catalog. This is the capability no
 competitor has generally.
 
-- [ ] Research + ADR: crawling/extraction approach (sitemap, product-schema/JSON-LD, HTML heuristics, LLM extraction), robots/ToS compliance, rate limits.
-- [ ] Extractor → normalized catalog: `{name, attributes, price, url, differentiators}` per product, with provenance (source URL) so nothing is fabricated.
-- [ ] Coverage + confidence report; graceful fallback when a site is thin (vertical templates).
-- **Exit:** paste a real brand URL → a verified catalog JSON with real product URLs.
+- [x] Research + ADR: crawling/extraction approach (sitemap, product-schema/JSON-LD, HTML heuristics, LLM extraction), robots/ToS compliance, rate limits — ADR-0013.
+- [x] Extractor → normalized catalog: `{name, attributes, price, url, differentiators}` per product, with provenance (source URL) so nothing is fabricated — `authoring/ingest/` (JSON-LD + Shopify + sitemap), offline-tested.
+- [x] Coverage + confidence report + thin-site flag (`report.js`); the vertical-template *fallback catalog* itself lands with Stage 2 authoring.
+- [ ] HTML-heuristic + LLM extraction fallbacks for unstructured sites (own ADR, per ADR-0013).
+- **Exit:** paste a real brand URL → a verified catalog JSON with real product URLs — pipeline + `npm run ingest` shipped; **live smoke test pending an operator-authorized URL**.
 
 ## Stage 2 — AI authoring  ·  *the value*
 
