@@ -1,0 +1,333 @@
+{
+  "_note": "Houseplant Advisor — built per the FullTimeDigi standard + engine reference, zero engine edits. Decision-table funnel. Pet-toxicity is the safety/disqualification gate; 'readiness' is a derived gate (care × experience, low-light clamp); 'thriving' short-circuits to advanced.",
+  "id": "houseplant-advisor",
+  "brand": { "name": "نَبتة", "logo": "", "tagline": "مرشد اختيار نبتتك المنزلية" },
+  "theme": "platform-clean",
+  "lang": "ar",
+  "hero": {
+    "eyebrow": "٥ أسئلة · دقيقة واحدة",
+    "headline": "أي نبتة منزلية تناسبك؟",
+    "headlineAccent": "",
+    "subtext": "جاوب على أسئلة سريعة ونوصّلك بالنبتة الأنسب لمنزلك وحيواناتك ووقتك — مع شرح واضح لماذا هي الأنسب.",
+    "chips": ["٥ أسئلة", "آمن للحيوانات", "نتيجة فورية"],
+    "startLabel": "ابدأ ←"
+  },
+
+  "scoring": { "mode": "decision-table" },
+
+  "signals": [
+    { "id": "experience", "role": "decision", "required": true, "source": "q_experience",
+      "domain": ["none", "struggled", "some", "thriving"],
+      "map": { "opt_none": "none", "opt_struggled": "struggled", "opt_some": "some", "opt_thriving": "thriving" } },
+    { "id": "care", "role": "decision", "required": true, "source": "q_care", "default": "unsure",
+      "domain": ["minimal", "regular", "unsure"],
+      "map": { "opt_minimal": "minimal", "opt_regular": "regular", "opt_careunsure": "unsure" } },
+    { "id": "light", "role": "decision", "required": true, "source": "q_light",
+      "domain": ["low", "bright"],
+      "map": { "opt_low": "low", "opt_bright": "bright" } },
+    { "id": "pets", "role": "decision", "required": true, "source": "q_pets",
+      "domain": ["pets", "none"],
+      "map": { "opt_pets": "pets", "opt_nopets": "none" } },
+    { "id": "goal", "role": "presentation", "required": false, "default": "unsure", "source": "q_goal",
+      "domain": ["aesthetics", "air_quality", "hobby", "gift", "unsure"],
+      "map": { "opt_aesthetics": "aesthetics", "opt_air": "air_quality", "opt_hobby": "hobby", "opt_gift": "gift" } }
+  ],
+
+  "derivedSignals": [
+    { "id": "DS_pets", "from": ["pets"], "rule": "identity", "domain": ["pets", "none"] },
+    { "id": "DS_light", "from": ["light"], "rule": "identity", "domain": ["low", "bright"] },
+    {
+      "id": "DS_tier", "from": ["experience"], "rule": "cases",
+      "domain": ["new", "growing", "expert"], "default": "new",
+      "cases": [
+        { "when": { "experience": "thriving" }, "value": "expert" },
+        { "when": { "experience": "some" }, "value": "growing" }
+      ]
+    },
+    {
+      "id": "DS_ready", "from": ["care", "experience", "light"], "rule": "cases",
+      "domain": ["easy", "demanding", "unsure"], "default": "easy",
+      "cases": [
+        { "when": { "care": "unsure" }, "value": "unsure" },
+        { "when": { "care": "regular", "experience": ["some", "thriving"] }, "value": "demanding" }
+      ],
+      "clamp": [ { "when": { "light": "low" }, "ifValue": "demanding", "to": "easy" } ]
+    }
+  ],
+
+  "decisionTable": [
+    { "id": "r1_expert",          "when": { "DS_tier": "expert" },                          "result": "EXPERT" },
+    { "id": "r2_pets_demanding",  "when": { "DS_pets": "pets", "DS_ready": "demanding" },    "result": "SAFE_FUSSY" },
+    { "id": "r3_pets_easy",       "when": { "DS_pets": "pets", "DS_ready": ["easy", "unsure"] }, "result": "SAFE_EASY" },
+    { "id": "r4_demanding",       "when": { "DS_ready": "demanding" },                       "result": "FUSSY" },
+    { "id": "r5_easy_low",        "when": { "DS_ready": "easy", "DS_light": "low" },         "result": "LOWLIGHT" },
+    { "id": "r6_easy_bright",     "when": { "DS_ready": "easy", "DS_light": "bright" },      "result": "BRIGHT" },
+    { "id": "r7_unsure",          "when": { "DS_ready": "unsure" },                          "result": "SAFESTART" },
+    { "id": "r8_safety_default",  "when": {},                                                "result": "SAFESTART" }
+  ],
+
+  "resultLayout": "commerce",
+
+  "archetypes": [
+    {
+      "id": "EXPERT",
+      "name": "نباتات نادرة + إكثار",
+      "icon": "🌿",
+      "description": "لديك مجموعة مزدهرة — الخطوة التالية نباتات نادرة أو إكثار ما لديك.",
+      "recommendations": {
+        "primary": {
+          "name": "نباتات نادرة + إكثار", "nameSecondary": "للهواة المتقدّمين",
+          "price": "متغيّر", "url": "https://example.com/plants/rare",
+          "becauseTemplate": "لديك خبرة ناجحة بالفعل، فالقيمة في التحدي التالي: أنواع نادرة أو إكثار مجموعتك."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          { "needs": { "DS_pets": "pets" },
+            "name": "نباتات نادرة آمنة للحيوانات", "url": "https://example.com/plants/rare-safe",
+            "becauseTemplate": "لديك خبرة وحيوانات أليفة — اخترنا أنواعاً نادرة غير سامة مثل كالاثيا وهويا.",
+            "nextAction": "اقتنِ نوعاً نادراً آمناً، أو ابدأ إكثار مجموعتك." }
+        ],
+        "why": [ { "needs": { "DS_tier": "expert" }, "claim": "مجموعتك المزدهرة تثبت أنك تجاوزت مستوى المبتدئ." } ],
+        "whyNot": [ { "name": "نبات مبتدئ", "needs": { "DS_tier": "expert" }, "claim": "النباتات السهلة لم تعد تمثّل تحدياً لك." } ],
+        "nextAction": "اختر نوعاً نادراً أو ابدأ إكثار ما لديك."
+      }
+    },
+    {
+      "id": "SAFE_FUSSY",
+      "name": "كالاثيا",
+      "icon": "🌺",
+      "description": "أنت مستعد لنبات مميّز — وآمن تماماً لحيواناتك.",
+      "recommendations": {
+        "primary": {
+          "name": "كالاثيا (Calathea)", "nameSecondary": "آمنة للحيوانات",
+          "price": "نبتة فقط / مع طقم", "url": "https://example.com/plants/calathea",
+          "becauseTemplate": "أنت مستعد لنبات يحتاج عناية، وكالاثيا مذهلة وآمنة تماماً للقطط والكلاب."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS_ready": "demanding" }, "claim": "وقت العناية والخبرة لديك يكفيان لنبات مميّز." },
+          { "needs": { "DS_pets": "pets" }, "claim": "كالاثيا غير سامة لحيواناتك." }
+        ],
+        "whyNot": [ { "name": "مونستيرا", "needs": { "DS_pets": "pets" }, "claim": "استبعدنا المونستيرا وغيرها لأنها سامة للحيوانات." } ],
+        "nextAction": "اقتنِ كالاثيا واحرص على رطوبة جيدة."
+      }
+    },
+    {
+      "id": "SAFE_EASY",
+      "name": "نبات العنكبوت",
+      "icon": "🕸️",
+      "description": "نبات سهل، قوي، وآمن لحيواناتك.",
+      "recommendations": {
+        "primary": {
+          "name": "نبات العنكبوت (Spider Plant)", "nameSecondary": "آمن للحيوانات",
+          "price": "نبتة فقط / مع طقم", "url": "https://example.com/plants/spider",
+          "becauseTemplate": "تريد بداية سهلة وآمنة — ونبات العنكبوت يتحمّل الإهمال وغير سام للحيوانات."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          { "needs": { "DS_tier": "growing" },
+            "name": "نبات العنكبوت — وسّع مجموعتك الآمنة",
+            "becauseTemplate": "أبقيت نبتة حية من قبل — نبات العنكبوت سهل وجاهز لتوسّع مجموعتك الآمنة.",
+            "nextAction": "أضِفه ووسّع مجموعتك الآمنة." }
+        ],
+        "why": [
+          { "needs": { "DS_ready": "easy" }, "claim": "يناسب وقت العناية المتاح لديك." },
+          { "needs": { "DS_pets": "pets" }, "claim": "غير سام للقطط والكلاب." }
+        ],
+        "whyNot": [ { "name": "البوثوس", "needs": { "DS_pets": "pets" }, "claim": "استبعدنا النباتات السامة كالبوثوس بسبب وجود حيوانات." } ],
+        "nextAction": "اقتنِ نبات العنكبوت."
+      }
+    },
+    {
+      "id": "FUSSY",
+      "name": "مونستيرا",
+      "icon": "🪴",
+      "description": "أنت مستعد لنبات مميّز يلفت الأنظار.",
+      "recommendations": {
+        "primary": {
+          "name": "مونستيرا (Monstera)", "nameSecondary": "نبات مميّز",
+          "price": "نبتة فقط / مع طقم", "url": "https://example.com/plants/monstera",
+          "becauseTemplate": "وقت عنايتك وخبرتك وإضاءتك الساطعة تناسب نباتاً مميّزاً كالمونستيرا."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS_ready": "demanding" }, "claim": "لديك العناية والخبرة لنبات يحتاج اهتماماً." },
+          { "needs": { "DS_light": "bright" }, "claim": "إضاءتك الساطعة تناسب المونستيرا." }
+        ],
+        "whyNot": [ { "name": "نبات سهل", "needs": { "DS_ready": "demanding" }, "claim": "النباتات السهلة أقل من طموحك الحالي." } ],
+        "nextAction": "اقتنِ مونستيرا واحرص على ضوء غير مباشر ساطع."
+      }
+    },
+    {
+      "id": "LOWLIGHT",
+      "name": "نبات الثعبان",
+      "icon": "🐍",
+      "description": "نبات شبه لا يُقتل، مثالي للإضاءة المنخفضة.",
+      "recommendations": {
+        "primary": {
+          "name": "نبات الثعبان (Snake Plant)", "nameSecondary": "للإضاءة المنخفضة",
+          "price": "نبتة فقط / مع طقم", "url": "https://example.com/plants/snake",
+          "becauseTemplate": "إضاءتك منخفضة ووقت عنايتك محدود — نبات الثعبان يزدهر في الظل وقلّة الري."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          { "needs": { "DS_tier": "growing" },
+            "name": "نبات الثعبان — وسّع مجموعتك",
+            "becauseTemplate": "أبقيت نبتة حية — نبات الثعبان سهل وجاهز لتوسّع مجموعتك.",
+            "nextAction": "أضِفه ووسّع مجموعتك." }
+        ],
+        "why": [
+          { "needs": { "DS_light": "low" }, "claim": "يتحمّل الإضاءة المنخفضة في مكانك." },
+          { "needs": { "DS_ready": "easy" }, "claim": "يناسب وقت العناية المحدود لديك." }
+        ],
+        "whyNot": [ { "name": "العصاريات", "needs": { "DS_light": "low" }, "claim": "العصاريات تحتاج شمساً ساطعة لا تتوفّر في مكانك." } ],
+        "nextAction": "اقتنِ نبات الثعبان."
+      }
+    },
+    {
+      "id": "BRIGHT",
+      "name": "عصاريات",
+      "icon": "🌵",
+      "description": "إضاءة ساطعة وعناية قليلة — العصاريات لك.",
+      "recommendations": {
+        "primary": {
+          "name": "العصاريات (Succulents)", "nameSecondary": "للإضاءة الساطعة",
+          "price": "نبتة فقط / تشكيلة", "url": "https://example.com/plants/succulents",
+          "becauseTemplate": "إضاءتك ساطعة ووقتك محدود — العصاريات تحب الشمس وتحتاج رياً نادراً."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          { "needs": { "DS_tier": "growing" },
+            "name": "العصاريات — اجمع تشكيلة",
+            "becauseTemplate": "أبقيت نبتة حية — وسّع بتشكيلة عصاريات متنوعة.",
+            "nextAction": "اجمع تشكيلة عصاريات." }
+        ],
+        "why": [
+          { "needs": { "DS_light": "bright" }, "claim": "إضاءتك الساطعة مثالية للعصاريات." },
+          { "needs": { "DS_ready": "easy" }, "claim": "تحتاج رياً نادراً يناسب وقتك." }
+        ],
+        "whyNot": [ { "name": "نباتات الظل", "needs": { "DS_light": "bright" }, "claim": "نباتات الظل تتمدّد وتضعف تحت إضاءتك الساطعة." } ],
+        "nextAction": "اقتنِ عصارية أو تشكيلة."
+      }
+    },
+    {
+      "id": "SAFESTART",
+      "name": "البوثوس",
+      "icon": "🌱",
+      "description": "لم نخمّن مستواك — إليك نباتاً متسامحاً للبداية.",
+      "recommendations": {
+        "primary": {
+          "name": "البوثوس (Pothos)", "nameSecondary": "الأكثر تسامحاً",
+          "price": "نبتة فقط / مع طقم", "url": "https://example.com/plants/pothos",
+          "becauseTemplate": "وقت عنايتك لم يكن واضحاً، فاخترنا أكثر النباتات تسامحاً — البوثوس ينمو في ظروف متنوعة."
+        },
+        "contextual": [
+          { "name": "تغليف هدية + بطاقة عناية", "nameSecondary": "للإهداء",
+            "price": "إضافة", "url": "https://example.com/plants/gift",
+            "needs": { "goal": "gift" },
+            "becauseTemplate": "بما أنها هدية، أضِف تغليفاً أنيقاً وبطاقة عناية بسيطة." }
+        ]
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS_ready": "unsure" }, "claim": "لم تتّضح كمية العناية المتاحة، فلن نخاطر بنبات صعب." },
+          { "needs": {}, "claim": "البوثوس يسامح الإهمال والإضاءة المتغيّرة، فهو آمن للبداية." }
+        ],
+        "whyNot": [ { "name": "كالاثيا", "needs": { "DS_ready": "unsure" }, "claim": "النباتات الصعبة تحتاج التزاماً لم نتأكد منه بعد." } ],
+        "nextAction": "ابدأ بالبوثوس، وراقب كيف تتعامل معه."
+      }
+    }
+  ],
+
+  "questions": [
+    {
+      "id": "q_experience",
+      "label": "السؤال الأول",
+      "text": "ما خبرتك مع النباتات المنزلية؟",
+      "options": [
+        { "id": "opt_none", "icon": "🌱", "label": "لم أربِّ نبتة من قبل" },
+        { "id": "opt_struggled", "icon": "🥀", "label": "حاولت لكنها ماتت" },
+        { "id": "opt_some", "icon": "🪴", "label": "أبقيت نبتة أو اثنتين على قيد الحياة" },
+        { "id": "opt_thriving", "icon": "🌿", "label": "لديّ مجموعة مزدهرة", "next": "q_pets" }
+      ]
+    },
+    {
+      "id": "q_care",
+      "label": "السؤال الثاني",
+      "text": "كم وقتاً واقعياً تستطيع تخصيصه للعناية؟",
+      "hint": "كن واقعياً — أغلب النباتات تموت من الإفراط في الري لا من الإهمال.",
+      "options": [
+        { "id": "opt_minimal", "icon": "🕐", "label": "أقل ما يمكن (أنساها أحياناً)" },
+        { "id": "opt_regular", "icon": "🗓️", "label": "عناية منتظمة (لا أمانع روتيناً)" },
+        { "id": "opt_careunsure", "icon": "❓", "label": "لست متأكداً" }
+      ]
+    },
+    {
+      "id": "q_light",
+      "label": "السؤال الثالث",
+      "text": "كيف إضاءة المكان الذي ستضع فيه النبتة؟",
+      "options": [
+        { "id": "opt_low", "icon": "🌥️", "label": "منخفضة أو غير مباشرة" },
+        { "id": "opt_bright", "icon": "☀️", "label": "ساطعة (قرب نافذة مشمسة)" }
+      ]
+    },
+    {
+      "id": "q_pets",
+      "label": "السؤال الرابع",
+      "text": "هل لديك قطط أو كلاب في المنزل؟",
+      "hint": "بعض النباتات الشائعة سامة للحيوانات — لن نوصي بها إن كان لديك حيوان.",
+      "options": [
+        { "id": "opt_pets", "icon": "🐾", "label": "نعم، لديّ حيوانات أليفة" },
+        { "id": "opt_nopets", "icon": "🚫", "label": "لا" }
+      ]
+    },
+    {
+      "id": "q_goal",
+      "label": "السؤال الخامس",
+      "text": "ما هدفك من النبتة؟ (اختياري)",
+      "hint": "لا يغيّر النبتة الموصى بها — فقط طريقة الشرح والإضافات.",
+      "options": [
+        { "id": "opt_aesthetics", "icon": "✨", "label": "ديكور وجمال" },
+        { "id": "opt_air", "icon": "🌬️", "label": "تنقية الهواء" },
+        { "id": "opt_hobby", "icon": "🌟", "label": "هواية جديدة" },
+        { "id": "opt_gift", "icon": "🎁", "label": "هدية لشخص" }
+      ]
+    }
+  ],
+
+  "leadForm": {
+    "gated": true,
+    "skippable": true,
+    "fields": [
+      { "name": "name", "label": "الاسم", "type": "text", "required": true },
+      { "name": "email", "label": "البريد الإلكتروني", "type": "email", "required": true },
+      { "name": "phone", "label": "رقم الجوال (اختياري)", "type": "tel", "required": false }
+    ],
+    "privacyNote": "🔒 بياناتك آمنة ولن تُشارك مع أي جهة.",
+    "submitLabel": "اعرض نبتتي ✦"
+  },
+
+  "cta": { "primaryLabel": "تسوّق نباتاتك ←", "primaryUrl": "https://example.com/plants", "utm": "" },
+
+  "analytics": { "sinks": ["sheets"], "sheetsEndpoint": "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE" },
+
+  "copy": {
+    "loaderText": "نحلّل إجاباتك…",
+    "progressLabels": ["خبرتك", "وقتك", "الإضاءة", "الحيوانات", "هدفك"],
+    "restartLabel": "↺ ابدأ من جديد",
+    "result": {
+      "eyebrow": "نبتتك",
+      "recommendationTitle": "نوصيك بـ",
+      "whyTitle": "لماذا تناسبك",
+      "whyNotTitle": "لماذا ليست غيرها",
+      "nextTitle": "الخطوة التالية",
+      "contextualTitle": "قد يعجبك أيضاً"
+    }
+  }
+}

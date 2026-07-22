@@ -1,0 +1,382 @@
+{
+  "_note": "PM Certification Advisor — full runnable funnel. decision-table mode. Realizes frozen Result Architecture v3 (Steps 1-9). Arabic-first. id-level logic is language-independent; copy is Arabic.",
+  "id": "pm-certification-advisor",
+  "brand": { "name": "بكه للتعليم", "logo": "", "tagline": "مساعد اختيار شهادتك في إدارة المشاريع" },
+  "theme": "platform-clean",
+  "lang": "ar",
+  "hero": {
+    "eyebrow": "٥ أسئلة · ٩٠ ثانية",
+    "headline": "محتار بين شهادات إدارة المشاريع؟",
+    "headlineAccent": "",
+    "subtext": "جاوب على أسئلة سريعة ونوصّلك للشهادة الأنسب لك — مع شرح واضح لماذا هي الأنسب، ولماذا ليست غيرها.",
+    "chips": ["٥ أسئلة", "نتيجة فورية", "شرح لكل توصية"],
+    "startLabel": "ابدأ الآن ←"
+  },
+
+  "scoring": { "mode": "decision-table" },
+
+  "signals": [
+    { "id": "credential", "role": "decision", "required": true, "source": "q_credential",
+      "domain": ["none", "capm", "prince2_foundation", "pmp_plus", "other_non_pm"],
+      "map": { "opt_none": "none", "opt_capm": "capm", "opt_prince2f": "prince2_foundation", "opt_pmp": "pmp_plus" } },
+    { "id": "qualification", "role": "decision", "required": true, "source": "q_qualification",
+      "domain": ["diploma", "bachelor_plus"],
+      "map": { "opt_diploma": "diploma", "opt_bachelor": "bachelor_plus" } },
+    { "id": "hours", "role": "decision", "required": true, "source": "q_hours",
+      "domain": ["lt_4500", "ge_4500_lt_7500", "ge_7500", "unsure"],
+      "map": { "opt_lt4500": "lt_4500", "opt_4500_7499": "ge_4500_lt_7500", "opt_ge7500": "ge_7500", "opt_unsure": "unsure" } },
+    { "id": "environment", "role": "decision", "required": true, "source": "q_environment",
+      "domain": ["private", "government", "construction", "not_yet_working"],
+      "map": { "opt_private": "private", "opt_gov": "government", "opt_construction": "construction", "opt_notyet": "not_yet_working" } },
+    { "id": "goal", "role": "presentation", "required": false, "default": "unsure", "source": "q_goal",
+      "domain": ["promotion", "mobility", "from_zero", "corporate", "unsure"],
+      "map": { "opt_promotion": "promotion", "opt_mobility": "mobility", "opt_fromzero": "from_zero", "opt_corporate": "corporate" } }
+  ],
+
+  "derivedSignals": [
+    { "id": "DS1", "from": ["qualification"], "rule": "identity", "domain": ["diploma", "bachelor_plus"] },
+    {
+      "id": "DS2", "from": ["qualification", "hours", "environment"], "rule": "cases",
+      "domain": ["meets", "below", "unsure"], "default": "below",
+      "cases": [
+        { "when": { "hours": "unsure" }, "value": "unsure" },
+        { "when": { "qualification": "bachelor_plus", "hours": ["ge_4500_lt_7500", "ge_7500"] }, "value": "meets" },
+        { "when": { "qualification": "diploma", "hours": "ge_7500" }, "value": "meets" }
+      ],
+      "clamp": [ { "when": { "environment": "not_yet_working" }, "ifValue": "meets", "to": "below" } ]
+    },
+    { "id": "DS3", "from": ["environment"], "rule": "identity", "domain": ["private", "government", "construction", "not_yet_working"] },
+    {
+      "id": "DS5", "from": ["credential"], "rule": "cases",
+      "domain": ["none", "entry_level", "pmp_plus"], "default": "none",
+      "cases": [
+        { "when": { "credential": "pmp_plus" }, "value": "pmp_plus" },
+        { "when": { "credential": ["capm", "prince2_foundation"] }, "value": "entry_level" }
+      ]
+    }
+  ],
+
+  "decisionTable": [
+    { "id": "r1_holds_pmp",        "when": { "DS5": "pmp_plus" },                                          "result": "R6" },
+    { "id": "r2_entry_constr",     "when": { "DS5": "entry_level", "DS2": "meets", "DS3": "construction" }, "result": "R4" },
+    { "id": "r3_entry_meets",      "when": { "DS5": "entry_level", "DS2": "meets" },                        "result": "R3" },
+    { "id": "r4_entry_prog_bach",  "when": { "DS5": "entry_level", "DS2": ["below", "unsure"], "DS1": "bachelor_plus" }, "result": "R1" },
+    { "id": "r5_entry_prog_dip",   "when": { "DS5": "entry_level", "DS2": ["below", "unsure"], "DS1": "diploma" },       "result": "R2" },
+    { "id": "r6_none_constr",      "when": { "DS5": "none", "DS2": "meets", "DS3": "construction" },        "result": "R4" },
+    { "id": "r7_none_meets",       "when": { "DS5": "none", "DS2": "meets" },                               "result": "R3" },
+    { "id": "r8_none_gov_entry",   "when": { "DS5": "none", "DS3": "government", "DS2": ["below", "unsure"] }, "result": "R5" },
+    { "id": "r9_none_below_bach",  "when": { "DS5": "none", "DS2": "below", "DS1": "bachelor_plus" },        "result": "R1" },
+    { "id": "r10_none_below_dip",  "when": { "DS5": "none", "DS2": "below", "DS1": "diploma" },              "result": "R2" },
+    { "id": "r11_none_unsure",     "when": { "DS5": "none", "DS2": "unsure" },                              "result": "R7" },
+    { "id": "r12_safety_default",  "when": {},                                                              "result": "R7" }
+  ],
+
+  "resultLayout": "commerce",
+
+  "archetypes": [
+    {
+      "id": "R1",
+      "name": "CAPM® — مسارك نحو PMP",
+      "icon": "🎯",
+      "description": "أنت على الطريق إلى PMP، وأذكى خطوة أولى هي الشهادة التي تفتح هذا الباب.",
+      "recommendations": {
+        "primary": {
+          "name": "CAPM®",
+          "nameSecondary": "Certified Associate in Project Management — دراسة ذاتية",
+          "price": "$94", "originalPrice": "$311",
+          "url": "https://bakkah.com/ar/capm-self",
+          "becauseTemplate": "‏CAPM لا تشترط ساعات خبرة، فيمكنك الحصول عليها الآن — ومع البكالوريوس فهي توثّق بدايتك نحو PMP التي تتطلب ٤٬٥٠٠ ساعة قيادة مشاريع."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          {
+            "needs": { "DS5": "entry_level" },
+            "name": "واصِل نحو PMP", "price": "—", "originalPrice": "",
+            "becauseTemplate": "أنت تحمل بالفعل شهادة تأسيسية في إدارة المشاريع، فإضافة شهادة تأسيسية أخرى لا تقدّم كثيراً — المكسب التالي هو توثيق ساعات القيادة التي تفتح لك PMP.",
+            "nextAction": "تابِع توثيق ساعات قيادتك، وابدأ التحضير لاختبار PMP عند اقترابك من ٤٬٥٠٠ ساعة."
+          }
+        ],
+        "why": [
+          { "needs": { "DS2": "below" }, "claim": "ساعات قيادتك للمشاريع لا تزال دون متطلب PMP." },
+          { "needs": { "DS2": "unsure" }, "claim": "إلى أن تتأكد من ساعاتك، تبقى CAPM البداية الآمنة بلا مخاطرة." },
+          { "needs": { "DS5": "none" }, "claim": "‏CAPM لا تتطلب خبرة سابقة، فلا شيء يمنعك من الحصول عليها الآن." }
+        ],
+        "whyNot": [
+          { "name": "PMP®", "needs": { "DS2": "below" }, "claim": "‏PMP تتطلب ٤٬٥٠٠ ساعة قيادة لم توثّقها بعد." },
+          { "name": "PMP®", "needs": { "DS2": "unsure" }, "claim": "لن نوجّهك إلى PMP قبل تأكيد ساعات أهليتك." }
+        ],
+        "nextAction": "سجّل في CAPM دراسة ذاتية ($94)."
+      }
+    },
+    {
+      "id": "R2",
+      "name": "CAPM® — الأساس",
+      "icon": "🧱",
+      "description": "ابنِ أساساً معتمداً دولياً من PMI تقف عليه.",
+      "recommendations": {
+        "primary": {
+          "name": "CAPM®",
+          "nameSecondary": "Certified Associate in Project Management — دراسة ذاتية",
+          "price": "$94", "originalPrice": "$311",
+          "url": "https://bakkah.com/ar/capm-self",
+          "becauseTemplate": "‏CAPM لا تشترط ساعات خبرة، فيمكنك الحصول على شهادة PMI معتمدة دولياً الآن."
+        },
+        "contextual": [
+          {
+            "name": "باقة المسار المهني",
+            "nameSecondary": "منسّق مشاريع → مدير مشاريع",
+            "price": "$590+", "url": "https://bakkah.com/ar/bundles/career-path",
+            "needs": { "goal": "from_zero" },
+            "becauseTemplate": "بما أنك تبدأ من الصفر، فإن مساراً متدرّجاً متعدد الدورات ينقلك من منسّق إلى مدير بدل اختبار واحد."
+          }
+        ]
+      },
+      "resultExtras": {
+        "variants": [
+          {
+            "needs": { "DS5": "entry_level" },
+            "name": "واصِل نحو مستواك التالي", "price": "—",
+            "becauseTemplate": "أنت تحمل شهادة تأسيسية بالفعل، فبدل تكرارها ابنِ الخبرة التي تتطلبها شهادتك التالية.",
+            "nextAction": "وثّق ساعات مشاريعك نحو شهادتك التالية."
+          }
+        ],
+        "why": [
+          { "needs": { "DS1": "diploma" }, "claim": "مع الدبلوم، ستتطلب PMP ٧٬٥٠٠ ساعة قيادة — طريق طويل؛ أما CAPM فتعتمدك فوراً." },
+          { "needs": { "DS2": "below" }, "claim": "ساعات قيادتك الموثّقة دون متطلب PMP." }
+        ],
+        "whyNot": [
+          { "name": "PMP®", "needs": { "DS1": "diploma" }, "claim": "لحاملي الدبلوم تتطلب PMP ٧٬٥٠٠ ساعة قيادة — ليست خطوة قريبة." }
+        ],
+        "nextAction": "سجّل في CAPM دراسة ذاتية ($94)."
+      }
+    },
+    {
+      "id": "R3",
+      "name": "PMP®",
+      "icon": "🏆",
+      "description": "أنت مؤهل لأكثر شهادات إدارة المشاريع اعترافاً في العالم.",
+      "recommendations": {
+        "primary": {
+          "name": "PMP®",
+          "nameSecondary": "Project Management Professional",
+          "price": "$270 (مباشر) / $395 (باقة نجاح الاختبار ذاتية)", "originalPrice": "$1,379",
+          "url": "https://bakkah.com/ar/pmp",
+          "becauseTemplate": "أنت تستوفي متطلب خبرة PMP، وهي أكثر شهادات إدارة المشاريع اعترافاً عالمياً."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS2": "meets" }, "claim": "ساعات قيادتك للمشاريع تستوفي متطلب PMP." },
+          { "needs": { "DS1": "bachelor_plus" }, "claim": "البكالوريوس مع ٤٬٥٠٠ ساعة يؤهلك لدخول اختبار PMP الآن." },
+          { "needs": { "DS1": "diploma" }, "claim": "الدبلوم مع ٧٬٥٠٠ ساعة يؤهلك لدخول اختبار PMP الآن." }
+        ],
+        "whyNot": [
+          { "name": "CAPM®", "needs": { "DS2": "meets" }, "claim": "‏CAPM لمن لم يبلغ ساعات PMP بعد — وأنت تجاوزت ذلك." },
+          { "name": "PRINCE2® Foundation", "needs": { "DS3": "government" }, "claim": "‏PRINCE2 تناسب البيئات الحكومية، لكن PMP أوسع انتقالاً؛ وتبقى PRINCE2 بديلاً صالحاً إن بقيت في القطاع العام." }
+        ],
+        "nextAction": "اختر المباشر ($270) أو باقة النجاح الذاتية ($395) وسجّل."
+      }
+    },
+    {
+      "id": "R4",
+      "name": "PMP® + Primavera P6",
+      "icon": "🏗️",
+      "description": "عُدّة مدير المشاريع الإنشائية: الشهادة وأداة الجدولة معاً.",
+      "recommendations": {
+        "primary": {
+          "name": "PMP® + Primavera P6",
+          "nameSecondary": "باقة إدارة المشاريع الإنشائية",
+          "price": "باقة", "url": "https://bakkah.com/ar/bundles/pmp-primavera",
+          "becauseTemplate": "أنت تستوفي أهلية PMP وتعمل في الإنشاء والهندسة، حيث Primavera P6 معيار الجدولة في القطاع — والباقة تغطي الاثنين."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS2": "meets" }, "claim": "ساعات قيادتك تستوفي أهلية PMP." },
+          { "needs": { "DS3": "construction" }, "claim": "مشاريع الإنشاء والهندسة تُدار بجدولة Primavera P6." }
+        ],
+        "whyNot": [
+          { "name": "PMP® فقط", "needs": { "DS3": "construction" }, "claim": "‏PMP وحدها تُغفل أداة الجدولة التي يتوقعها قطاعك في العمل." }
+        ],
+        "nextAction": "سجّل في باقة PMP + Primavera P6."
+      }
+    },
+    {
+      "id": "R5",
+      "name": "PRINCE2® Foundation",
+      "icon": "🏛️",
+      "description": "المعيار الذي تعترف به بيئتك الحكومية والمؤسسية أولاً.",
+      "recommendations": {
+        "primary": {
+          "name": "PRINCE2® Foundation",
+          "nameSecondary": "PeopleCert",
+          "price": "$126", "url": "https://bakkah.com/ar/prince2-foundation",
+          "becauseTemplate": "في البيئات الحكومية وكبرى شركات الخليج، PRINCE2 هي المعيار المعتمد، وFoundation لا تشترط خبرة — فيمكنك البدء الآن."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS3": "government" }, "claim": "بيئتك حكومية أو شبه حكومية، حيث PRINCE2 المعيار السائد." },
+          { "needs": { "DS2": "below" }, "claim": "‏PRINCE2 Foundation لا تتطلب ساعات سابقة — بخلاف PMP." },
+          { "needs": { "DS2": "unsure" }, "claim": "حتى قبل تأكيد ساعاتك، تبقى PRINCE2 Foundation بداية آمنة ومتوافقة مع سياقك." }
+        ],
+        "whyNot": [
+          { "name": "PMP®", "needs": { "DS2": "below" }, "claim": "‏PMP ليست متاحة لك بعد من حيث الساعات، وسياقك يفضّل PRINCE2 أولاً." }
+        ],
+        "nextAction": "سجّل في PRINCE2 Foundation ($126)."
+      }
+    },
+    {
+      "id": "R6",
+      "name": "خطوتك التالية بعد PMP",
+      "icon": "🚀",
+      "description": "أنت تحمل PMP بالفعل — والمكسب الأعلى الآن تخصّص يناسب سياقك.",
+      "recommendations": {
+        "primary": {
+          "name": "تخصّص بعد PMP",
+          "nameSecondary": "PMI-RMP / PMI-ACP / PgMP",
+          "price": "متغيّر", "url": "https://bakkah.com/ar/sessions",
+          "becauseTemplate": "أنت تحمل PMP بالفعل، فالمكسب التالي تخصّص — المخاطر أو الأجايل أو إدارة البرامج — لا شهادة عامة أخرى."
+        }
+      },
+      "resultExtras": {
+        "variants": [
+          {
+            "needs": { "DS3": "construction" },
+            "name": "Primavera P6 (تخصّص للإنشاء)", "url": "https://bakkah.com/ar/primavera-p6",
+            "becauseTemplate": "أنت تحمل PMP وتعمل في الإنشاء — وPrimavera P6 للجدولة هي التخصّص الطبيعي فوقها.",
+            "nextAction": "سجّل في Primavera P6."
+          },
+          {
+            "needs": { "DS3": "government" },
+            "name": "MSP® / MoP® (البرامج والمحافظ)", "url": "https://bakkah.com/ar/msp",
+            "becauseTemplate": "أنت تحمل PMP في سياق حكومي — وMSP وMoP يوسّعانك إلى معايير البرامج والمحافظ التي يستخدمها قطاعك.",
+            "nextAction": "استكشف MSP / MoP."
+          }
+        ],
+        "why": [
+          { "needs": { "DS5": "pmp_plus" }, "claim": "أنت معتمد PMP بالفعل، فإعادة التوصية بها لا تضيف شيئاً." }
+        ],
+        "whyNot": [
+          { "name": "PMP®", "needs": { "DS5": "pmp_plus" }, "claim": "أنت تحملها بالفعل." }
+        ],
+        "nextAction": "اختر التخصّص الذي يناسب هدفك."
+      }
+    },
+    {
+      "id": "R7",
+      "name": "نقطة انطلاقك الآمنة",
+      "icon": "🧭",
+      "description": "لن نخمّن أهليتك لـ PMP — إليك خطوة أولى بلا مخاطرة، وكيف تتأكد من الباقي.",
+      "recommendations": {
+        "primary": {
+          "name": "CAPM®",
+          "nameSecondary": "Certified Associate in Project Management — دراسة ذاتية",
+          "price": "$94", "originalPrice": "$311",
+          "url": "https://bakkah.com/ar/capm-self",
+          "becauseTemplate": "لم نتمكن من تأكيد أهليتك لـ PMP من إجاباتك، فنوصي بالبداية الآمنة — CAPM بلا متطلبات — مع كيفية التحقق من ساعات PMP."
+        }
+      },
+      "resultExtras": {
+        "why": [
+          { "needs": { "DS2": "unsure" }, "claim": "ساعات قيادتك للمشاريع لم تكن واضحة، فلن نخمّن أهلية PMP." },
+          { "needs": {}, "claim": "‏CAPM لا تتطلب خبرة، فهي آمنة مهما كانت حصيلة ساعاتك." }
+        ],
+        "whyNot": [
+          { "name": "PMP®", "needs": { "DS2": "unsure" }, "claim": "لن نوصي بـ PMP قبل تأكيد أهلية الـ ٤٬٥٠٠ / ٧٬٥٠٠ ساعة." }
+        ],
+        "nextAction": "ابدأ بـ CAPM ($94)، واستخدم دليل ساعات PMI للتأكد من إتاحة PMP لك."
+      }
+    }
+  ],
+
+  "questions": [
+    {
+      "id": "q_credential",
+      "label": "السؤال الأول",
+      "text": "هل تحمل حالياً شهادة في إدارة المشاريع؟",
+      "hint": "اختر الأعلى لديك. شهادة في مجال آخر (مثل ITIL) تُحتسب «لا، ليس بعد» هنا.",
+      "options": [
+        { "id": "opt_none", "icon": "⬜", "label": "لا، ليس بعد" },
+        { "id": "opt_capm", "icon": "📘", "label": "CAPM" },
+        { "id": "opt_prince2f", "icon": "📗", "label": "PRINCE2 Foundation" },
+        { "id": "opt_pmp", "icon": "🏆", "label": "PMP أو شهادة PMI أعلى", "next": "q_environment" }
+      ]
+    },
+    {
+      "id": "q_qualification",
+      "label": "السؤال الثاني",
+      "text": "ما مؤهلك الأكاديمي؟",
+      "options": [
+        { "id": "opt_diploma", "icon": "🎓", "label": "ثانوية أو دبلوم" },
+        { "id": "opt_bachelor", "icon": "🎓", "label": "بكالوريوس فأعلى" }
+      ]
+    },
+    {
+      "id": "q_hours",
+      "label": "السؤال الثالث",
+      "text": "كم ساعة قضيتها في قيادة أو إدارة المشاريع؟",
+      "hint": "٤٬٥٠٠ ساعة ≈ ٣ سنوات تفرّغ؛ ٧٬٥٠٠ ساعة ≈ ٥ سنوات. PMI يحتسب ساعات القيادة لا مدة الوظيفة.",
+      "options": [
+        { "id": "opt_lt4500", "icon": "🕐", "label": "أقل من ٤٬٥٠٠ ساعة (أو لا شيء بعد)" },
+        { "id": "opt_4500_7499", "icon": "🕓", "label": "بين ٤٬٥٠٠ و ٧٬٥٠٠ ساعة" },
+        { "id": "opt_ge7500", "icon": "🕗", "label": "أكثر من ٧٬٥٠٠ ساعة" },
+        { "id": "opt_unsure", "icon": "❓", "label": "لست متأكداً" }
+      ]
+    },
+    {
+      "id": "q_environment",
+      "label": "السؤال الرابع",
+      "text": "أين تدير (أو ستدير) المشاريع؟",
+      "options": [
+        { "id": "opt_private", "icon": "🏢", "label": "قطاع خاص أو شركة عالمية" },
+        { "id": "opt_gov", "icon": "🏛️", "label": "جهة حكومية أو شبه حكومية" },
+        { "id": "opt_construction", "icon": "🏗️", "label": "إنشاء وهندسة" },
+        { "id": "opt_notyet", "icon": "🚪", "label": "لم أبدأ في إدارة المشاريع بعد" }
+      ]
+    },
+    {
+      "id": "q_goal",
+      "label": "السؤال الخامس",
+      "text": "ما هدفك الأساسي؟ (اختياري)",
+      "hint": "لا يغيّر الشهادة الموصى بها — فقط طريقة الشرح وعرض باقة المسار المهني.",
+      "options": [
+        { "id": "opt_promotion", "icon": "📈", "label": "ترقية في وظيفتي الحالية" },
+        { "id": "opt_mobility", "icon": "🌍", "label": "فرص عمل أفضل" },
+        { "id": "opt_fromzero", "icon": "🌱", "label": "بناء خبرة موثقة من الصفر" },
+        { "id": "opt_corporate", "icon": "🏢", "label": "تلبية متطلب من جهة العمل" }
+      ]
+    }
+  ],
+
+  "leadForm": {
+    "gated": true,
+    "skippable": true,
+    "fields": [
+      { "name": "name", "label": "الاسم", "type": "text", "required": true },
+      { "name": "email", "label": "البريد الإلكتروني", "type": "email", "required": true },
+      { "name": "phone", "label": "رقم الجوال (اختياري)", "type": "tel", "required": false }
+    ],
+    "privacyNote": "🔒 بياناتك آمنة ولن تُشارك مع أي جهة.",
+    "submitLabel": "اعرض توصيتي ✦"
+  },
+
+  "cta": { "primaryLabel": "احجز شهادتك في بكه ←", "primaryUrl": "https://bakkah.com/ar", "utm": "" },
+
+  "analytics": { "sinks": ["sheets"], "sheetsEndpoint": "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE" },
+
+  "copy": {
+    "loaderText": "نحلّل إجاباتك…",
+    "progressLabels": ["شهادتك", "مؤهلك", "خبرتك", "بيئتك", "هدفك"],
+    "restartLabel": "↺ ابدأ من جديد",
+    "result": {
+      "eyebrow": "توصيتك",
+      "recommendationTitle": "نوصيك بـ",
+      "whyTitle": "لماذا تناسبك",
+      "whyNotTitle": "لماذا ليست البدائل",
+      "nextTitle": "الخطوة التالية",
+      "contextualTitle": "قد يناسبك أيضاً"
+    }
+  }
+}

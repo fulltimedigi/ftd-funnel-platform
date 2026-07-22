@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!--
+  examples/pm-certification-advisor/index.html — runnable PM Certification Advisor.
+
+  Copies the templates/index.html shell pattern: one mount point, base + RTL
+  styles, theme injected by the engine from config.theme. Serve from the repo
+  root (npm run serve) and open /examples/pm-certification-advisor/index.html.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مساعد اختيار شهادة إدارة المشاريع — بكه</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <link rel="stylesheet" href="../../styles/base.css" />
+  <link rel="stylesheet" href="../../styles/rtl.css" />
+</head>
+<body>
+  <main id="ftd-root"><!-- engine mounts here --></main>
+  <script type="module">
+    import { boot } from "../../engine/index.js";
+    boot({
+      configUrl: "../../configs/pm-certification-advisor.json",
+      mountEl: document.getElementById("ftd-root"),
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "fulltimedigi-engine-v0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static, config-driven engine for Arabic-first diagnostic funnels. No build step; type:module enables native ES modules in Node and the browser.",
+  "scripts": {
+    "test": "node tests/scoring.test.mjs && node tests/funnel.freelancex.test.mjs && node tests/leadloop.test.mjs && node tests/asq.test.mjs && node tests/signals.test.mjs && node tests/questions.test.mjs && node tests/decision.test.mjs && node tests/explanation.test.mjs && node tests/trust.test.mjs && node tests/conversion.test.mjs && node tests/houseplant.decision.test.mjs && node tests/houseplant.explanation.test.mjs && node tests/houseplant.trust.test.mjs && node tests/houseplant.conversion.test.mjs",
+    "test:scoring": "node tests/scoring.test.mjs",
+    "test:signals": "node tests/signals.test.mjs",
+    "test:questions": "node tests/questions.test.mjs",
+    "test:decision": "node tests/decision.test.mjs",
+    "test:explanation": "node tests/explanation.test.mjs",
+    "test:trust": "node tests/trust.test.mjs",
+    "test:conversion": "node tests/conversion.test.mjs",
+    "test:funnel": "node tests/funnel.freelancex.test.mjs",
+    "test:leadloop": "node tests/leadloop.test.mjs",
+    "test:asq": "node tests/asq.test.mjs",
+    "serve": "python3 -m http.server 8000"
+  }
+}

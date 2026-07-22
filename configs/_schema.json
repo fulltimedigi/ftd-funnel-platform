@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fulltimedigi-engine-v0/configs/_schema.json",
+  "title": "FullTimeDigi Funnel Config",
+  "description": "The contract between strategy and engine. One config = one funnel. Foundation placeholder — field constraints to be tightened during build (SPEC §6).",
+  "type": "object",
+  "required": ["id", "brand", "theme", "lang", "hero", "scoring", "questions", "archetypes", "resultLayout", "leadForm", "cta", "analytics"],
+  "properties": {
+    "id": { "type": "string", "description": "Unique funnel id. localStorage namespace + analytics tag." },
+    "brand": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "logo": { "type": "string", "description": "path or inline SVG" },
+        "tagline": { "type": "string" }
+      }
+    },
+    "theme": { "type": "string", "description": "name of a file in themes/ e.g. 'luxury-gold-light'" },
+    "lang": { "type": "string", "default": "ar", "description": "RTL is first-class; 'ar' is the default." },
+    "hero": {
+      "type": "object",
+      "properties": {
+        "eyebrow": { "type": "string" },
+        "headline": { "type": "string" },
+        "headlineAccent": { "type": "string" },
+        "subtext": { "type": "string" },
+        "chips": { "type": "array", "items": { "type": "string" } },
+        "startLabel": { "type": "string" }
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["sum-band", "dominant", "weighted-multi", "decision-table"] },
+        "flags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "description": "STEP 4 Signal Architecture (optional; used by 'decision-table' funnels). Raw signals collected from questions, each with an option→canonical-value binding. The deriver in engine/signals.js owns the meaning; questions only produce the raw value.",
+      "items": {
+        "type": "object",
+        "required": ["id", "domain"],
+        "properties": {
+          "id": { "type": "string" },
+          "role": { "enum": ["decision", "presentation", "offer"], "default": "decision" },
+          "required": { "type": "boolean", "default": true },
+          "default": { "type": "string", "description": "fallback when the sourcing question is skipped" },
+          "domain": { "type": "array", "items": { "type": "string" }, "description": "allowed canonical values" },
+          "source": { "type": "string", "description": "questionId that elicits this signal" },
+          "map": { "type": "object", "description": "{ optionId: canonicalValue } binding (authored in Step 6)" }
+        }
+      }
+    },
+    "derivedSignals": {
+      "type": "array",
+      "description": "STEP 4. Signals computed from raw signals by a GENERIC, data-driven rule in engine/signals.js. Decision logic (Step 7) reads these, never the raw values. The derivation LOGIC lives here as data, so a new funnel needs no engine edit. `domain` is REQUIRED — it declares the value set and is consumed by Trust Validation (Step 9) for the predicate-domain check and the totality sweep.",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "rule", "domain"],
+        "properties": {
+          "id": { "type": "string" },
+          "from": { "type": "array", "items": { "type": "string" }, "description": "raw signal ids this derivation reads" },
+          "rule": { "enum": ["identity", "cases"], "description": "identity = passthrough from[0]; cases = first-match table" },
+          "domain": { "type": "array", "items": { "type": "string" }, "description": "REQUIRED: the derived value set" },
+          "default": { "type": "string", "description": "cases: value when no case matches" },
+          "cases": {
+            "type": "array",
+            "description": "cases: ordered, first-match-wins. `when` uses value/array/wildcard semantics over raw signals.",
+            "items": {
+              "type": "object",
+              "required": ["when", "value"],
+              "properties": {
+                "when": { "type": "object", "description": "{ rawId: value | [values] }; omitted = wildcard" },
+                "value": { "type": "string" }
+              }
+            }
+          },
+          "clamp": {
+            "type": "array",
+            "description": "cases: coherence overrides applied AFTER the cases. If the computed value === ifValue and `when` holds, override to `to`. (e.g. low light ⇒ a demanding plant becomes easy.)",
+            "items": {
+              "type": "object",
+              "required": ["when", "ifValue", "to"],
+              "properties": {
+                "when": { "type": "object" },
+                "ifValue": { "type": "string" },
+                "to": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decisionTable": {
+      "type": "array",
+      "description": "STEP 7 Decision Logic (required for scoring.mode 'decision-table'). ORDERED, first-match-wins rules over derived signals → archetype id. Evaluated by engine/decide.js. End with a `when: {}` safety rule to guarantee totality.",
+      "items": {
+        "type": "object",
+        "required": ["when", "result"],
+        "properties": {
+          "id": { "type": "string", "description": "rule label for audit/analytics" },
+          "when": { "type": "object", "description": "{ signalKey: value | [values] }; omitted key = wildcard" },
+          "result": { "type": "string", "description": "archetype id to select" }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "description": "Ordered (or branched) questions. RULE: every question must affect scoring (no theater).",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "options"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string", "description": "e.g. 'السؤال الأول'" },
+          "text": { "type": "string" },
+          "hint": { "type": "string" },
+          "weight": { "type": "number", "default": 1 },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "label"],
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "icon": { "type": "string", "description": "emoji" },
+                "description": { "type": "string" },
+                "score": {
+                  "description": "Mode-dependent and OPTIONAL: number (sum-band) or {archetypeId: points} (dominant/weighted-multi). Omitted for 'decision-table' mode, where option→signal binding comes from config.signals[].map instead."
+                },
+                "flag": { "type": "string" },
+                "next": { "type": "string", "description": "branch: next question id; if absent, advance in array" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "archetypes": {
+      "type": "array",
+      "description": "4–7 distinct archetypes (warn outside that range).",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "recommendations"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "icon": { "type": "string" },
+          "description": { "type": "string", "description": "identity copy" },
+          "traits": { "type": "array", "items": { "type": "string" } },
+          "band": {
+            "type": "object",
+            "description": "only for sum-band mode",
+            "properties": { "min": { "type": "number" }, "max": { "type": "number" } }
+          },
+          "recommendations": {
+            "type": "object",
+            "required": ["primary"],
+            "properties": {
+              "primary": { "$ref": "#/definitions/recommendation" },
+              "contextual": { "type": "array", "items": { "$ref": "#/definitions/recommendation" } }
+            }
+          },
+          "resultExtras": { "type": "object", "description": "layout-variant data (strengths/gaps/actions, details, etc.)" }
+        }
+      }
+    },
+    "resultLayout": { "enum": ["personas", "commerce", "tracks"] },
+    "flags": {
+      "type": "array",
+      "description": "flag definitions for weighted-multi adjustments",
+      "items": {
+        "type": "object",
+        "required": ["id", "adjustments"],
+        "properties": {
+          "id": { "type": "string" },
+          "adjustments": { "type": "object", "description": "{ archetypeId: +/- points }" }
+        }
+      }
+    },
+    "leadForm": {
+      "type": "object",
+      "properties": {
+        "gated": { "type": "boolean", "default": true },
+        "skippable": { "type": "boolean", "default": true },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "properties": {
+              "name": { "type": "string" },
+              "label": { "type": "string" },
+              "type": { "enum": ["text", "email", "tel"] },
+              "required": { "type": "boolean" },
+              "validation": { "type": "string", "description": "rule id or pattern" }
+            }
+          }
+        },
+        "privacyNote": { "type": "string" },
+        "submitLabel": { "type": "string" }
+      }
+    },
+    "cta": {
+      "type": "object",
+      "required": ["primaryLabel", "primaryUrl"],
+      "properties": {
+        "primaryLabel": { "type": "string" },
+        "primaryUrl": { "type": "string" },
+        "utm": { "type": "string" },
+        "secondary": { "type": "object" }
+      }
+    },
+    "analytics": {
+      "type": "object",
+      "properties": {
+        "sinks": { "type": "array", "items": { "enum": ["sheets", "ga4"] } },
+        "ga4Id": { "type": "string" },
+        "sheetsEndpoint": { "type": "string", "description": "Apps Script /exec URL" }
+      }
+    },
+    "copy": {
+      "type": "object",
+      "description": "misc UI strings for full localization",
+      "properties": {
+        "loaderText": { "type": "string" },
+        "progressLabels": { "type": "array", "items": { "type": "string" } },
+        "restartLabel": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "recommendation": {
+      "type": "object",
+      "required": ["name", "url", "becauseTemplate"],
+      "description": "RULE: becauseTemplate is mandatory; no recommendation renders without a resolved 'because'.",
+      "properties": {
+        "name": { "type": "string" },
+        "nameSecondary": { "type": "string" },
+        "notes": { "type": "string" },
+        "price": { "type": "string" },
+        "originalPrice": { "type": "string" },
+        "discountLabel": { "type": "string" },
+        "image": { "type": "string" },
+        "url": { "type": "string" },
+        "utm": { "type": "string" },
+        "becauseTemplate": { "type": "string", "description": "string with answer placeholders e.g. 'لأنك تفضّل {q1}…'" }
+      }
+    }
+  }
+}

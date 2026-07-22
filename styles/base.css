@@ -1,0 +1,142 @@
+/*
+ * styles/base.css — Structural + component styles (SPEC §7).
+ *
+ * Token-driven: every color/font/shape comes from a CSS variable defined in
+ * themes/_tokens.css and overridden per client by themes/<theme>.css. Swapping
+ * the theme reskins the entire funnel with NO change here. There are no
+ * client-specific or vertical-specific values in this file.
+ */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.7;
+}
+
+#ftd-root { max-width: var(--maxwidth); margin: 0 auto; padding: 28px 16px 56px; }
+
+.ftd-screen { animation: ftd-fade 0.35s ease; }
+@keyframes ftd-fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ---- Hero ---- */
+.ftd-hero { text-align: center; padding-top: 32px; }
+.ftd-hero-eyebrow { color: var(--accent); font-size: 13px; letter-spacing: 1px; margin: 0 0 12px; }
+.ftd-hero-title { font-family: var(--font-display); font-size: clamp(24px, 6vw, 34px); font-weight: 800; margin: 0 0 14px; }
+.ftd-accent { color: var(--accent); }
+.ftd-hero-sub { color: var(--text-muted); font-size: 15px; max-width: 460px; margin: 0 auto 20px; }
+.ftd-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 26px; }
+.ftd-chip { font-size: 12px; padding: 6px 12px; border: 1px solid var(--border-accent); border-radius: 999px; color: var(--text-soft); }
+
+/* ---- Progress ---- */
+.ftd-progress { margin-bottom: 22px; }
+.ftd-progress-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.ftd-progress-step { color: var(--accent); }
+.ftd-progress-track { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
+.ftd-progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); transition: width 0.5s ease; }
+
+/* ---- Question ---- */
+.ftd-back { background: none; border: none; color: var(--text-muted); font-size: 13px; cursor: pointer; padding: 4px 0; margin-bottom: 8px; }
+.ftd-q-label { color: var(--accent); font-size: 12px; margin: 0 0 6px; }
+.ftd-q-text { font-size: clamp(18px, 4.5vw, 22px); font-weight: 700; margin: 0 0 6px; }
+.ftd-q-hint { color: var(--text-muted); font-size: 13px; margin: 0 0 18px; }
+
+.ftd-opts { display: grid; gap: 10px; margin-bottom: 20px; }
+.ftd-opt {
+  display: flex; align-items: center; gap: 12px; text-align: right;
+  width: 100%; padding: 16px; cursor: pointer;
+  background: var(--surface); color: var(--text);
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-family: inherit; font-size: 15px; transition: all 0.2s ease;
+}
+.ftd-opt:hover { border-color: var(--border-accent); transform: translateX(-3px); }
+.ftd-opt.is-selected { border-color: var(--primary); background: var(--surface-2); }
+.ftd-opt-icon { font-size: 22px; }
+.ftd-opt-label { font-weight: 600; }
+.ftd-opt-desc { color: var(--text-muted); font-size: 13px; display: block; }
+
+/* ---- Buttons ---- */
+.ftd-start, .ftd-next, .ftd-cta, .ftd-submit, .ftd-card-cta {
+  display: inline-block; width: 100%; text-align: center; cursor: pointer;
+  padding: 15px 20px; border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 16px; font-weight: 700;
+  color: var(--on-primary); background: linear-gradient(90deg, var(--primary), var(--primary-2));
+  text-decoration: none; transition: transform 0.2s ease;
+}
+.ftd-start:hover, .ftd-next:hover, .ftd-cta:hover, .ftd-submit:hover, .ftd-card-cta:hover { transform: translateY(-2px); }
+.ftd-next[disabled], .ftd-submit[disabled] { opacity: 0.4; cursor: not-allowed; }
+.ftd-restart {
+  display: block; width: 100%; margin-top: 14px; padding: 12px;
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-muted); font-family: inherit; font-size: 14px; cursor: pointer;
+}
+
+/* ---- Result (shared) ---- */
+.ftd-result-hero { text-align: center; padding: 24px; background: var(--surface); border: 1px solid var(--border-accent); border-radius: var(--radius); margin-bottom: 16px; }
+.ftd-result-icon { font-size: 48px; }
+.ftd-result-eyebrow { color: var(--text-muted); font-size: 13px; margin: 8px 0 4px; }
+.ftd-result-name { font-family: var(--font-display); font-size: clamp(22px, 5vw, 30px); font-weight: 800; margin: 0 0 6px; }
+.ftd-result-tagline { color: var(--accent); font-size: 14px; margin: 0; }
+.ftd-result-desc { color: var(--text-soft); font-size: 14px; }
+.ftd-traits { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+.ftd-trait { font-size: 12px; padding: 5px 12px; background: var(--accent-soft); border: 1px solid var(--border-accent); border-radius: 999px; }
+.ftd-blend { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; font-size: 14px; }
+.ftd-section-title { font-size: 15px; margin: 18px 0 12px; }
+.ftd-tip { background: var(--accent-soft); border: 1px solid var(--border-accent); border-radius: var(--radius); padding: 14px 16px; font-size: 13px; color: var(--text-soft); }
+
+/* ---- Tracks layout ---- */
+.ftd-details { display: grid; gap: 10px; margin: 16px 0; }
+.ftd-detail { display: flex; justify-content: space-between; gap: 12px; background: var(--surface); border-radius: var(--radius); padding: 12px 14px; font-size: 14px; }
+.ftd-detail-k { color: var(--text-muted); }
+.ftd-detail-v { font-weight: 600; text-align: left; }
+.ftd-rec { margin: 16px 0; }
+.ftd-rec-title { font-size: 14px; color: var(--accent); margin: 0 0 8px; }
+.ftd-bars { margin: 18px 0; }
+.ftd-bars-title { font-size: 15px; margin: 0 0 12px; }
+.ftd-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+.ftd-bar-name { flex: 0 0 40%; }
+.ftd-bar-track { flex: 1; height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+.ftd-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
+.ftd-bar-val { flex: 0 0 28px; text-align: left; color: var(--text-muted); }
+
+/* ---- Recommendation card (shared, used by commerce + tracks) ---- */
+.ftd-grid { display: grid; gap: 12px; }
+.ftd-signature { margin: 8px 0 4px; }
+.ftd-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.ftd-card.is-highlight { border-color: var(--accent); border-width: 1.5px; }
+.ftd-card-badge { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: var(--on-primary); margin-bottom: 8px; }
+.ftd-card-tag { font-size: 12px; color: var(--accent); margin: 0 0 4px; }
+.ftd-card-name { font-weight: 700; font-size: 16px; margin: 0 0 4px; }
+.ftd-card-name2 { color: var(--text-muted); font-size: 13px; margin: 0 0 6px; }
+.ftd-card-notes { color: var(--text-soft); font-size: 13px; margin: 0 0 6px; }
+.ftd-card-because { color: var(--text-soft); font-size: 13px; margin: 0 0 10px; }
+.ftd-price { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.ftd-price-sale { color: var(--price); font-size: 22px; font-weight: 800; }
+.ftd-price-orig { color: var(--text-muted); text-decoration: line-through; font-size: 14px; }
+.ftd-price-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.ftd-card-cta { margin-top: 8px; font-size: 15px; }
+
+.ftd-cta { margin-top: 8px; }
+
+/* ---- Lead capture ---- */
+.ftd-lead-head { text-align: center; margin-bottom: 18px; }
+.ftd-lead-title { font-family: var(--font-display); font-size: 20px; font-weight: 800; margin: 0 0 6px; }
+.ftd-lead-sub { color: var(--text-muted); font-size: 14px; margin: 0; }
+.ftd-field { margin-bottom: 12px; }
+.ftd-label { display: block; font-size: 13px; color: var(--text-soft); margin-bottom: 6px; }
+.ftd-input {
+  width: 100%; padding: 13px 14px; font-family: inherit; font-size: 15px;
+  color: var(--text); background: var(--surface);
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+}
+.ftd-input:focus { outline: none; border-color: var(--primary); }
+.ftd-lead-status { min-height: 18px; font-size: 13px; text-align: center; margin: 6px 0; color: var(--text-muted); }
+.ftd-lead-status.is-error { color: var(--error); }
+.ftd-skip {
+  display: block; width: 100%; margin-top: 12px; background: none; border: none;
+  color: var(--text-muted); font-family: inherit; font-size: 13px; text-decoration: underline; cursor: pointer;
+}
+.ftd-privacy { text-align: center; color: var(--text-muted); font-size: 12px; margin: 12px 0 0; }

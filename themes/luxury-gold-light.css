@@ -1,0 +1,33 @@
+/*
+ * themes/luxury-gold-light.css — "Luxury Gold (light)" theme.
+ * Source: asq-perfume-finder-demo. Cream/navy/gold, premium, heritage.
+ * Fonts: Noto Naskh Arabic (body) + Cormorant Garamond (display).
+ * Fills the token vocabulary from _tokens.css (SPEC §7).
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap");
+
+:root {
+  --bg: #f7f4ec;
+  --surface: #ffffff;
+  --surface-2: #f0ebde;
+  --border: #ddd6c4;
+  --border-accent: rgba(200, 169, 81, 0.45);
+  --text: #1e2d6b;
+  --text-muted: #6b6f86;
+  --text-soft: #4a5278;
+  --primary: #1e2d6b;
+  --primary-2: #16224f;
+  --on-primary: #ffffff;
+  --accent: #c8a951;
+  --accent-soft: rgba(200, 169, 81, 0.12);
+  --price: #c0392b;
+  --error: #c0392b;
+
+  --font-body: "Noto Naskh Arabic", serif;
+  --font-display: "Cormorant Garamond", "Noto Naskh Arabic", serif;
+
+  --radius: 6px;
+  --maxwidth: 640px;
+  --shadow: 0 6px 20px rgba(30, 45, 107, 0.10);
+}

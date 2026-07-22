@@ -1,0 +1,207 @@
+{
+  "_note": "ASQ Perfume Finder rebuilt as pure config. dominant scoring, 5 questions (every one affects the result), 4 archetypes, commerce result layout, luxury-gold-light theme. No ASQ logic in JS — this file is the entire funnel.",
+  "id": "asq-perfume",
+  "brand": { "name": "عبدالصمد القرشي", "logo": "", "tagline": "تراث عطري منذ ١٨٥٢" },
+  "theme": "luxury-gold-light",
+  "lang": "ar",
+  "hero": {
+    "eyebrow": "The Scent Profile · الكويت",
+    "headline": "اكتشف بروفايلك العطري",
+    "headlineAccent": "",
+    "subtext": "العطر امتداد لهويتك. خمسة أسئلة تكشف عالمك العطري مع توصيات وأسعار بالدينار الكويتي.",
+    "chips": ["٥ أسئلة فقط", "بروفايل شخصي", "أسعار بالدينار"],
+    "startLabel": "ابدأ ✦"
+  },
+  "scoring": { "mode": "dominant", "flags": [] },
+  "questions": [
+    {
+      "id": "identity",
+      "label": "السؤال الأول",
+      "text": "كيف تحب أن يصفك الناس؟",
+      "hint": "اختر الأقرب إليك",
+      "options": [
+        { "id": "rooted", "icon": "🪵", "label": "حضور ووقار", "description": "ثقة لا تحتاج كلمات", "score": { "rooted": 2 } },
+        { "id": "intimate", "icon": "🤍", "label": "دفء وقرب", "description": "أثر يبقى لمن حولك", "score": { "intimate": 2 } },
+        { "id": "radiant", "icon": "✨", "label": "إشراق وحيوية", "description": "حضور يُلاحَظ", "score": { "radiant": 2 } },
+        { "id": "warm", "icon": "🌹", "label": "رومانسية وعاطفة", "description": "حكاية ناعمة", "score": { "warm": 2 } }
+      ]
+    },
+    {
+      "id": "scent",
+      "label": "السؤال الثاني",
+      "text": "أي عالم عطري يناديك؟",
+      "options": [
+        { "id": "oud", "icon": "🌑", "label": "العود", "description": "عمق شرقي أصيل", "score": { "rooted": 2, "radiant": 1 } },
+        { "id": "musk", "icon": "🤍", "label": "المسك", "description": "نقاء وناعم", "score": { "intimate": 2 } },
+        { "id": "woody", "icon": "🌿", "label": "خشب عصري", "description": "أنيق ومنعش", "score": { "radiant": 2 } },
+        { "id": "floral", "icon": "🌸", "label": "الأزهار", "description": "دفء زهري", "score": { "warm": 2, "intimate": 1 } }
+      ]
+    },
+    {
+      "id": "presence",
+      "label": "السؤال الثالث",
+      "text": "كيف تحب أن يكون أثر عطرك؟",
+      "options": [
+        { "id": "subtle", "icon": "🌫️", "label": "هادئ وقريب", "description": "لمن يقترب فقط", "score": { "intimate": 2 } },
+        { "id": "balanced", "icon": "🍃", "label": "متوازن", "description": "حاضر باعتدال", "score": { "warm": 1, "radiant": 1 } },
+        { "id": "bold", "icon": "🔥", "label": "جريء وواضح", "description": "يسبقك", "score": { "rooted": 2, "radiant": 1 } },
+        { "id": "lasting", "icon": "⏳", "label": "ثابت طويل", "description": "يدوم اليوم كله", "score": { "rooted": 1, "warm": 1 } }
+      ]
+    },
+    {
+      "id": "occasion",
+      "label": "السؤال الرابع",
+      "text": "متى يكون العطر أهمّ شيء؟",
+      "options": [
+        { "id": "daily", "icon": "☀️", "label": "كل يوم", "description": "رفيقك الدائم", "score": { "intimate": 1, "radiant": 1 } },
+        { "id": "work", "icon": "💼", "label": "العمل واللقاءات", "description": "حضور احترافي", "score": { "radiant": 2 } },
+        { "id": "majlis", "icon": "🪑", "label": "المجلس والمناسبات", "description": "وقار شرقي", "score": { "rooted": 2 } },
+        { "id": "special", "icon": "🌙", "label": "اللحظات الخاصة", "description": "سحر المساء", "score": { "warm": 2 } }
+      ]
+    },
+    {
+      "id": "season",
+      "label": "السؤال الخامس",
+      "text": "في أي أجواء تجد نفسك أكثر؟",
+      "options": [
+        { "id": "summer", "icon": "🏖️", "label": "الصيف", "description": "خفّة وانتعاش", "score": { "radiant": 1, "intimate": 1 } },
+        { "id": "winter", "icon": "❄️", "label": "الشتاء", "description": "دفء وعمق", "score": { "rooted": 2, "warm": 1 } },
+        { "id": "both", "icon": "🌤️", "label": "الاثنان", "description": "حسب المزاج", "score": { "warm": 1, "radiant": 1 } },
+        { "id": "indoor", "icon": "🏠", "label": "الأجواء المغلقة", "description": "أناقة هادئة", "score": { "intimate": 1, "rooted": 1 } }
+      ]
+    }
+  ],
+  "archetypes": [
+    {
+      "id": "rooted",
+      "name": "الحضور الراسخ",
+      "icon": "🪵",
+      "tagline": "حضورك يسبق كلماتك.",
+      "description": "تميل للعمق الشرقي الأصيل: العود المعتّق والعنبر الملكي. عطرك ليس إكسسواراً، بل امتداد لهوية واثقة لا تحتاج إثباتاً.",
+      "traits": ["عميق", "واثق", "خالد"],
+      "resultExtras": { "tip": "في حرّ الكويت رشّة واحدة على مواضع النبض تكفي؛ في الشتاء أضف طبقة على الملابس لعمق أطول." },
+      "recommendations": {
+        "primary": {
+          "name": "المزيج الملكي",
+          "nameSecondary": "Royal Mixture",
+          "notes": "عود ملكي نادر · عنبر دافئ · مسك راسخ · خشب كريمي",
+          "price": "٣٤ د.ك",
+          "originalPrice": "٦٨ د.ك",
+          "discountLabel": "خصم ٥٠٪",
+          "url": "https://kw.abdulsamadalqurashi.com/ar/",
+          "becauseTemplate": "لأنك انجذبت إلى «{scent}» وتحب أثراً «{presence}» — توقيع عميق يليق بحضورك."
+        },
+        "contextual": [
+          { "tag": "للمجلس", "name": "دهن العود المعتّق", "notes": "عود كمبودي ثقيل", "price": "٤٥ د.ك", "originalPrice": "٩٠ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "للمساء", "name": "عنبر الملوك", "notes": "عنبر وبخور دافئ", "price": "٣٠ د.ك", "originalPrice": "٦٠ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "لكل يوم", "name": "مسك أسود", "notes": "مسك خفيف ثابت", "price": "٢٠ د.ك", "originalPrice": "٤٠ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" }
+        ]
+      }
+    },
+    {
+      "id": "intimate",
+      "name": "الأثر الحميمي",
+      "icon": "🤍",
+      "tagline": "أناقة لا تصرخ.",
+      "description": "تميل للمسك النقي الناعم بدفء خفيّ يشعر به من يقترب منك. عطرك همسة لا إعلان.",
+      "traits": ["ناعم", "راقٍ", "قريب"],
+      "resultExtras": { "tip": "المسك يتفتّح مع حرارة الجسم — رشّة على المعصم والرقبة تكفي ليبقى أثره طوال اليوم." },
+      "recommendations": {
+        "primary": {
+          "name": "مسك القرشي الذهبي",
+          "nameSecondary": "Golden Musk",
+          "notes": "مسك أبيض نقي · بودرة ناعمة · دفء خفيّ",
+          "price": "٣٤ د.ك",
+          "originalPrice": "٦٨ د.ك",
+          "discountLabel": "خصم ٥٠٪",
+          "url": "https://kw.abdulsamadalqurashi.com/ar/",
+          "becauseTemplate": "لأنك تفضّل أثراً «{presence}» وعالم «{scent}» — توقيع حميمي يبقى لمن حولك."
+        },
+        "contextual": [
+          { "tag": "لكل يوم", "name": "مسك الطهارة", "notes": "نظافة وناعم", "price": "١٥ د.ك", "originalPrice": "٣٠ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "للعمل", "name": "وايت ماسك", "notes": "مسك أنيق هادئ", "price": "٢٢ د.ك", "originalPrice": "٤٤ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "للمساء", "name": "مسك وعنبر", "notes": "دفء ناعم", "price": "٢٨ د.ك", "originalPrice": "٥٦ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" }
+        ]
+      }
+    },
+    {
+      "id": "radiant",
+      "name": "الحضور المُشِع",
+      "icon": "✨",
+      "tagline": "تُلاحَظ أينما حللت.",
+      "description": "تميل للعود العصري والخشب المنعش بلمسة بهارات. عطرك حيّ، حاد، واجتماعي.",
+      "traits": ["عصري", "حيوي", "اجتماعي"],
+      "resultExtras": { "tip": "العطور المنعشة مثالية لنهار الكويت — جدّد الرشّة بعد الظهر لإشراق يدوم." },
+      "recommendations": {
+        "primary": {
+          "name": "بودي عود ألور",
+          "nameSecondary": "Body Oud Allure",
+          "notes": "عود عصري · خشب منعش · بهارات خفيفة",
+          "price": "١٦.٥ د.ك",
+          "originalPrice": "٣٣ د.ك",
+          "discountLabel": "خصم ٥٠٪",
+          "url": "https://kw.abdulsamadalqurashi.com/ar/",
+          "becauseTemplate": "لأنك تحب «{scent}» وحضوراً «{presence}» — توقيع عصري مشرق يُلاحَظ."
+        },
+        "contextual": [
+          { "tag": "للعمل", "name": "بلو نوت", "notes": "حمضيات وخشب أزرق", "price": "١٨ د.ك", "originalPrice": "٣٦ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "للصيف", "name": "أكوا فريش", "notes": "انتعاش بحري", "price": "١٤ د.ك", "originalPrice": "٢٨ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "لكل يوم", "name": "وودي سبورت", "notes": "خشب ومسك خفيف", "price": "١٧ د.ك", "originalPrice": "٣٤ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" }
+        ]
+      }
+    },
+    {
+      "id": "warm",
+      "name": "الدفء الرومانسي",
+      "icon": "🌹",
+      "tagline": "عطرك يحكي حكاية.",
+      "description": "تميل للمزيج الزهري الشرقي والمسك الحلو الذي يترك أثراً بعد رحيلك. عطرك دافئ وآسر.",
+      "traits": ["دافئ", "آسر", "رومانسي"],
+      "resultExtras": { "tip": "الفانيليا والأزهار تتألق في المساء — طبقة على الشعر تترك أثراً ناعماً يدوم." },
+      "recommendations": {
+        "primary": {
+          "name": "بودي عود جولد فانيلا",
+          "nameSecondary": "Body Oud Gold Vanilla",
+          "notes": "فانيليا دافئة · أزهار · عود ناعم · مسك حلو",
+          "price": "٢٧ د.ك",
+          "originalPrice": "٥٤ د.ك",
+          "discountLabel": "خصم ٥٠٪",
+          "url": "https://kw.abdulsamadalqurashi.com/ar/",
+          "becauseTemplate": "لأنك تميل إلى «{scent}» ولحظات «{occasion}» — توقيع دافئ يترك أثراً بعدك."
+        },
+        "contextual": [
+          { "tag": "للمساء", "name": "روز رومانس", "notes": "ورد نبيل وعنبر", "price": "٢٤ د.ك", "originalPrice": "٤٨ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "للمناسبات", "name": "سويت أمبر", "notes": "عنبر حلو وفانيليا", "price": "٢٦ د.ك", "originalPrice": "٥٢ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" },
+          { "tag": "لكل يوم", "name": "فلورا مسك", "notes": "أزهار ومسك خفيف", "price": "١٩ د.ك", "originalPrice": "٣٨ د.ك", "url": "https://kw.abdulsamadalqurashi.com/ar/" }
+        ]
+      }
+    }
+  ],
+  "resultLayout": "commerce",
+  "flags": [],
+  "leadForm": {
+    "gated": true,
+    "skippable": true,
+    "fields": [
+      { "name": "name", "label": "الاسم", "type": "text", "required": true },
+      { "name": "email", "label": "البريد الإلكتروني", "type": "email", "required": true },
+      { "name": "phone", "label": "رقم الجوال (اختياري)", "type": "tel", "required": false }
+    ],
+    "privacyNote": "🔒 بياناتك آمنة ولن تُشارك مع أي جهة.",
+    "submitLabel": "اكشف بروفايلي ✦"
+  },
+  "cta": { "primaryLabel": "تصفّح المتجر الكويتي ←", "primaryUrl": "https://kw.abdulsamadalqurashi.com/ar/", "utm": "" },
+  "analytics": { "sinks": ["sheets"], "sheetsEndpoint": "https://script.google.com/macros/s/AKfycbzgVmampDQuLJCQFtYB5M-qaKHZrN8O19saGZyGaTOP3GYvAbbiO9oLWlI4y0pO7Y0/exec" },
+  "copy": {
+    "loaderText": "نحلّل إجاباتك ونكشف عالمك العطري…",
+    "progressLabels": ["هويتك", "عالمك", "حضورك", "طقوسك", "أجواؤك"],
+    "restartLabel": "↺ أعد الاختبار",
+    "result": {
+      "eyebrow": "بروفايلك العطري",
+      "recommendationTitle": "✦ توقيعك العطري ✦",
+      "contextualTitle": "✦ عطرك لكل مناسبة ✦",
+      "bestForYou": "الأنسب لك",
+      "shopLabel": "تسوّق الآن ←"
+    }
+  }
+}

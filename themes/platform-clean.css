@@ -1,0 +1,32 @@
+/*
+ * themes/platform-clean.css — "Platform / Educational" theme.
+ * Source: freelancex-diagnostic. Dark, cyan, energetic, marketplace. Font: Cairo.
+ * Fills the token vocabulary from _tokens.css (SPEC §7).
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap");
+
+:root {
+  --bg: #0a0d1a;
+  --surface: #111627;
+  --surface-2: #15203a;
+  --border: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(0, 200, 248, 0.25);
+  --text: #f0f4ff;
+  --text-muted: #8a97b8;
+  --text-soft: #c4cde2;
+  --primary: #00c8f8;
+  --primary-2: #0099d6;
+  --on-primary: #0a0d1a;
+  --accent: #00c8f8;
+  --accent-soft: rgba(0, 200, 248, 0.10);
+  --price: #00c8f8;
+  --error: #ff8a8a;
+
+  --font-body: "Cairo", system-ui, sans-serif;
+  --font-display: "Cairo", system-ui, sans-serif;
+
+  --radius: 14px;
+  --maxwidth: 640px;
+  --shadow: 0 8px 24px rgba(0, 200, 248, 0.18);
+}

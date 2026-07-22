@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>عبدالصمد القرشي — بروفايلك العطري</title>
+  <!-- Identical to the FreelanceX page except the config path below. Same
+       engine, same styles; the luxury-gold-light theme is injected by the
+       engine from config.theme. This is the proof: config swaps the funnel. -->
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <link rel="stylesheet" href="../../styles/base.css" />
+</head>
+<body>
+  <!--
+    Run from a local server (fetch() is blocked on file://):
+      cd fulltimedigi-engine-v0 && python3 -m http.server 8000
+      open http://localhost:8000/examples/asq-perfume/
+  -->
+  <main id="ftd-root"></main>
+  <script type="module">
+    import { boot } from "../../engine/index.js";
+    boot({
+      configUrl: "../../configs/asq-perfume.json",
+      mountEl: document.getElementById("ftd-root"),
+    });
+  </script>
+</body>
+</html>

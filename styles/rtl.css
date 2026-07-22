@@ -1,0 +1,11 @@
+/*
+ * styles/rtl.css — RTL-specific corrections.
+ *
+ * Responsibility (SPEC §7, §5): Arabic RTL is first-class. Hold the few
+ * direction-specific fixes that dir="rtl" alone doesn't solve (badge/checkmark
+ * positioning, LTR email/phone fields, logo direction).
+ *
+ * STATUS: foundation stub. To be added during build.
+ */
+
+/* TODO(v0.1): RTL corrections; .ltr-field { direction: ltr; } etc. */

@@ -1,0 +1,24 @@
+name: CI
+
+# Run the full test suite (the trust gate) on every push and every pull request.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No dependencies and no lockfile — the engine and tests are dependency-free
+      # native ES modules, so `npm test` runs node directly with nothing to install.
+      - name: Run tests
+        run: npm test

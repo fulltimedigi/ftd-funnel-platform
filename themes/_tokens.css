@@ -1,0 +1,36 @@
+/*
+ * themes/_tokens.css — The token vocabulary + safe defaults (SPEC §7).
+ *
+ * Every component in styles/base.css is styled ONLY through these variables.
+ * A concrete theme (platform-clean.css, luxury-gold-light.css) overrides them.
+ * These defaults are a neutral dark fallback so the funnel is never unstyled if
+ * a theme fails to load.
+ */
+
+:root {
+  /* ---- Color ---- */
+  --bg: #0a0d1a;
+  --surface: #111627;
+  --surface-2: #15203a;
+  --border: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(0, 200, 248, 0.25);
+  --text: #f0f4ff;
+  --text-muted: #8a97b8;
+  --text-soft: #c4cde2;
+  --primary: #00c8f8;
+  --primary-2: #0099d6;
+  --on-primary: #0a0d1a;
+  --accent: #00c8f8;
+  --accent-soft: rgba(0, 200, 248, 0.10);
+  --price: #00c8f8;
+  --error: #ff8a8a;
+
+  /* ---- Type ---- */
+  --font-body: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  --font-display: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+
+  /* ---- Shape & space ---- */
+  --radius: 14px;
+  --maxwidth: 640px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}

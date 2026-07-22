@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--
+  templates/index.html — The thin shell (SPEC §5, §13).
+
+  One mount point. Loads engine + theme + base styles, points the engine at a
+  config, and boots. No funnel content lives here — that's all in config.json.
+  Each example funnel copies this shell and sets its own config path + theme.
+
+  STATUS: foundation stub. Wire-up to be completed during build.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FullTimeDigi Diagnostic</title>
+
+  <!-- Theme is selected per funnel; base + rtl are always loaded. -->
+  <!-- TODO(v0.1): theme link is injected by engine/index.js from config.theme -->
+  <link rel="stylesheet" href="../themes/_tokens.css" />
+  <link rel="stylesheet" href="../styles/base.css" />
+  <link rel="stylesheet" href="../styles/rtl.css" />
+</head>
+<body>
+  <main id="ftd-root"><!-- engine mounts here --></main>
+
+  <!-- TODO(v0.1): boot the engine
+  <script type="module">
+    import { boot } from '../engine/index.js';
+    boot({ configUrl: './config.json', mountEl: document.getElementById('ftd-root') });
+  </script>
+  -->
+</body>
+</html>

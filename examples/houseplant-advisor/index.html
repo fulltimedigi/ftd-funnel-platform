@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!-- examples/houseplant-advisor/index.html — runnable Houseplant Advisor.
+     Serve from repo root (npm run serve), open /examples/houseplant-advisor/index.html. -->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>أي نبتة منزلية تناسبك؟ — نَبتة</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <link rel="stylesheet" href="../../styles/base.css" />
+  <link rel="stylesheet" href="../../styles/rtl.css" />
+</head>
+<body>
+  <main id="ftd-root"></main>
+  <script type="module">
+    import { boot } from "../../engine/index.js";
+    boot({ configUrl: "../../configs/houseplant-advisor.json", mountEl: document.getElementById("ftd-root") });
+  </script>
+</body>
+</html>

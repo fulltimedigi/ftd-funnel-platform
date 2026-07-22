@@ -1,0 +1,223 @@
+{
+  "_note": "Phase-1 FreelanceX funnel. weighted-multi scoring, 6 questions, 5 archetypes, flags (URGENT/AR_ONLY/EN_GOOD). Every question contributes to scoring.",
+  "id": "freelancex",
+  "brand": { "name": "FreelanceX", "logo": "", "tagline": "أكبر مجتمع فريلانس عربي" },
+  "theme": "platform-clean",
+  "lang": "ar",
+  "hero": {
+    "eyebrow": "٥ مسارات · ٦ أسئلة",
+    "headline": "محتار تبدأ منين في الفريلانس؟",
+    "headlineAccent": "",
+    "subtext": "جاوب على ٦ أسئلة سريعة، وهنحلّل شخصيتك وظروفك ونوصّلك للمسار الأنسب ليك.",
+    "chips": ["٦ أسئلة", "نتيجة فورية", "مخصّص ليك"],
+    "startLabel": "ابدأ التشخيص ←"
+  },
+  "scoring": { "mode": "weighted-multi", "flags": ["URGENT", "AR_ONLY", "EN_GOOD"] },
+  "questions": [
+    {
+      "id": "q1",
+      "label": "السؤال الأول",
+      "text": "كم وقت تقدر تخصّصه للتعلم أسبوعياً؟",
+      "hint": "كن واقعياً",
+      "weight": 1,
+      "options": [
+        { "id": "a", "icon": "⏳", "label": "ساعة لساعتين باليوم", "score": { "freelance_start": 2, "copywriting": 2 } },
+        { "id": "b", "icon": "📚", "label": "٣ – ٤ ساعات باليوم", "score": { "graphic_design": 2, "video_editing": 2 } },
+        { "id": "c", "icon": "🕒", "label": "وقت كبير ومرن", "score": { "development": 3, "graphic_design": 1 } }
+      ]
+    },
+    {
+      "id": "q2",
+      "label": "السؤال الثاني",
+      "text": "إيه أقرب شيء ليك من دول؟",
+      "hint": "اختر الأقرب لشخصيتك",
+      "weight": 2,
+      "options": [
+        { "id": "a", "icon": "✍️", "label": "الكتابة والتعبير", "score": { "copywriting": 5 } },
+        { "id": "b", "icon": "🎨", "label": "التصميم والبصريات", "score": { "graphic_design": 5 } },
+        { "id": "c", "icon": "🎬", "label": "الفيديو والمونتاج", "score": { "video_editing": 5 } },
+        { "id": "d", "icon": "💻", "label": "حل المشكلات بالبرمجة", "score": { "development": 5 } }
+      ]
+    },
+    {
+      "id": "q3",
+      "label": "السؤال الثالث",
+      "text": "وضعك المادي حالياً؟",
+      "weight": 1,
+      "options": [
+        { "id": "a", "icon": "⚡", "label": "محتاج دخل بسرعة", "score": { "freelance_start": 3, "copywriting": 1 }, "flag": "URGENT" },
+        { "id": "b", "icon": "📈", "label": "مستقر وبدوّر على نمو", "score": { "development": 2, "graphic_design": 1 } },
+        { "id": "c", "icon": "🌱", "label": "بتعلّم كهواية", "score": { "video_editing": 1, "graphic_design": 1 } }
+      ]
+    },
+    {
+      "id": "q4",
+      "label": "السؤال الرابع",
+      "text": "مستوى الإنجليزي عندك؟",
+      "weight": 1,
+      "options": [
+        { "id": "a", "icon": "🔤", "label": "ضعيف", "score": { "copywriting": 1 }, "flag": "AR_ONLY" },
+        { "id": "b", "icon": "🆗", "label": "متوسط", "score": { "graphic_design": 1, "video_editing": 1 } },
+        { "id": "c", "icon": "🌍", "label": "كويس جداً", "score": { "development": 2 }, "flag": "EN_GOOD" }
+      ]
+    },
+    {
+      "id": "q5",
+      "label": "السؤال الخامس",
+      "text": "بتفضّل تشتغل إزاي؟",
+      "weight": 1,
+      "options": [
+        { "id": "a", "icon": "⚡", "label": "مشاريع سريعة ومتنوعة", "score": { "copywriting": 2, "graphic_design": 1 } },
+        { "id": "b", "icon": "🧩", "label": "مشاريع طويلة وعميقة", "score": { "development": 3 } },
+        { "id": "c", "icon": "📱", "label": "محتوى وسوشيال ميديا", "score": { "video_editing": 2, "graphic_design": 1 } }
+      ]
+    },
+    {
+      "id": "q6",
+      "label": "السؤال السادس",
+      "text": "إيه هدفك خلال ٦ شهور؟",
+      "weight": 2,
+      "options": [
+        { "id": "a", "icon": "💵", "label": "أكسب أول ٥٠٠ دولار بأسرع وقت", "score": { "freelance_start": 3, "copywriting": 2 } },
+        { "id": "b", "icon": "🗂️", "label": "أبني بورتفوليو قوي", "score": { "graphic_design": 3, "video_editing": 2 } },
+        { "id": "c", "icon": "🚀", "label": "أتعلّم مهارة تقنية عالية الدخل", "score": { "development": 4 } }
+      ]
+    }
+  ],
+  "archetypes": [
+    {
+      "id": "copywriting",
+      "name": "الكوبي رايتينج",
+      "icon": "✍️",
+      "tagline": "بتعرف تقنع الناس بالكلمة — ده مهارة بتتدفع عليها من أول مشروع.",
+      "description": "عندك إحساس باللغة وقدرة على التعبير. الكتابة الإعلانية تحوّل الموهبة دي لدخل سريع لأنها مطلوبة في كل مكان: إعلانات، إيميلات، صفحات هبوط.",
+      "traits": ["معبّر", "مقنع", "بيفهم نفسية الناس"],
+      "resultExtras": {
+        "step": "اكتب ٥ نماذج إعلانية وانشرها في بورتفوليو بسيط خلال أسبوع",
+        "time": "٢ – ٤ أسابيع",
+        "earn": "$30 – $200 للمشروع",
+        "platforms": ["خمسات", "Upwork", "LinkedIn"]
+      },
+      "recommendations": {
+        "primary": {
+          "name": "ابدأ بمسار الكوبي رايتينج في FreelanceX",
+          "url": "https://freelance-x.co",
+          "becauseTemplate": "لأنك اخترت «{q2}» كأقرب شيء إليك، والكتابة الإعلانية تحوّل هذه الموهبة إلى دخل سريع."
+        }
+      }
+    },
+    {
+      "id": "graphic_design",
+      "name": "الجرافيك ديزاين",
+      "icon": "🎨",
+      "tagline": "عندك ذوق بصري — والتصميم بيبني لك بورتفوليو مطلوب بسرعة.",
+      "description": "بتحب الجمال البصري والتفاصيل. التصميم مسار إبداعي بطلب عالٍ، من اللوجوهات للسوشيال ميديا للهوية البصرية.",
+      "traits": ["مبدع", "ذوق بصري", "صبور على التفاصيل"],
+      "resultExtras": {
+        "step": "صمّم ٥ قطع في كانفا وابنِ بروفايل على Behance",
+        "time": "٢ – ٤ أسابيع",
+        "earn": "$15 – $150 للمشروع",
+        "platforms": ["خمسات", "Fiverr", "Instagram"]
+      },
+      "recommendations": {
+        "primary": {
+          "name": "ابدأ بمسار الجرافيك ديزاين في FreelanceX",
+          "url": "https://freelance-x.co",
+          "becauseTemplate": "لأن «{q2}» يعبّر عنك، والتصميم يبني لك بورتفوليو مطلوباً بسرعة."
+        }
+      }
+    },
+    {
+      "id": "video_editing",
+      "name": "المونتاج",
+      "icon": "🎬",
+      "tagline": "الفيديو هو لغة العصر — والمونتاج من أكثر المهارات طلباً.",
+      "description": "بتحب الحركة والإيقاع والقصة. مع انفجار المحتوى القصير، المونتاج مهارة دخلها بيكبر بسرعة.",
+      "traits": ["إبداعي", "سريع التعلّم", "بيحب الفيديو"],
+      "resultExtras": {
+        "step": "قصّ ٣ فيديوهات قصيرة في CapCut وانشرها",
+        "time": "٢ – ٤ أسابيع",
+        "earn": "$20 – $200 للفيديو",
+        "platforms": ["Fiverr", "TikTok", "YouTube"]
+      },
+      "recommendations": {
+        "primary": {
+          "name": "ابدأ بمسار المونتاج في FreelanceX",
+          "url": "https://freelance-x.co",
+          "becauseTemplate": "لأنك اخترت «{q2}»، والمونتاج من أكثر المهارات طلباً مع نمو المحتوى."
+        }
+      }
+    },
+    {
+      "id": "development",
+      "name": "البرمجة والتطوير",
+      "icon": "💻",
+      "tagline": "بتحب تحل المشكلات بالمنطق — والبرمجة أعلى المسارات دخلاً.",
+      "description": "بتفكر بشكل منطقي وبتستمتع بحل المشكلات. التطوير مسار طويل النفس لكنه الأعلى دخلاً والأكثر استقراراً.",
+      "traits": ["منطقي", "صبور", "بيحب حل المشاكل"],
+      "resultExtras": {
+        "step": "ابدأ بكورس HTML/CSS ثم WordPress، وصمّم أول موقع خلال أسبوعين",
+        "time": "٣ – ٦ أسابيع",
+        "earn": "$100 – $1,000 للمشروع",
+        "platforms": ["مستقل", "Upwork", "Fiverr"]
+      },
+      "recommendations": {
+        "primary": {
+          "name": "ابدأ بمسار تطوير الويب في FreelanceX",
+          "url": "https://freelance-x.co",
+          "becauseTemplate": "لأنك اخترت «{q2}» كأقرب شيء إليك، والبرمجة من أعلى المسارات دخلاً وطلباً."
+        }
+      }
+    },
+    {
+      "id": "freelance_start",
+      "name": "الفريلانس من الصفر",
+      "icon": "🚀",
+      "tagline": "أنت متحمس وجاهز تبدأ — نبدأ بأساس متين يوصلك لأول دخل بسرعة.",
+      "description": "أولويتك دخل سريع وبداية صحيحة. نبدأ بأساسيات الفريلانس واختيار مهارة واحدة تنفّذها فوراً على المنصات.",
+      "traits": ["متحمّس", "عملي", "جاهز يبدأ"],
+      "resultExtras": {
+        "step": "اختر مهارة واحدة وأنشئ حساب على خمسات اليوم",
+        "time": "١ – ٣ أسابيع",
+        "earn": "حسب المهارة التي تختارها",
+        "platforms": ["خمسات", "مستقل"]
+      },
+      "recommendations": {
+        "primary": {
+          "name": "ابدأ بمسار الفريلانس من الصفر في FreelanceX",
+          "url": "https://freelance-x.co",
+          "becauseTemplate": "لأن أولويتك «{q6}» — نبدأ بأساس متين يوصلك لأول دخل بأسرع وقت."
+        }
+      }
+    }
+  ],
+  "resultLayout": "tracks",
+  "flags": [
+    { "id": "URGENT", "adjustments": { "freelance_start": 5, "copywriting": 3, "development": -4 } },
+    { "id": "AR_ONLY", "adjustments": { "development": -3 } },
+    { "id": "EN_GOOD", "adjustments": { "development": 2 } }
+  ],
+  "leadForm": {
+    "gated": true,
+    "skippable": true,
+    "fields": [
+      { "name": "name", "label": "الاسم", "type": "text", "required": true },
+      { "name": "email", "label": "البريد الإلكتروني", "type": "email", "required": true },
+      { "name": "phone", "label": "رقم الجوال (اختياري)", "type": "tel", "required": false }
+    ],
+    "privacyNote": "🔒 بياناتك آمنة ولن تُشارك مع أي جهة.",
+    "submitLabel": "اعرض نتيجتي ✦"
+  },
+  "cta": { "primaryLabel": "ابدأ مسارك في FreelanceX ←", "primaryUrl": "https://freelance-x.co", "utm": "" },
+  "analytics": { "sinks": ["sheets"], "sheetsEndpoint": "https://script.google.com/macros/s/AKfycbzgVmampDQuLJCQFtYB5M-qaKHZrN8O19saGZyGaTOP3GYvAbbiO9oLWlI4y0pO7Y0/exec" },
+  "copy": {
+    "loaderText": "بنحلّل إجاباتك…",
+    "progressLabels": ["الوقت", "ميولك", "وضعك", "لغتك", "أسلوبك", "هدفك"],
+    "restartLabel": "↺ ابدأ من جديد",
+    "result": {
+      "eyebrow": "مسارك الأنسب",
+      "recommendationTitle": "توصيتنا لك",
+      "scoreTitle": "📊 توزيع نتيجتك على المسارات"
+    }
+  }
+}
