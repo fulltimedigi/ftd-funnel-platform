@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Static, config-driven engine for Arabic-first diagnostic funnels. No build step; type:module enables native ES modules in Node and the browser.",
   "scripts": {
-    "test": "node tests/scoring.test.mjs && node tests/funnel.freelancex.test.mjs && node tests/leadloop.test.mjs && node tests/asq.test.mjs && node tests/signals.test.mjs && node tests/questions.test.mjs && node tests/decision.test.mjs && node tests/explanation.test.mjs && node tests/trust.test.mjs && node tests/conversion.test.mjs && node tests/houseplant.decision.test.mjs && node tests/houseplant.explanation.test.mjs && node tests/houseplant.trust.test.mjs && node tests/houseplant.conversion.test.mjs && node tests/errormonitor.test.mjs && node tests/leadqueue.test.mjs && node tests/analytics.test.mjs && node tests/i18n.test.mjs && node tests/validateConfig.test.mjs && node tests/personas.test.mjs && node tests/carriedBugs.test.mjs && node tests/backend.test.mjs && node tests/ingest.compliance.test.mjs && node tests/ingest.extract.test.mjs && node tests/ingest.pipeline.test.mjs && node tests/author.axes.test.mjs",
+    "test": "node tests/scoring.test.mjs && node tests/funnel.freelancex.test.mjs && node tests/leadloop.test.mjs && node tests/asq.test.mjs && node tests/signals.test.mjs && node tests/questions.test.mjs && node tests/decision.test.mjs && node tests/explanation.test.mjs && node tests/trust.test.mjs && node tests/conversion.test.mjs && node tests/houseplant.decision.test.mjs && node tests/houseplant.explanation.test.mjs && node tests/houseplant.trust.test.mjs && node tests/houseplant.conversion.test.mjs && node tests/errormonitor.test.mjs && node tests/leadqueue.test.mjs && node tests/analytics.test.mjs && node tests/i18n.test.mjs && node tests/validateConfig.test.mjs && node tests/personas.test.mjs && node tests/carriedBugs.test.mjs && node tests/backend.test.mjs && node tests/ingest.compliance.test.mjs && node tests/ingest.extract.test.mjs && node tests/ingest.pipeline.test.mjs && node tests/author.axes.test.mjs && node tests/author.generate.test.mjs",
     "test:scoring": "node tests/scoring.test.mjs",
     "test:signals": "node tests/signals.test.mjs",
     "test:questions": "node tests/questions.test.mjs",
@@ -29,6 +29,7 @@
     "test:ingest-extract": "node tests/ingest.extract.test.mjs",
     "test:ingest-pipeline": "node tests/ingest.pipeline.test.mjs",
     "ingest": "node authoring/ingest/run.mjs",
-    "test:axes": "node tests/author.axes.test.mjs"
+    "test:axes": "node tests/author.axes.test.mjs",
+    "test:generate": "node tests/author.generate.test.mjs"
   }
 }
