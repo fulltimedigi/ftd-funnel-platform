@@ -18,8 +18,8 @@ Merge the two engines into one clean, tested engine (see ADR-0003).
 - [x] Make the **JSON schema executable** at boot (dependency-free validator; ran it, fixed the primary-vs-contextual `becauseTemplate` drift it exposed) — ADR-0009.
 - [x] Build the **`personas`** result layout (strengths/gaps/next-steps; no longer falls back to tracks) — ADR-0010.
 - [x] Fix carried bugs: mount-selector restart, `track-based` mode, missing theme, GA4 CSP — audited (3 were production-only, verified absent + regression-guarded; GA4 CSP shipped in DEPLOY.md) — ADR-0011.
-- [ ] Merge production's backend `Code.gs` (per-funnel isolation).
-- **Exit:** one engine, all strengths, no known bugs, `npm test` green, one demo funnel boots & renders.
+- [x] Merge production's backend `Code.gs` (per-funnel isolation; lead/event/error routing; adapted to our payloads; fake-GAS tested) — ADR-0012.
+- **Exit:** one engine, all strengths, no known bugs, `npm test` green (22 suites / 253 assertions), one demo funnel boots & renders. ✅ **Stage 0 complete.**
 
 ## Stage 1 — Catalog ingestion  ·  *the moat*
 
