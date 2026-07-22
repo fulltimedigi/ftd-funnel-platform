@@ -11,15 +11,15 @@ next stage until the current one is green.
 Merge the two engines into one clean, tested engine (see ADR-0003).
 
 - [x] Seed from `fulltimedigi-engine-v0` — 14 suites / 176 assertions green.
-- [ ] Port production **lead capture** loop (offline queue → POST → honest failure) + keep tests green.
-- [ ] Port production **error monitor** (PII masking).
-- [ ] Port production **analytics** (working sheets + GA4 sinks) replacing v0 stubs.
-- [ ] Port production **i18n-rtl** (numerals, LTR-forcing) replacing v0 stubs; ship real `rtl.css`.
-- [ ] Make the **JSON schema executable** at boot (fix the "decorative schema" gap in both).
-- [ ] Build the **`personas`** result layout (currently falls back).
-- [ ] Fix carried bugs: mount-selector restart, `track-based` mode, missing theme, GA4 CSP.
-- [ ] Merge production's backend `Code.gs` (per-funnel isolation).
-- **Exit:** one engine, all strengths, no known bugs, `npm test` green, one demo funnel boots & renders.
+- [x] Port production **lead capture** loop (offline outbox → POST → honest failure; retried at boot / on reconnect) — ADR-0006.
+- [x] Port production **error monitor** (PII masking) — Node-safe, test-covered (ADR-0005).
+- [x] Port production **analytics** (working sheets + GA4 sinks) replacing v0 stubs; lifecycle events wired in `index.js` (ADR-0007).
+- [x] Port production **i18n-rtl** (Arabic numerals, LTR-forcing) replacing v0 stubs; real `rtl.css` wired into the shells (ADR-0008).
+- [x] Make the **JSON schema executable** at boot (dependency-free validator; ran it, fixed the primary-vs-contextual `becauseTemplate` drift it exposed) — ADR-0009.
+- [x] Build the **`personas`** result layout (strengths/gaps/next-steps; no longer falls back to tracks) — ADR-0010.
+- [x] Fix carried bugs: mount-selector restart, `track-based` mode, missing theme, GA4 CSP — audited (3 were production-only, verified absent + regression-guarded; GA4 CSP shipped in DEPLOY.md) — ADR-0011.
+- [x] Merge production's backend `Code.gs` (per-funnel isolation; lead/event/error routing; adapted to our payloads; fake-GAS tested) — ADR-0012.
+- **Exit:** one engine, all strengths, no known bugs, `npm test` green (22 suites / 253 assertions), one demo funnel boots & renders. ✅ **Stage 0 complete.**
 
 ## Stage 1 — Catalog ingestion  ·  *the moat*
 

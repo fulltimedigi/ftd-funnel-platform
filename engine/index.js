@@ -9,7 +9,8 @@
  * Lead loop (this phase): after the last question the result is computed, then —
  *   if leadForm.gated and has fields — the lead form is shown. On submit the
  *   tagged lead is sent to the sheets sink; on success (or skip) the result is
- *   shown. NO analytics events, NO themes yet.
+ *   shown. The fixed analytics vocabulary (docs/EVENTS.md) is emitted across the
+ *   lifecycle to any configured sinks (ADR-0007).
  *
  * createFunnel(config, mountEl, deps) — deps.submitLead(payload)->Promise lets
  *   tests inject the transport; default is the Google Sheets sink built from
@@ -25,12 +26,32 @@ import { renderLeadCapture } from "./leadCapture.js";
 import { score } from "./scoring.js";
 import { resolve } from "./resolver.js";
 import { buildRecommendations } from "./recommend.js";
-import { createSheetsSink } from "../analytics/sheets-sink.js";
+import { createSheetsSink, registerSink as registerSheetsEventSink } from "../analytics/sheets-sink.js";
+import { registerSink as registerGa4Sink } from "../analytics/ga4-sink.js";
+import { createResilientSink } from "./leadQueue.js";
+import * as analytics from "./analytics.js";
+import { validateConfig, formatValidationErrors } from "./validateConfig.js";
 
-export async function boot({ configUrl, mountEl }) {
+export async function boot({ configUrl, mountEl, schemaUrl }) {
   const res = await fetch(configUrl);
   const config = await res.json();
-  return createFunnel(config, mountEl);
+
+  // Executable schema: load the sibling _schema.json (or an override) and run it.
+  // If the schema can't be fetched, validation is skipped honestly — the funnel
+  // still boots, but we say so rather than pretend it was validated.
+  let schema = null;
+  const sUrl = schemaUrl || (typeof configUrl === "string" ? configUrl.replace(/[^/]+$/, "_schema.json") : null);
+  if (sUrl) {
+    try {
+      const sres = await fetch(sUrl);
+      if (sres && sres.ok) schema = await sres.json();
+      else console.warn("[ftd] schema not loaded — config validation skipped.");
+    } catch {
+      console.warn("[ftd] schema fetch failed — config validation skipped.");
+    }
+  }
+
+  return createFunnel(config, mountEl, { schema });
 }
 
 /**
@@ -55,13 +76,50 @@ function loadTheme(name) {
 
 export function createFunnel(config, mountEl, deps = {}) {
   const state = State.createState(config.id);
-  const submitLead = deps.submitLead || createSheetsSink(config.analytics?.sheetsEndpoint).submit;
+
+  // Executable schema (ADR-0009): if a schema is supplied, validate the config and
+  // surface violations honestly. Non-blocking — the funnel still renders (the
+  // decision core + trust gate catch fatal cases), but the contract breach is
+  // logged and exposed via api.getValidation(). No schema → validation skipped.
+  let validation = null;
+  if (deps.schema) {
+    validation = validateConfig(config, deps.schema);
+    if (!validation.valid) {
+      console.warn(`[ftd] config "${config.id}" failed schema validation:\n${formatValidationErrors(validation)}`);
+    }
+  }
+
+  // Injected transport (tests) is used raw; the default production Sheets sink is
+  // wrapped in an offline outbox so a mid-submit network drop never loses the lead
+  // and stranded leads are retried at boot / when the network returns (ADR-0006).
+  let leadSink = null;
+  let submitLead;
+  if (typeof deps.submitLead === "function") {
+    submitLead = deps.submitLead;
+  } else {
+    const base = createSheetsSink(config.analytics?.sheetsEndpoint).submit;
+    leadSink = createResilientSink(base, config.id);
+    submitLead = leadSink.submit;
+  }
   const theme = config.theme || null;
   loadTheme(theme);
+
+  // Analytics: init the bus and register any sinks the config asks for. Sink
+  // registration is best-effort — a sink that fails to register must not stop
+  // the funnel. With no configured sinks, emit() is a harmless no-op.
+  analytics.initAnalytics(config.id);
+  const _aSinks = config.analytics?.sinks || [];
+  if (_aSinks.includes("sheets") && config.analytics?.sheetsEndpoint) {
+    try { registerSheetsEventSink(config.analytics.sheetsEndpoint); } catch { /* non-fatal */ }
+  }
+  if (_aSinks.includes("ga4") && config.analytics?.ga4Id) {
+    try { registerGa4Sink(config.analytics.ga4Id); } catch { /* non-fatal */ }
+  }
 
   let view = "hero";
   let lastResolved = null;
   let leadHandle = null;
+  let leadCaptured = false;
 
   /* ---------------------------------------------------------- rendering */
 
@@ -109,6 +167,7 @@ export function createFunnel(config, mountEl, deps = {}) {
         current,
         total,
         label,
+        lang: config.lang,
         onSelect: selectOption,
         onNext: goNext,
         onBack: goBack,
@@ -122,18 +181,48 @@ export function createFunnel(config, mountEl, deps = {}) {
       config,
       onSubmit: async (values) => {
         const res = await submitLead(buildLeadPayload(values));
-        if (res && res.ok) showResult();
+        const ok = !!(res && res.ok);
+        analytics.emitLeadSubmitted(ok);
+        if (ok) {
+          leadCaptured = true;
+          showResult();
+        }
         return res || { ok: false };
       },
-      onSkip: showResult,
+      onSkip: () => {
+        analytics.emitLeadSkipped();
+        showResult();
+      },
     });
     mount(mountEl, leadHandle.node);
+    analytics.emitLeadShown();
   }
 
   function showResult() {
     view = "result";
     if (!lastResolved) lastResolved = resolve(score(config, state.answers), config);
     mount(mountEl, renderResult({ resolved: lastResolved, config, answers: state.answers, onRestart: restart }));
+
+    const sc = lastResolved.scoring || {};
+    analytics.emitResultShown(lastResolved.primary?.id || null, lastResolved.secondary?.id || null, sc.flags || []);
+    analytics.emitFunnelComplete(lastResolved.primary?.id || null, leadCaptured);
+    _wireCtaAnalytics();
+  }
+
+  /**
+   * Attach click tracking to the rendered CTAs. Browser-only: the Node test DOM
+   * shim has no querySelectorAll, so this is skipped there (guarded) and never
+   * throws — the funnel behaves identically with or without it.
+   */
+  function _wireCtaAnalytics() {
+    if (!mountEl || typeof mountEl.querySelectorAll !== "function") return;
+    const archetype = lastResolved?.primary?.id || null;
+    mountEl.querySelectorAll(".ftd-cta, .ftd-card-cta").forEach((a) => {
+      const ctaType = a.classList?.contains?.("ftd-card-cta") ? "secondary" : "primary";
+      a.addEventListener("click", () => {
+        analytics.emitCtaClicked(a.getAttribute("href") || "", archetype, ctaType);
+      });
+    });
   }
 
   /* ------------------------------------------------- payloads & control */
@@ -177,9 +266,13 @@ export function createFunnel(config, mountEl, deps = {}) {
   }
 
   function start() {
+    // Flush any leads stranded by a previous session's network drop (best-effort).
+    if (leadSink) leadSink.drain().catch(() => {});
+    leadCaptured = false;
     state.currentStepId = Flow.firstStepId(config);
     state.history = [];
     State.save(state);
+    analytics.emitQuizStart(theme);
     renderCurrentQuestion();
   }
 
@@ -188,6 +281,7 @@ export function createFunnel(config, mountEl, deps = {}) {
     if (!q) return;
     State.setAnswer(state, q.id, optionId);
     State.save(state);
+    analytics.emitQuestionAnswered(q.id, optionId, Flow.questionNumber(config, q.id));
     renderCurrentQuestion();
   }
 
@@ -209,8 +303,10 @@ export function createFunnel(config, mountEl, deps = {}) {
       renderHero();
       return;
     }
+    const fromStep = state.currentStepId;
     state.currentStepId = state.history.pop();
     State.save(state);
+    analytics.emitQuestionBack(fromStep, state.currentStepId);
     renderCurrentQuestion();
   }
 
@@ -218,6 +314,8 @@ export function createFunnel(config, mountEl, deps = {}) {
     State.reset(state);
     lastResolved = null;
     leadHandle = null;
+    leadCaptured = false;
+    analytics.emitRestart();
     renderHero();
   }
 
@@ -235,6 +333,8 @@ export function createFunnel(config, mountEl, deps = {}) {
     getState: () => state,
     getResolved: () => lastResolved,
     getTheme: () => theme,
+    // Schema-validation result ({valid, errors}), or null if no schema was supplied.
+    getValidation: () => validation,
     // test/drive handle for the lead form (null unless on the lead step)
     getLeadHandle: () =>
       leadHandle && {

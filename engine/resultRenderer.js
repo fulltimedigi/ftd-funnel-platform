@@ -22,6 +22,7 @@
 
 import { el } from "./dom.js";
 import { buildRecommendations } from "./recommend.js";
+import { localizeNum, formatPercent } from "./i18n-rtl.js";
 
 /* ----------------------------------------------------------- helpers */
 
@@ -83,11 +84,11 @@ function traitsBlock(primary) {
   return el("div", { class: "ftd-traits" }, primary.traits.map((t) => el("span", { class: "ftd-trait", text: t })));
 }
 
-function blendBlock(primary, secondary, proportion) {
+function blendBlock(primary, secondary, proportion, lang) {
   if (!secondary) return null;
   return el("p", {
     class: "ftd-blend",
-    text: `أنت في الأساس ${primary.name} (${proportion.primaryPct}%)، مع لمسة من ${secondary.name} (${proportion.secondaryPct}%).`,
+    text: `أنت في الأساس ${primary.name} (${formatPercent(proportion.primaryPct, lang)})، مع لمسة من ${secondary.name} (${formatPercent(proportion.secondaryPct, lang)}).`,
   });
 }
 
@@ -119,12 +120,13 @@ function renderTracks(ctx) {
   const archById = new Map((config.archetypes || []).map((a) => [a.id, a]));
   const extras = primary?.resultExtras || {};
   const copy = resultCopy(config);
+  const lang = config.lang;
 
   const children = [
     heroCard(primary, copy.eyebrow || "نتيجتك"),
     primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
     traitsBlock(primary),
-    blendBlock(primary, secondary, proportion),
+    blendBlock(primary, secondary, proportion, lang),
   ];
 
   // Details
@@ -163,7 +165,7 @@ function renderTracks(ctx) {
     return el("div", { class: "ftd-bar-row" }, [
       el("span", { class: "ftd-bar-name", text: (a?.icon ? a.icon + " " : "") + (a?.name || id) }),
       el("div", { class: "ftd-bar-track" }, [el("div", { class: "ftd-bar-fill", style: `width:${pct}%` })]),
-      el("span", { class: "ftd-bar-val", text: String(v) }),
+      el("span", { class: "ftd-bar-val", text: localizeNum(v, lang) }),
     ]);
   });
   children.push(
@@ -201,6 +203,7 @@ function renderCommerce(ctx) {
   const copy = resultCopy(config);
   const rcopy = copy; // result-scoped copy aliases below
   const recs = primary?.recommendations || {};
+  const lang = config.lang;
 
   // Decision-table funnels carry the Step-8 explanation engine (signal-gated
   // why/why-not, variant-correct recommendation). Generic funnels keep the
@@ -211,7 +214,7 @@ function renderCommerce(ctx) {
     heroCard(primary, copy.eyebrow || "بروفايلك"),
     primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
     traitsBlock(primary),
-    blendBlock(primary, secondary, proportion),
+    blendBlock(primary, secondary, proportion, lang),
   ];
 
   // Signature recommendation: variant-resolved for decision funnels.
@@ -264,6 +267,59 @@ function renderCommerce(ctx) {
   return el("section", { class: "ftd-screen ftd-result ftd-result-commerce" }, children);
 }
 
+/* ------------------------------------------------------------ personas */
+
+/** One titled persona list (strengths / gaps / actions). Null when empty. */
+function personaList(icon, title, className, items) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return el("div", { class: "ftd-persona-section " + className }, [
+    el("div", { class: "ftd-persona-head" }, [
+      el("span", { class: "ftd-persona-icon", text: icon }),
+      el("h3", { class: "ftd-persona-title", text: title }),
+    ]),
+    el("ul", { class: "ftd-persona-list" }, items.map((it) => el("li", { class: "ftd-persona-item", text: it }))),
+  ]);
+}
+
+/**
+ * Personas layout — a coaching / B2B profile: who you are (hero + traits +
+ * blend) then strengths / gaps / next-steps from the archetype's resultExtras,
+ * and the primary recommendation (only when its `because` resolves — same §9
+ * rule as every layout). Lists are omitted when absent (no fabrication).
+ */
+function renderPersonas(ctx) {
+  const { resolved, config, answers, onRestart } = ctx;
+  const { primary, secondary, proportion } = resolved;
+  const extras = primary?.resultExtras || {};
+  const copy = resultCopy(config);
+  const lang = config.lang;
+
+  const children = [
+    heroCard(primary, copy.eyebrow || "نتيجتك"),
+    primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
+    traitsBlock(primary),
+    blendBlock(primary, secondary, proportion, lang),
+    personaList("💪", copy.strengthsTitle || "نقاط القوة", "ftd-strengths", extras.strengths),
+    personaList("🎯", copy.gapsTitle || "مجالات التطوير", "ftd-gaps", extras.gaps),
+    personaList("✅", copy.actionsTitle || "الخطوات التالية", "ftd-actions", extras.actions),
+  ];
+
+  // Primary recommendation — only if its `because` resolves from the answers.
+  const rec = primary?.recommendations?.primary;
+  if (rec && fillBecause(rec.becauseTemplate, answers, config)) {
+    children.push(
+      el("div", { class: "ftd-rec" }, [
+        el("h3", { class: "ftd-rec-title", text: copy.recommendationTitle || "توصيتنا لك" }),
+        recommendationCard(rec, answers, config, { showCta: true }),
+      ])
+    );
+  }
+
+  children.push(ctaLink(config));
+  children.push(restartButton(config, onRestart));
+  return el("section", { class: "ftd-screen ftd-result ftd-result-personas" }, children);
+}
+
 /* ----------------------------------------------------------- dispatch */
 
 export function renderResult(ctx) {
@@ -271,8 +327,9 @@ export function renderResult(ctx) {
   switch (layout) {
     case "commerce":
       return renderCommerce(ctx);
+    case "personas":
+      return renderPersonas(ctx);
     case "tracks":
-    case "personas": // personas variant not built yet — falls back to tracks
     default:
       return renderTracks(ctx);
   }

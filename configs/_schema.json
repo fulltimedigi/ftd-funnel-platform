@@ -109,6 +109,7 @@
     },
     "questions": {
       "type": "array",
+      "minItems": 1,
       "description": "Ordered (or branched) questions. RULE: every question must affect scoring (no theater).",
       "items": {
         "type": "object",
@@ -121,6 +122,7 @@
           "weight": { "type": "number", "default": 1 },
           "options": {
             "type": "array",
+            "minItems": 2,
             "items": {
               "type": "object",
               "required": ["id", "label"],
@@ -142,7 +144,8 @@
     },
     "archetypes": {
       "type": "array",
-      "description": "4–7 distinct archetypes (warn outside that range).",
+      "minItems": 2,
+      "description": "A decision funnel needs ≥2 distinct outcomes (hard floor). The 4–7 sweet spot is advisory.",
       "items": {
         "type": "object",
         "required": ["id", "name", "recommendations"],
@@ -162,7 +165,7 @@
             "required": ["primary"],
             "properties": {
               "primary": { "$ref": "#/definitions/recommendation" },
-              "contextual": { "type": "array", "items": { "$ref": "#/definitions/recommendation" } }
+              "contextual": { "type": "array", "items": { "$ref": "#/definitions/contextualRecommendation" } }
             }
           },
           "resultExtras": { "type": "object", "description": "layout-variant data (strengths/gaps/actions, details, etc.)" }
@@ -237,7 +240,7 @@
     "recommendation": {
       "type": "object",
       "required": ["name", "url", "becauseTemplate"],
-      "description": "RULE: becauseTemplate is mandatory; no recommendation renders without a resolved 'because'.",
+      "description": "The PRIMARY recommendation. RULE (§9): becauseTemplate is mandatory — the headline recommendation never renders without a resolved 'because' (enforced by engine/recommend.js + trustValidate TV1).",
       "properties": {
         "name": { "type": "string" },
         "nameSecondary": { "type": "string" },
@@ -249,6 +252,25 @@
         "url": { "type": "string" },
         "utm": { "type": "string" },
         "becauseTemplate": { "type": "string", "description": "string with answer placeholders e.g. 'لأنك تفضّل {q1}…'" }
+      }
+    },
+    "contextualRecommendation": {
+      "type": "object",
+      "required": ["name", "url"],
+      "description": "A CONTEXTUAL ('also relevant') recommendation. Only name + a real url are required; becauseTemplate is OPTIONAL — a contextual card renders without a reason line rather than fabricating one, and a decision-table funnel simply omits an unresolved one (engine/recommend.js). This matches the engine + trust gate, which require a 'because' only for the primary.",
+      "properties": {
+        "name": { "type": "string" },
+        "nameSecondary": { "type": "string" },
+        "tag": { "type": "string", "description": "short contextual label, e.g. 'للمجلس'" },
+        "notes": { "type": "string" },
+        "price": { "type": "string" },
+        "originalPrice": { "type": "string" },
+        "discountLabel": { "type": "string" },
+        "image": { "type": "string" },
+        "url": { "type": "string" },
+        "utm": { "type": "string" },
+        "needs": { "type": "object", "description": "optional signal predicate gating this contextual offer (decision-table funnels)" },
+        "becauseTemplate": { "type": "string", "description": "optional; if present and it resolves, a reason line is shown" }
       }
     }
   }
