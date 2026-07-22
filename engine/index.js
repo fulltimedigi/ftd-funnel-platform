@@ -9,7 +9,8 @@
  * Lead loop (this phase): after the last question the result is computed, then —
  *   if leadForm.gated and has fields — the lead form is shown. On submit the
  *   tagged lead is sent to the sheets sink; on success (or skip) the result is
- *   shown. NO analytics events, NO themes yet.
+ *   shown. The fixed analytics vocabulary (docs/EVENTS.md) is emitted across the
+ *   lifecycle to any configured sinks (ADR-0007).
  *
  * createFunnel(config, mountEl, deps) — deps.submitLead(payload)->Promise lets
  *   tests inject the transport; default is the Google Sheets sink built from
@@ -25,8 +26,10 @@ import { renderLeadCapture } from "./leadCapture.js";
 import { score } from "./scoring.js";
 import { resolve } from "./resolver.js";
 import { buildRecommendations } from "./recommend.js";
-import { createSheetsSink } from "../analytics/sheets-sink.js";
+import { createSheetsSink, registerSink as registerSheetsEventSink } from "../analytics/sheets-sink.js";
+import { registerSink as registerGa4Sink } from "../analytics/ga4-sink.js";
 import { createResilientSink } from "./leadQueue.js";
+import * as analytics from "./analytics.js";
 
 export async function boot({ configUrl, mountEl }) {
   const res = await fetch(configUrl);
@@ -71,9 +74,22 @@ export function createFunnel(config, mountEl, deps = {}) {
   const theme = config.theme || null;
   loadTheme(theme);
 
+  // Analytics: init the bus and register any sinks the config asks for. Sink
+  // registration is best-effort — a sink that fails to register must not stop
+  // the funnel. With no configured sinks, emit() is a harmless no-op.
+  analytics.initAnalytics(config.id);
+  const _aSinks = config.analytics?.sinks || [];
+  if (_aSinks.includes("sheets") && config.analytics?.sheetsEndpoint) {
+    try { registerSheetsEventSink(config.analytics.sheetsEndpoint); } catch { /* non-fatal */ }
+  }
+  if (_aSinks.includes("ga4") && config.analytics?.ga4Id) {
+    try { registerGa4Sink(config.analytics.ga4Id); } catch { /* non-fatal */ }
+  }
+
   let view = "hero";
   let lastResolved = null;
   let leadHandle = null;
+  let leadCaptured = false;
 
   /* ---------------------------------------------------------- rendering */
 
@@ -134,18 +150,48 @@ export function createFunnel(config, mountEl, deps = {}) {
       config,
       onSubmit: async (values) => {
         const res = await submitLead(buildLeadPayload(values));
-        if (res && res.ok) showResult();
+        const ok = !!(res && res.ok);
+        analytics.emitLeadSubmitted(ok);
+        if (ok) {
+          leadCaptured = true;
+          showResult();
+        }
         return res || { ok: false };
       },
-      onSkip: showResult,
+      onSkip: () => {
+        analytics.emitLeadSkipped();
+        showResult();
+      },
     });
     mount(mountEl, leadHandle.node);
+    analytics.emitLeadShown();
   }
 
   function showResult() {
     view = "result";
     if (!lastResolved) lastResolved = resolve(score(config, state.answers), config);
     mount(mountEl, renderResult({ resolved: lastResolved, config, answers: state.answers, onRestart: restart }));
+
+    const sc = lastResolved.scoring || {};
+    analytics.emitResultShown(lastResolved.primary?.id || null, lastResolved.secondary?.id || null, sc.flags || []);
+    analytics.emitFunnelComplete(lastResolved.primary?.id || null, leadCaptured);
+    _wireCtaAnalytics();
+  }
+
+  /**
+   * Attach click tracking to the rendered CTAs. Browser-only: the Node test DOM
+   * shim has no querySelectorAll, so this is skipped there (guarded) and never
+   * throws — the funnel behaves identically with or without it.
+   */
+  function _wireCtaAnalytics() {
+    if (!mountEl || typeof mountEl.querySelectorAll !== "function") return;
+    const archetype = lastResolved?.primary?.id || null;
+    mountEl.querySelectorAll(".ftd-cta, .ftd-card-cta").forEach((a) => {
+      const ctaType = a.classList?.contains?.("ftd-card-cta") ? "secondary" : "primary";
+      a.addEventListener("click", () => {
+        analytics.emitCtaClicked(a.getAttribute("href") || "", archetype, ctaType);
+      });
+    });
   }
 
   /* ------------------------------------------------- payloads & control */
@@ -191,9 +237,11 @@ export function createFunnel(config, mountEl, deps = {}) {
   function start() {
     // Flush any leads stranded by a previous session's network drop (best-effort).
     if (leadSink) leadSink.drain().catch(() => {});
+    leadCaptured = false;
     state.currentStepId = Flow.firstStepId(config);
     state.history = [];
     State.save(state);
+    analytics.emitQuizStart(theme);
     renderCurrentQuestion();
   }
 
@@ -202,6 +250,7 @@ export function createFunnel(config, mountEl, deps = {}) {
     if (!q) return;
     State.setAnswer(state, q.id, optionId);
     State.save(state);
+    analytics.emitQuestionAnswered(q.id, optionId, Flow.questionNumber(config, q.id));
     renderCurrentQuestion();
   }
 
@@ -223,8 +272,10 @@ export function createFunnel(config, mountEl, deps = {}) {
       renderHero();
       return;
     }
+    const fromStep = state.currentStepId;
     state.currentStepId = state.history.pop();
     State.save(state);
+    analytics.emitQuestionBack(fromStep, state.currentStepId);
     renderCurrentQuestion();
   }
 
@@ -232,6 +283,8 @@ export function createFunnel(config, mountEl, deps = {}) {
     State.reset(state);
     lastResolved = null;
     leadHandle = null;
+    leadCaptured = false;
+    analytics.emitRestart();
     renderHero();
   }
 
