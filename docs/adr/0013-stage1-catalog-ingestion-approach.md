@@ -1,7 +1,10 @@
 # ADR-0013 — Stage 1 catalog ingestion: layered extraction + compliance-first
 
-- **Status:** Proposed (awaiting operator approval — no code until approved)
+- **Status:** Accepted
 - **Date:** 2026-07-22
+- **Operator decision (2026-07-22):** ingestion scope = **client-owned / authorized
+  sites only** (Option a). Standing approval to build all of Stage 1 without
+  step-by-step re-approval.
 
 ## Context
 
