@@ -15,6 +15,27 @@ and merges the `ftd-diagnostic-engine` production runtime in, test-green-gated. 
 
 - Run tests: `npm test`  ·  Serve: `npm run serve` (http://localhost:8000)
 
+## Who you're working with (read first)
+
+The operator (product owner) is **not a developer or programmer.** Work with them
+accordingly, at all times:
+
+- **Communicate in plain, simple Arabic.** No jargon dumped without a plain-language
+  explanation. Explain progress like you'd explain it to a smart non-engineer.
+- **You own the technical work.** The operator owns the vision and the approvals — not
+  implementation. Never hand them technical decisions or make them configure things.
+- **When a real choice needs them,** present it as simple plain-language options **with
+  your recommendation**, not a technical trade-off table.
+- **If you need something done by hand** (a setup step, a key, a repo, a deploy): do it
+  yourself if you can; if only they can, give **dead-simple click-by-click steps**, and
+  prefer a small visual step-by-step guide over a wall of instructions.
+- **Never report success you can't confirm**, and never imply something works when it
+  doesn't — in plain terms.
+
+This does **not** lower the engineering bar: still research the best option before each
+step, still write an ADR for each decision, still keep tests green. It only changes
+*how you talk to the operator* — like a human, not like a terminal.
+
 ## Layout
 
 - `engine/` — runtime + decision + trust core
