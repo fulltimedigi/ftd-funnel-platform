@@ -12,7 +12,7 @@ Merge the two engines into one clean, tested engine (see ADR-0003).
 
 - [x] Seed from `fulltimedigi-engine-v0` — 14 suites / 176 assertions green.
 - [ ] Port production **lead capture** loop (offline queue → POST → honest failure) + keep tests green.
-- [ ] Port production **error monitor** (PII masking).
+- [x] Port production **error monitor** (PII masking) — Node-safe, test-covered (ADR-0005).
 - [ ] Port production **analytics** (working sheets + GA4 sinks) replacing v0 stubs.
 - [ ] Port production **i18n-rtl** (numerals, LTR-forcing) replacing v0 stubs; ship real `rtl.css`.
 - [ ] Make the **JSON schema executable** at boot (fix the "decorative schema" gap in both).
