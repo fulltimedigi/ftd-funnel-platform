@@ -26,6 +26,7 @@ import { score } from "./scoring.js";
 import { resolve } from "./resolver.js";
 import { buildRecommendations } from "./recommend.js";
 import { createSheetsSink } from "../analytics/sheets-sink.js";
+import { createResilientSink } from "./leadQueue.js";
 
 export async function boot({ configUrl, mountEl }) {
   const res = await fetch(configUrl);
@@ -55,7 +56,18 @@ function loadTheme(name) {
 
 export function createFunnel(config, mountEl, deps = {}) {
   const state = State.createState(config.id);
-  const submitLead = deps.submitLead || createSheetsSink(config.analytics?.sheetsEndpoint).submit;
+  // Injected transport (tests) is used raw; the default production Sheets sink is
+  // wrapped in an offline outbox so a mid-submit network drop never loses the lead
+  // and stranded leads are retried at boot / when the network returns (ADR-0006).
+  let leadSink = null;
+  let submitLead;
+  if (typeof deps.submitLead === "function") {
+    submitLead = deps.submitLead;
+  } else {
+    const base = createSheetsSink(config.analytics?.sheetsEndpoint).submit;
+    leadSink = createResilientSink(base, config.id);
+    submitLead = leadSink.submit;
+  }
   const theme = config.theme || null;
   loadTheme(theme);
 
@@ -177,6 +189,8 @@ export function createFunnel(config, mountEl, deps = {}) {
   }
 
   function start() {
+    // Flush any leads stranded by a previous session's network drop (best-effort).
+    if (leadSink) leadSink.drain().catch(() => {});
     state.currentStepId = Flow.firstStepId(config);
     state.history = [];
     State.save(state);
