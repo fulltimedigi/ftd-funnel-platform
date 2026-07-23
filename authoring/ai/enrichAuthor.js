@@ -17,14 +17,16 @@
  *    then give up → {ok:false} so the caller falls back to deterministic.
  *
  * Pure/Node-safe: the model call is an INJECTED `complete()`, so the whole loop
- * (prompt → design → compile → validate → repair) runs offline in tests. Default
- * model for the design step: claude-sonnet-5 (operator-specified).
+ * (prompt → design → compile → validate → repair) runs offline in tests. Design
+ * model: claude-opus-4-8 — the most capable model, chosen for the highest design
+ * quality (the moat). Runs once per funnel with a cached system prompt, so cost
+ * is negligible; operator directive is best quality regardless of cost.
  */
 
 import { authorFromAxes } from "../author/index.js";
 import { richnessCheck } from "../quality/richnessCheck.js";
 
-export const DESIGN_MODEL = "claude-sonnet-5";
+export const DESIGN_MODEL = "claude-opus-4-8";
 
 /** JSON-schema the model must return (structured outputs → guaranteed shape). */
 export const DESIGN_SCHEMA = {
