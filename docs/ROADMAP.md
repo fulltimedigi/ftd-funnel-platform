@@ -36,11 +36,12 @@ competitor has generally.
 
 Catalog → a complete, grounded funnel `config` the engine can run.
 
-- [ ] Research + ADR: how to derive the 3–5 real decision axes from product differentiators; question generation (facts-not-goals); automatic answer→product scoring matrix.
-- [ ] Generate config: questions, scoring, archetypes each bound to a **real SKU + URL**, `becauseTemplate` grounded in answers.
-- [ ] Run the **trust gate** on generated output — no dead ends, no fabricated reasons, no unmeasured claims. Regenerate/repair on failure.
-- [ ] Human-in-the-loop diffs (operator can edit questions/weights/products).
-- **Exit:** URL → auto-authored funnel that passes the trust gate, recommending real products with real reasons.
+- [x] Research + ADR: derive decision axes from product differentiators (ADR-0014); fact-based question generation + answer→product matching (ADR-0017).
+- [x] Generate config: questions, scoring, archetypes each bound to a **real SKU + URL**, `becauseTemplate` grounded — `authoring/author/` (ADR-0015 → superseded by 0017).
+- [x] Run the **trust gate** on generated output; regenerate on failure (reject-and-regenerate loop, ADR-0017).
+- [x] **Anti-Bland quality gate** (ADR-0016): rejects mirror question, >40% dominance, unjustified question/result — the mirror check the runtime trust gate misses.
+- [ ] Human-in-the-loop diffs (operator can edit questions/weights/products) — Stage 3 / Studio.
+- **Exit:** URL → auto-authored funnel that passes the trust **and** anti-bland gates, recommending real products with real reasons — offline-proven end to end; **live oud proof is a review-session follow-up**.
 
 ## Stage 3 — Platform & deploy  ·  *the delivery*
 
