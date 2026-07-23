@@ -56,6 +56,7 @@
       <div class="hint">حاجة واحدة ما نقدرش نستنتجها من المتجر — بتوجّه أي منتجات نبرزها.</div>
 
       <label class="chk"><input id="auth" type="checkbox" checked /> <span>أؤكّد أن لديّ إذن صاحب الموقع لقراءة منتجاته (النطاق: مواقعنا/عملائنا المصرّح بها فقط).</span></label>
+      <label class="chk"><input id="regen" type="checkbox" /> <span>أعِد التصميم من جديد (تجاهل النسخة المحفوظة لهذا المتجر).</span></label>
 
       <button class="btn" id="go">أنشئ الفانل ←</button>
       <div class="status" id="status">جارٍ قراءة المتجر وبناء الفانل…</div>
@@ -80,11 +81,11 @@
     // Live anticipation (UX_INTERFACE_DECISION screen 2): never a blank wait — walk
     // the real phases the pipeline runs, so the wait itself earns trust.
     const PHASES = [
-      "بنقرأ منتجات المتجر…",
-      "بنستخرج المنتجات الحقيقية…",
-      "بنستنتج محاور القرار…",
-      "بنكتب الأسئلة والنتائج…",
-      "بنتأكّد من الثقة والجودة…",
+      "بنقرأ متجرك ومنتجاته الحقيقية…",
+      "بنصمّم محاور القرار (زي بائع خبير)…",
+      "بنكتب الأسئلة ونربط كل إجابة بمنتج حقيقي…",
+      "بنتأكّد من الثقة والجودة والعمق…",
+      "لسه شغّالين — التصميم الغني بياخد شوية ثواني…",
     ];
     let _tick = null;
     function busy(on) {
@@ -98,25 +99,37 @@
       } else if (_tick) { clearInterval(_tick); _tick = null; }
     }
 
-    // Prefer the SERVER-SIDE generator (Netlify Function) — it reads real external
-    // sites (no browser CORS limit). Fall back to the in-browser pipeline when the
-    // function isn't there (local `npm run serve`, or the bundled sample store).
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    async function jsonOnly(res) {
+      // Only treat as OUR contract if the host returned JSON (a static host's 404/501
+      // is HTML → throw so we fall back to the in-browser path locally).
+      const ct = (res.headers.get("content-type") || "");
+      if (!ct.includes("application/json")) throw new Error("not-json");
+      return res.json();
+    }
+
+    // Server-side ASYNC generation (ADR-0029): submit → poll the design cache. Heavy
+    // Opus authoring isn't bound by the sync timeout, and a cached store is instant.
+    // Falls back to the in-browser pipeline when the functions aren't there (local).
     async function generate(request, isSample) {
-      // Use the server function only when it answers with OUR JSON contract
-      // ({ok} / {reason}). Anything else (404/501 from a static host, non-JSON,
-      // network error) means the function isn't there → fall back in-browser.
       try {
-        const r = await fetch("/.netlify/functions/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true }),
-        });
-        const ct = (r.headers.get("content-type") || "");
-        if (ct.includes("application/json")) {
-          const j = await r.json().catch(() => null);
-          if (j && (j.ok === true || typeof j.reason === "string")) return j;
+        const sub = await jsonOnly(await fetch("/.netlify/functions/generate-submit", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true, regenerate: !!request.regenerate }),
+        }));
+        if (sub && sub.id) {
+          const deadline = Date.now() + 180000; // up to 3 min of polling
+          while (Date.now() < deadline) {
+            let rec = null;
+            try { rec = await jsonOnly(await fetch("/.netlify/functions/generate-status?id=" + encodeURIComponent(sub.id))); } catch { /* transient */ }
+            if (rec && rec.status === "ready") return { ok: true, config: rec.config, catalog: rec.catalog, source: rec.source, richness: rec.richness, ai: rec.ai };
+            if (rec && rec.status === "error") return { ok: false, stage: rec.stage, reason: rec.reason, ai: rec.ai };
+            await sleep(2500);
+          }
+          return { ok: false, reason: "timeout" };
         }
-      } catch (e) { /* function unreachable (local dev) → fall through */ }
+        if (sub && typeof sub.reason === "string") return { ok: false, reason: sub.reason };
+      } catch (e) { /* functions unreachable (local dev) → fall through to in-browser */ }
       return generateFunnelFromUrl(request.url, {
         authorized: true,
         goal: request.goal || undefined,
@@ -130,19 +143,22 @@
       if (!$("auth").checked) { setMsg("err", "لازم تأكيد الإذن قبل قراءة الموقع."); return; }
 
       const isSample = /\/examples\/sample-shop\/?/.test(intake.request.url);
+      intake.request.regenerate = $("regen") && $("regen").checked;
       busy(true);
       try {
         const res = await generate(intake.request, isSample);
 
         if (!res.ok) {
           busy(false);
-          // Honest: a browser can't read an arbitrary external site (CORS) — that
-          // is exactly why live generation runs server-side (3C).
+          // Honest: surface the real reason (timeout / ingest / author) — no fake success.
+          const isTimeout = res.reason === "timeout";
           setMsg("info",
-            "ما قدرناش نقرأ المتجر ده من المتصفّح مباشرة (سبب تقني: المتصفّح ما بيسمحش بقراءة موقع خارجي). " +
-            "القراءة الحيّة للمواقع الحقيقية بتشتغل على السيرفر — بتيجي في الخطوة الجاية. " +
-            'لحد ما ننشر السيرفر، <a id="lnk-sample" href="#">جرّب على متجر العيّنة</a>.' +
-            "<br><span class='sub'>السبب من المحرّك: " + (res.stage ? res.stage + " / " : "") + (res.reason || "غير معروف") + "</span>");
+            (isTimeout
+              ? "التصميم أخد وقت أطول من المتوقّع. جرّب تاني بعد شوية — لو المتجر اتقرأ قبل كده، النتيجة بتكون فورية."
+              : "ما قدرناش نبني فانل لهذا الرابط دلوقتي.") +
+            ' <a id="lnk-sample" href="#">جرّب على متجر العيّنة</a>.' +
+            "<br><span class='sub'>السبب: " + (res.stage ? res.stage + " / " : "") + (res.reason || "غير معروف") +
+            (res.ai && res.ai.reason ? " · ai: " + res.ai.reason : "") + "</span>");
           const l = $("lnk-sample"); if (l) l.addEventListener("click", (e) => { e.preventDefault(); $("url").value = SAMPLE; run(); });
           return;
         }

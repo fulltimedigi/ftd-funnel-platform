@@ -43,7 +43,7 @@ function richDesign() {
     axes: axisDefs.map((a) => ({
       id: a.id, label: a.label, question: a.question,
       values: a.vals.map((v) => ({ value: v, label: v })),
-      productValues: PRODUCTS.map((p, i) => ({ url: p.url, value: a.vals[bit(i, a.n)] })), // array of {url,value} — matches DESIGN_SCHEMA
+      productValues: PRODUCTS.map((p, i) => ({ i, value: a.vals[bit(i, a.n)] })), // array of {i,value} — index form (ADR-0029)
     })),
   };
 }
@@ -94,13 +94,15 @@ await (async () => {
   });
 
   console.log("\nenrich — grounding + repair + honest failure:");
-  await check("hallucinated product URLs in the mapping are DROPPED (grounded to the real catalog)", () => {
+  await check("out-of-range / hallucinated indices are DROPPED (grounded to the real catalog)", () => {
     const design = richDesign();
-    design.axes[0].productValues.push({ url: "https://evil.example/fake", value: "daily" }); // not in catalog
+    design.axes[0].productValues.push({ i: 999, value: "daily" });                    // out-of-range index
+    design.axes[0].productValues.push({ url: "https://evil.example/fake", value: "daily" }); // legacy fake url
     const axes = designToAxes(design, CATALOG);
     const occ = axes.find((a) => a.id === "occasion");
     assert.ok(!occ.profile.has("https://evil.example/fake"), "fake url dropped");
-    assert.ok(occ.profile.has(PRODUCTS[0].url), "real urls kept");
+    assert.equal(occ.profile.size, PRODUCTS.length, "only the 16 real products mapped (index 999 dropped)");
+    assert.ok(occ.profile.has(PRODUCTS[0].url), "index 0 resolved to the real url");
   });
 
   await check("a THIN first design is REPAIRED on the next attempt", async () => {

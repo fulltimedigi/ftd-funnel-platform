@@ -14,9 +14,22 @@
   [headers.values]
     Access-Control-Allow-Origin = "*"
 
-# Friendly path for the generator (default is /.netlify/functions/generate).
+# Friendly paths (defaults are /.netlify/functions/<name>).
 [[redirects]]
   from = "/api/generate"
   to = "/.netlify/functions/generate"
+  status = 200
+  force = true
+
+# Async generation (ADR-0029): submit → poll. Background fn is triggered internally.
+[[redirects]]
+  from = "/api/generate-submit"
+  to = "/.netlify/functions/generate-submit"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/generate-status"
+  to = "/.netlify/functions/generate-status"
   status = 200
   force = true
