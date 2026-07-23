@@ -14,6 +14,7 @@
 
 import { ingestCatalog } from "./ingest/index.js";
 import { authorFunnel } from "./author/index.js";
+import { cleanCatalog } from "./author/axes.js";
 import { trustValidate } from "../engine/trustValidate.js";
 import { antiBlandCheck } from "./author/qualityGate.js";
 import { richnessCheck } from "./quality/richnessCheck.js";
@@ -31,12 +32,17 @@ export async function generateFunnelFromUrl(url, opts = {}) {
     return { ok: false, stage: "ingest", reason: "empty-catalog", report: ing.report, notes: ing.notes };
   }
 
-  const catalog = { origin: ing.origin, products: ing.products, report: ing.report, brandUrl: ing.brandUrl };
+  // Clean ONCE at the source (drop gift cards / samples / non-products) so coverage is
+  // measured against REAL sellable products everywhere — no raw-vs-cleaned mismatch that
+  // understates coverage (ADR-0031). The authoring layer cleans again (idempotent).
+  const realProducts = cleanCatalog(ing.products);
+  if (!realProducts.length) return { ok: false, stage: "ingest", reason: "no-real-products", report: ing.report, notes: ing.notes };
+  const catalog = { origin: ing.origin, products: realProducts, report: ing.report, brandUrl: ing.brandUrl };
   const brand = extractBrand(ing.startHtml || "", ing.origin);
   const themeVars = brandToThemeVars(brand);
 
   // 1) Deterministic author (fast, free, honest — the baseline / fallback).
-  const authored = authorFunnel({ products: ing.products, origin: ing.origin, brandUrl: ing.brandUrl }, opts);
+  const authored = authorFunnel({ products: realProducts, origin: ing.origin, brandUrl: ing.brandUrl }, opts);
   let config = authored.ok ? authored.config : null;
   let source = authored.ok ? "deterministic" : null;
   let meta = (authored && authored.meta) || null;
