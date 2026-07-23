@@ -23,7 +23,16 @@ export const handler = async (event = {}) => {
   if (!intake.ok) return json(400, { ok: false, reason: intake.reason });
   if (input.authorized !== true) return json(403, { ok: false, reason: "not-authorized" });
 
-  const store = await createBlobStore();
+  // Honest failure (ADR-0030): if Blobs isn't configured on this site, say so with our
+  // JSON contract — never crash into a raw 500 that the client mistakes for "unreachable"
+  // and silently degrades to the AI-less in-browser path.
+  let store;
+  try {
+    store = await createBlobStore();
+    if (!(await store.healthy())) return json(503, { ok: false, reason: "storage-unconfigured" });
+  } catch (e) {
+    return json(503, { ok: false, reason: "storage-unconfigured", detail: String((e && e.name) || e) });
+  }
 
   // Trigger the background function (returns 202 fast; it runs up to 15 min).
   const base = process.env.DEPLOY_PRIME_URL || process.env.URL || (event.headers && ("https://" + event.headers.host)) || "";

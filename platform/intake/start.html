@@ -108,33 +108,45 @@
       return res.json();
     }
 
-    // Server-side ASYNC generation (ADR-0029): submit → poll the design cache. Heavy
+    async function submit(request) {
+      return jsonOnly(await fetch("/.netlify/functions/generate-submit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true, regenerate: !!request.regenerate }),
+      }));
+    }
+    async function poll(id) {
+      const deadline = Date.now() + 180000; // up to 3 min
+      while (Date.now() < deadline) {
+        let rec = null;
+        try { rec = await jsonOnly(await fetch("/.netlify/functions/generate-status?id=" + encodeURIComponent(id))); } catch { /* transient */ }
+        if (rec && rec.status === "ready") return { ok: true, config: rec.config, catalog: rec.catalog, source: rec.source, richness: rec.richness, ai: rec.ai };
+        if (rec && rec.status === "error") return { ok: false, stage: rec.stage, reason: rec.reason, ai: rec.ai };
+        await sleep(2500);
+      }
+      return { ok: false, reason: "timeout" };
+    }
+
+    // Server-side ASYNC generation (ADR-0029/0030): submit → poll the design cache. Heavy
     // Opus authoring isn't bound by the sync timeout, and a cached store is instant.
-    // Falls back to the in-browser pipeline when the functions aren't there (local).
+    // HONEST FAILURE: the in-browser pipeline is used ONLY for the same-origin sample
+    // (a real local demo). A real external URL NEVER silently degrades to the AI-less
+    // in-browser path — a server problem is surfaced with its real reason.
     async function generate(request, isSample) {
-      try {
-        const sub = await jsonOnly(await fetch("/.netlify/functions/generate-submit", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true, regenerate: !!request.regenerate }),
-        }));
-        if (sub && sub.id) {
-          const deadline = Date.now() + 180000; // up to 3 min of polling
-          while (Date.now() < deadline) {
-            let rec = null;
-            try { rec = await jsonOnly(await fetch("/.netlify/functions/generate-status?id=" + encodeURIComponent(sub.id))); } catch { /* transient */ }
-            if (rec && rec.status === "ready") return { ok: true, config: rec.config, catalog: rec.catalog, source: rec.source, richness: rec.richness, ai: rec.ai };
-            if (rec && rec.status === "error") return { ok: false, stage: rec.stage, reason: rec.reason, ai: rec.ai };
-            await sleep(2500);
-          }
-          return { ok: false, reason: "timeout" };
-        }
-        if (sub && typeof sub.reason === "string") return { ok: false, reason: sub.reason };
-      } catch (e) { /* functions unreachable (local dev) → fall through to in-browser */ }
-      return generateFunnelFromUrl(request.url, {
-        authorized: true,
-        goal: request.goal || undefined,
-        brandName: isSample ? "متجر العيّنة (تجريبي)" : undefined,
-      });
+      if (isSample) {
+        try {
+          const sub = await submit(request);
+          if (sub && sub.id) return await poll(sub.id);
+          if (sub && typeof sub.reason === "string") return { ok: false, reason: sub.reason };
+        } catch (e) { /* functions absent locally → the browser CAN crawl the same-origin sample */ }
+        return generateFunnelFromUrl(request.url, { authorized: true, goal: request.goal || undefined, brandName: "متجر العيّنة (تجريبي)" });
+      }
+      // Real external store: server path only.
+      let sub;
+      try { sub = await submit(request); }
+      catch (e) { return { ok: false, reason: "unreachable" }; }
+      if (sub && sub.id) return await poll(sub.id);
+      if (sub && typeof sub.reason === "string") return { ok: false, reason: sub.reason };
+      return { ok: false, reason: (sub && (sub.errorType || sub.errorMessage)) ? "server-error" : "unknown" };
     }
 
     async function run() {
@@ -150,12 +162,15 @@
 
         if (!res.ok) {
           busy(false);
-          // Honest: surface the real reason (timeout / ingest / author) — no fake success.
-          const isTimeout = res.reason === "timeout";
+          // Honest: surface the real reason — never a fake success or a misleading result.
+          const HEAD = {
+            "storage-unconfigured": "الخدمة اللي بتحفظ التصميم لسه محتاجة تفعيل بخطوة صغيرة واحدة عندي في Netlify. النتيجة مش هتظهر لحد ما نفعّلها — وده متعمّد عشان ما نوريكش نتيجة غلط.",
+            "timeout": "التصميم أخد وقت أطول من المتوقّع. جرّب تاني بعد شوية — لو المتجر اتقرأ قبل كده، النتيجة بتكون فورية.",
+            "unreachable": "ما قدرناش نوصل للخادم دلوقتي. جرّب تاني بعد لحظات.",
+            "server-error": "حصل خطأ في الخادم أثناء بدء التوليد.",
+          };
           setMsg("info",
-            (isTimeout
-              ? "التصميم أخد وقت أطول من المتوقّع. جرّب تاني بعد شوية — لو المتجر اتقرأ قبل كده، النتيجة بتكون فورية."
-              : "ما قدرناش نبني فانل لهذا الرابط دلوقتي.") +
+            (HEAD[res.reason] || "ما قدرناش نبني فانل لهذا الرابط دلوقتي.") +
             ' <a id="lnk-sample" href="#">جرّب على متجر العيّنة</a>.' +
             "<br><span class='sub'>السبب: " + (res.stage ? res.stage + " / " : "") + (res.reason || "غير معروف") +
             (res.ai && res.ai.reason ? " · ai: " + res.ai.reason : "") + "</span>");
