@@ -16,11 +16,15 @@ const STOPWORDS = new Set([
   "new", "sale", "set", "pack", "box", "piece", "pieces", "size", "ml", "gm", "g",
 ]);
 
-/** Entries that are not shoppable products — excluded before deriving a decision. */
-const NON_PRODUCT = /gift\s*-?\s*card|e-?\s*gift|\bvoucher\b|\bsample\b|\btester\b|\bshipping\b|fragrance\s+experience|\bwarranty\b|\bsubscription\b/i;
+/** Entries that are not shoppable products — excluded before deriving a decision.
+ *  NOTE: "fragrance experience" was removed — on real stores (e.g. oudfactory) that
+ *  is a real, priced, buyable perfume line, not a non-product. Only genuine
+ *  non-products stay here (gift cards/vouchers, samples/testers, shipping, warranty,
+ *  subscriptions). Operator decision: every priced, sellable product enters the funnel. */
+const NON_PRODUCT = /gift\s*-?\s*card|e-?\s*gift|\bvoucher\b|\bsample\b|\btester\b|\bshipping\b|\bwarranty\b|\bsubscription\b/i;
 
-/** Drop obvious non-products (gift cards, samples, shipping, experiences…) so the
- *  decision is derived from real, differentiating products only (ADR-0018). */
+/** Drop obvious non-products (gift cards, samples, shipping…) so the decision is
+ *  derived from real, differentiating products only (ADR-0018). */
 export function cleanCatalog(products) {
   return (products || []).filter((p) => p && p.name && !NON_PRODUCT.test(`${p.name} ${(p.attributes && p.attributes.type) || ""}`));
 }
