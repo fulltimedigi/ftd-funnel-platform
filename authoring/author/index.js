@@ -16,7 +16,7 @@
  * Deterministic, dependency-free, Node-safe.
  */
 
-import { deriveAxes, tokenize } from "./axes.js";
+import { deriveAxes, cleanCatalog } from "./axes.js";
 import { trustValidate } from "../../engine/trustValidate.js";
 import { antiBlandCheck } from "./qualityGate.js";
 
@@ -39,9 +39,10 @@ function _priceLabel(v) {
   return m[v.value] || v.value;
 }
 
-function buildFactAxes(catalog) {
-  const d = deriveAxes(catalog);
-  const products = catalog.products || [];
+const _FACET_Q = ["أي طابع تفضّل؟", "ما التفضيل الأقرب لك؟", "أي فئة تناسبك أكثر؟"];
+
+function buildFactAxes(products) {
+  const d = deriveAxes({ products });
   const axes = [];
 
   const price = d.axes.find((a) => a.id === "price");
@@ -51,22 +52,14 @@ function buildFactAxes(catalog) {
     axes.push({ id: "budget", label: "الميزانية", question: "ما ميزانيتك التقريبية؟", values: price.values.map((v) => ({ value: v.value, label: _priceLabel(v) })), profile });
   }
 
-  // style/attribute axis from top keyword facets (product → its dominant top term)
-  const facets = (d.facets || []).slice(0, 4);
-  if (facets.length >= 2) {
-    const rank = new Map(facets.map((f, i) => [f.term, i]));
-    const profile = new Map();
-    for (const p of products) {
-      const terms = tokenize(`${p.name} ${(p.differentiators || []).join(" ")}`).filter((t) => rank.has(t)).sort((a, b) => rank.get(a) - rank.get(b));
-      if (terms.length) profile.set(p.url, terms[0]);
-    }
-    const present = new Set(profile.values());
-    const values = facets.filter((f) => present.has(f.term)).map((f) => ({ value: f.term, label: f.term }));
-    if (values.length >= 2) axes.push({ id: "style", label: "الطابع", question: "أي طابع تفضّل؟", values, profile });
+  // name-mined mutually-exclusive facet axes (form / origin / size), clustered by
+  // co-occurrence in axes.js — each already carries a url→value profile.
+  for (const fa of d.axes.filter((a) => String(a.id).startsWith("facet"))) {
+    axes.push({ id: fa.id, label: "الطابع", question: _FACET_Q[axes.length % _FACET_Q.length], values: fa.values.map((v) => ({ value: v.value, label: v.value })), profile: fa.profile });
   }
 
   const type = d.axes.find((a) => a.id === "type");
-  if (type && type.values.length >= 2 && type.values.length <= 4) {
+  if (type && type.values.length >= 2 && type.values.length <= 6) {
     const profile = new Map();
     type.values.forEach((v) => v.productUrls.forEach((u) => profile.set(u, v.value)));
     axes.push({ id: "usetype", label: "الفئة", question: "لأي نوع استخدام تبحث؟", values: type.values.map((v) => ({ value: v.value, label: v.value })), profile });
@@ -193,10 +186,11 @@ function _axisSets(axes) {
 }
 
 export function authorFunnel(catalog, opts = {}) {
-  const products = (catalog && catalog.products) || [];
+  const products = cleanCatalog((catalog && catalog.products) || []);
   if (products.length < 4) return { ok: false, reason: "too-few-products", meta: { count: products.length } };
+  const cleanCat = { ...catalog, products };
 
-  const axes = buildFactAxes(catalog);
+  const axes = buildFactAxes(products);
   if (axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
 
   const attempts = [];
@@ -204,7 +198,7 @@ export function authorFunnel(catalog, opts = {}) {
     // keep the swept signal-space bounded
     const combos = set.reduce((n, a) => n * a.values.length, 1);
     if (combos > 64) continue;
-    const config = buildConfig(catalog, set, opts);
+    const config = buildConfig(cleanCat, set, opts);
     const trust = trustValidate(config);
     const bland = antiBlandCheck(config);
     attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });

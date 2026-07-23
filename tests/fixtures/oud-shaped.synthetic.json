@@ -1,0 +1,19 @@
+{
+  "_note": "SYNTHETIC oud-shaped test data — NOT a real client catalog. Mirrors the shape found live on oud stores: richness lives in the product NAMES (form + origin + size), the structured product_type is coarse, and a non-product (Gift Card) is present. Names/URLs are invented (example domain). Used to prove axis-mining yields a non-bland funnel.",
+  "origin": "https://oud-shop.example",
+  "products": [
+    { "name": "Kalimantan Agarwood Oil 3ml", "url": "https://oud-shop.example/products/kalimantan-oil-3ml", "price": 180, "currency": "USD", "attributes": { "type": "Agarwood" }, "differentiators": [] },
+    { "name": "Kalimantan Agarwood Oil 6ml", "url": "https://oud-shop.example/products/kalimantan-oil-6ml", "price": 340, "currency": "USD", "attributes": { "type": "Agarwood" }, "differentiators": [] },
+    { "name": "Indian Oud Oil 3ml", "url": "https://oud-shop.example/products/indian-oil-3ml", "price": 150, "currency": "USD", "attributes": { "type": "Perfumes" }, "differentiators": [] },
+    { "name": "Cambodian Oud Oil 3ml", "url": "https://oud-shop.example/products/cambodian-oil-3ml", "price": 210, "currency": "USD", "attributes": { "type": "Perfumes" }, "differentiators": [] },
+    { "name": "Malaysian Agarwood Wood Chips Tola", "url": "https://oud-shop.example/products/malaysian-wood-tola", "price": 400, "currency": "USD", "attributes": { "type": "Agarwood" }, "differentiators": [] },
+    { "name": "Indian Agarwood Wood Chips Tola", "url": "https://oud-shop.example/products/indian-wood-tola", "price": 520, "currency": "USD", "attributes": { "type": "Agarwood" }, "differentiators": [] },
+    { "name": "Kalimantan Wood Chips", "url": "https://oud-shop.example/products/kalimantan-wood", "price": 90, "currency": "USD", "attributes": { "type": "Agarwood" }, "differentiators": [] },
+    { "name": "Cambodian Bakhoor", "url": "https://oud-shop.example/products/cambodian-bakhoor", "price": 60, "currency": "USD", "attributes": { "type": "Bakhoor" }, "differentiators": [] },
+    { "name": "Indian Bakhoor Premium", "url": "https://oud-shop.example/products/indian-bakhoor", "price": 75, "currency": "USD", "attributes": { "type": "Bakhoor" }, "differentiators": [] },
+    { "name": "Kalimantan Bakhoor", "url": "https://oud-shop.example/products/kalimantan-bakhoor", "price": 55, "currency": "USD", "attributes": { "type": "Bakhoor" }, "differentiators": [] },
+    { "name": "Cambodian Oud Parfum 50ml", "url": "https://oud-shop.example/products/cambodian-parfum", "price": 120, "currency": "USD", "attributes": { "type": "Perfumes" }, "differentiators": [] },
+    { "name": "Indian Oud Parfum 50ml", "url": "https://oud-shop.example/products/indian-parfum", "price": 130, "currency": "USD", "attributes": { "type": "Perfumes" }, "differentiators": [] },
+    { "name": "Gift Card", "url": "https://oud-shop.example/products/gift-card", "price": 100, "currency": "USD", "attributes": { "type": "Gift Card" }, "differentiators": [] }
+  ]
+}
