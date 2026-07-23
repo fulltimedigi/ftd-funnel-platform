@@ -73,7 +73,7 @@ export const SYSTEM_PROMPT = [
   "2. Design 3–6 dimensions ('axes'). Each axis has 2–4 answer values.",
   "3. For EVERY product in the catalog, assign its value on EACH axis in `productValues` — an ARRAY of {i, value} objects, one per product, where `i` is the product's index number `i` shown in the numbered catalog. This mapping is how answers select products — make it discriminating (products must differ across axes) so no single axis decides everything.",
   "4. Use ONLY the product indices provided (0..N-1). Do not invent products. Do not name products in the axes.",
-  "5. Cover the whole catalog: across all answer combinations, most products should be reachable.",
+  "5. SPREAD THE CATALOG (most important): give each product a DISTINCT profile — the combination of its values across the axes should be as unique as possible, so each product is the single best answer for some shopper. Choose enough axes and values that the number of answer-combinations is ≥ the number of products. A design where many products share the same profile leaves products unreachable and will be REJECTED. Only genuine near-duplicates (differing only by price) may share a profile.",
   "Return ONLY the JSON matching the provided schema.",
 ].join("\n");
 
@@ -186,9 +186,14 @@ export async function enrichAuthor(catalog, opts = {}) {
       lastReason = "too-few-grounded-axes";
     }
 
-    // Repair: tell the model exactly what was wrong and ask again.
+    // Repair: tell the model exactly what was wrong and ask again. Low coverage means
+    // too many products share a profile — the fix is to SPREAD them (more distinct
+    // profiles), adding a discriminating axis if needed.
+    const coverageHint = /coverage/i.test(lastReason)
+      ? " Too many products share the same profile, so most of the catalog is unreachable. Re-spread the productValues so each product has a DISTINCT profile, and/or add another discriminating axis, until #answer-combinations ≥ #products."
+      : "";
     user = buildUserPrompt(catalog, opts) + "\n\nYour previous design was rejected: " + lastReason +
-      ". Fix it — add or sharpen axes so more products are reachable across ≥4 questions, keep each axis discriminating, and map every product's value on every axis.";
+      "." + coverageHint + " Fix it — keep ≥4 discriminating questions, map every product on every axis, and make each product reachable as the #1 for some answer path.";
   }
   return { ok: false, reason: lastReason };
 }

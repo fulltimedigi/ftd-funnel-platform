@@ -17,7 +17,10 @@
 export const RICHNESS_DEFAULTS = {
   richCatalogMin: 12,   // at/above this product count, a catalog can justify depth
   minQuestions: 4,      // a rich catalog deserves ≥ this many question screens
-  minCoverage: 0.25,    // …and ≥ this fraction of the catalog reachable as a result
+  minCoverage: 0.9,     // …and NEAR-FULL catalog coverage (ADR-0031): with the covering
+                        // assignment every product owns a path, so a funnel that still
+                        // orphans most of the catalog is broken and must fail (was 0.25 —
+                        // "a gate that can't fail is theater").
 };
 
 /** Distinct real product URLs reachable as a recommendation across all archetypes. */

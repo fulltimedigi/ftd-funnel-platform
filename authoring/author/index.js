@@ -32,6 +32,67 @@ function _bestProduct(list) {
   })[0];
 }
 
+/**
+ * Covering assignment (ADR-0031) — "Results First". Every product OWNS the answer-
+ * combination that matches its own axis-profile, so it is the #1 result for at least
+ * that path; no product is orphaned. Genuine profile-twins share that leaf ranked
+ * (#1 + nearest alternates). Combos that are no product's home are filled by best
+ * match (routing to an already-reachable product).
+ * @returns {{winnerByCombo:Map<string,Object>, altByUrl:Map<string,Object[]>}}
+ */
+function _assignCovering(products, axisSet, combos, overall) {
+  const key = (c) => c.join("¦");
+  const val = (p, a) => a.profile.get(p.url);
+  const isFull = (p) => axisSet.every((a) => val(p, a) != null);
+  const score = (p, combo) => {
+    let s = 0;
+    axisSet.forEach((a, i) => { const pv = val(p, a); if (pv != null) s += pv === combo[i] ? 1 : -0.001; });
+    return s;
+  };
+
+  // Each product's HOME combo: its exact profile (full) or its best-matching combo (partial).
+  const contenders = new Map(); // comboKey -> [products whose home is this combo]
+  for (const p of products) {
+    let home;
+    if (isFull(p)) {
+      home = axisSet.map((a) => val(p, a));
+    } else {
+      let best = combos[0], bs = -Infinity;
+      for (const c of combos) { const s = score(p, c); if (s > bs) { bs = s; best = c; } }
+      home = best;
+    }
+    const k = key(home);
+    if (!contenders.has(k)) contenders.set(k, []);
+    contenders.get(k).push(p);
+  }
+  for (const list of contenders.values()) list.sort((a, b) => (_bestProduct([a, b]) === a ? -1 : 1));
+
+  const winnerByCombo = new Map();
+  const altByUrl = new Map();
+  for (const combo of combos) {
+    const k = key(combo);
+    let primary;
+    if (contenders.has(k)) {
+      const list = contenders.get(k);
+      primary = list[0];
+      if (list.length > 1) {
+        const acc = altByUrl.get(primary.url) || [];
+        for (const a of list.slice(1)) if (!acc.some((x) => x.url === a.url)) acc.push(a);
+        altByUrl.set(primary.url, acc);
+      }
+    } else {
+      let best = overall, bs = -Infinity;
+      for (const p of products) {
+        const s = score(p, combo);
+        if (s > bs || (s === bs && best && _bestProduct([p, best]) === p)) { best = p; bs = s; }
+      }
+      primary = best;
+    }
+    winnerByCombo.set(k, primary);
+  }
+  return { winnerByCombo, altByUrl };
+}
+
 /* ---- fact axes (categorical, fact-framed, ≤4 values each) ------------------ */
 
 function _priceLabel(v) {
@@ -75,25 +136,18 @@ function buildConfig(catalog, axisSet, opts) {
   const brandName = opts.brandName || (catalog.origin ? new URL(catalog.origin).host.replace(/^www\./, "") : "المتجر");
   const homeUrl = catalog.origin || catalog.brandUrl || (products[0] && new URL(products[0].url).origin) || "";
 
-  // 1. match every fact-combination to the best real product
+  // 1. COVERING assignment (ADR-0031): every product owns the combo matching its own
+  //    profile → no product is orphaned. "Results First, Questions Last."
   const combos = cartesian(axisSet.map((a) => a.values.map((v) => v.value)));
   const overall = _bestProduct(products);
-  const winnerByCombo = new Map();
-  const winners = new Map(); // url -> product
-  for (const combo of combos) {
-    let best = null, bestScore = -2;
-    for (const p of products) {
-      let score = 0;
-      axisSet.forEach((a, i) => { const pv = a.profile.get(p.url); if (pv != null) score += pv === combo[i] ? 1 : -0.001; });
-      const better = score > bestScore || (score === bestScore && best && _bestProduct([p, best]) === p);
-      if (better) { best = p; bestScore = score; }
-    }
-    best = best || overall;
-    winnerByCombo.set(combo.join("¦"), best);
-    winners.set(best.url, best);
-  }
+  const { winnerByCombo, altByUrl } = _assignCovering(products, axisSet, combos, overall);
+  const winners = new Map(); // url -> product (distinct combo winners)
+  for (const p of winnerByCombo.values()) if (!winners.has(p.url)) winners.set(p.url, p);
 
-  // 2. archetypes = the winning real products
+  // 2. archetypes = the winning real products, each with up to 3 REAL nearest
+  //    alternates (profile-twins) so every product is reachable and each result shows
+  //    "قد يناسبك أيضاً" — a clear #1 + alternates, never a catalog dump.
+  const ALT_CAP = 3;
   const archId = new Map();
   const archetypes = [];
   [...winners.values()].forEach((p, i) => {
@@ -103,6 +157,7 @@ function buildConfig(catalog, axisSet, opts) {
     const carries = axisSet.map((a) => ({ D: `D_${a.id}`, label: a.label, value: a.profile.get(p.url) })).filter((x) => x.value != null);
     const why = [{ needs: {}, claim: `«${clamp(p.name, 70)}» يطابق ما اخترته من ${axisSet.map((a) => a.label).join(" و")}.` }];
     for (const c of carries) why.push({ needs: { [c.D]: c.value }, claim: `اخترت ${c.label}، و«${clamp(p.name, 60)}» يوفّرها.` });
+    const contextual = (altByUrl.get(p.url) || []).slice(0, ALT_CAP).map((q) => ({ name: clamp(q.name, 120), url: q.url, price: fmtPrice(q) }));
     archetypes.push({
       id, name: clamp(p.name, 80), icon: "✨",
       description: `اختيارنا الأنسب من ${brandName} بناءً على إجاباتك.`,
@@ -111,6 +166,7 @@ function buildConfig(catalog, axisSet, opts) {
           name: clamp(p.name, 120), url: p.url, price: fmtPrice(p),
           becauseTemplate: `«${clamp(p.name, 80)}» هو الأنسب لأنه يجمع ما تبحث عنه من ${axisSet.map((a) => a.label).join(" و")} في ${brandName}.`,
         },
+        ...(contextual.length ? { contextual } : {}),
       },
       resultExtras: {
         why,

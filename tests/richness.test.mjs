@@ -31,10 +31,18 @@ check("THIN on a RICH catalog is REJECTED (2 Q, 12% coverage, 51 products)", () 
   assert.ok(r.findings.some((f) => f.code === "RICHNESS_LOW_COVERAGE"));
 });
 
-check("RICH funnel PASSES (6 Q, broad coverage on a big catalog)", () => {
-  const r = richnessCheck(cfg(6, urls(30)), catalogOf(51));
+check("RICH funnel PASSES (6 Q, near-full coverage on a big catalog)", () => {
+  // The covering assignment (ADR-0031) makes near-full coverage the bar: a genuinely
+  // rich funnel now reaches ~all of the catalog, not a fraction of it.
+  const r = richnessCheck(cfg(6, urls(48)), catalogOf(51));
   assert.equal(r.ok, true, JSON.stringify(r.findings));
-  assert.ok(r.metrics.coverage >= 0.25);
+  assert.ok(r.metrics.coverage >= 0.9, `coverage ${r.metrics.coverage}`);
+});
+
+check("a MID-coverage funnel that used to pass (59%) is now REJECTED (raised gate)", () => {
+  const r = richnessCheck(cfg(6, urls(30)), catalogOf(51)); // 30/51 = 59%
+  assert.equal(r.ok, false, "59% coverage must fail the near-full gate");
+  assert.ok(r.findings.some((f) => f.code === "RICHNESS_LOW_COVERAGE"));
 });
 
 check("THIN on a SMALL catalog PASSES (honest floor — never pad questions)", () => {
