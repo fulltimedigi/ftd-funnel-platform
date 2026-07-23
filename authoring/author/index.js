@@ -153,6 +153,7 @@ function buildConfig(catalog, axisSet, opts) {
     scoring: { mode: "decision-table" },
     signals, derivedSignals, decisionTable,
     resultLayout: "commerce",
+    decisiveResult: true, // UX_INTERFACE_DECISION §6: one pick + 2–3 reasons + one CTA
     archetypes, questions,
     leadForm: {
       gated: true, skippable: true,

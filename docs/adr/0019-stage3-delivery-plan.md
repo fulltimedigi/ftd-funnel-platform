@@ -97,6 +97,13 @@ win that unblocks all integrations, independent of the SaaS/hosting decisions.
 - **Honest failure** (rule 4): sinks that can't confirm say so; publish reports the real
   artifact state; never a fabricated "published".
 
+> **Superseded (2026-07-23, see ADR-0025):** the hosting lean below (Vercel + Postgres) is
+> **withdrawn.** `fulltimedigi.com` is **already live on Netlify** (repo
+> `fulltimedigi-interactive-builder`). 3C now = **edit that existing Netlify site** (keep
+> the marketing homepage, add the Studio behind login), server-side generation → **Netlify
+> Functions**, accounts + published funnels → **evaluate Netlify DB + Blobs first**. The
+> question below is kept for history only.
+
 ## Open question for the operator (defer until 3C — does NOT block 3A/3B core)
 
 **Platform stack/hosting** (re-opened per the SaaS vision — needs *app* hosting + a DB +

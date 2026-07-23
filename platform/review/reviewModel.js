@@ -8,6 +8,8 @@
  * unit-tested and the HTML page is a thin renderer over it.
  */
 
+import { respondentStepCount } from "../../engine/flow.js";
+
 const GATE_LABELS = {
   trust: "بوابة الثقة (لا نتائج مسدودة)",
   bland: "بوابة الجودة (لا رتابة)",
@@ -56,6 +58,7 @@ export function buildReviewModel(res = {}) {
   if (config) {
     const products = _primaryNames(config);
     const questions = config.questions || [];
+    const steps = respondentStepCount(config);
     summary = {
       brand: (config.brand && config.brand.name) || "",
       theme: config.theme || "",
@@ -65,6 +68,9 @@ export function buildReviewModel(res = {}) {
       productCount: res.catalog && Array.isArray(res.catalog.products) ? res.catalog.products.length : products.length,
       firstQuestion: questions[0] ? questions[0].text : "",
       recommends: products,
+      steps,                              // UX_INTERFACE_DECISION: 3–5 target (incl. email)
+      stepsInRange: steps >= 3 && steps <= 5,
+      decisiveResult: config.decisiveResult === true,
     };
   }
 

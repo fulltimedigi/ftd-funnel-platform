@@ -54,6 +54,13 @@
     .note { color:var(--muted); font-size:.85rem; margin-top:.6rem; }
     .blocked-banner { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
     .err { color:var(--bad); }
+    details.advanced { margin-top:1.5rem; background:#fff; border:1px solid var(--line); border-radius:14px; padding:.25rem 1.25rem; }
+    details.advanced > summary { cursor:pointer; font-weight:700; padding:.9rem 0; list-style:none; }
+    details.advanced > summary::-webkit-details-marker { display:none; }
+    details.advanced > summary::before { content:"⚙ "; }
+    .adv-body { padding:.25rem 0 1rem; }
+    .adv-row { display:flex; align-items:center; gap:.6rem; margin:.5rem 0; }
+    .adv-row select { padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; font-family:inherit; }
   </style>
 </head>
 <body>
@@ -122,7 +129,7 @@
       const s = model.summary;
       const sum = el("div", { class: "card" }, [el("h2", { text: "ملخّص الفانل" })]);
       if (s) {
-        [["عدد الأسئلة", s.questionCount], ["عدد النتائج", s.resultCount], ["عدد المنتجات", s.productCount]]
+        [["عدد الأسئلة", s.questionCount], ["عدد النتائج", s.resultCount], ["عدد المنتجات", s.productCount], ["خطوات المستفتى", s.steps + (s.stepsInRange ? " ✓" : "")]]
           .forEach(([k, v]) => sum.appendChild(el("div", { class: "stat" }, [el("span", { text: k }), el("b", { text: String(v) })])));
         if (s.firstQuestion) sum.appendChild(el("div", { class: "stat" }, [el("span", { text: "أول سؤال" }), el("b", { text: s.firstQuestion })]));
         if (s.recommends && s.recommends.length) {
@@ -159,6 +166,29 @@
         });
         app.appendChild(el("div", { class: "publish card" }, [el("h2", { text: "النشر" }), btn, box]));
       }
+
+      // Advanced surface — hidden by default (UX_INTERFACE_DECISION: default stays
+      // simple; depth is progressively disclosed). Editing starts from the
+      // smart-default draft — there is no blank/empty state anywhere. A few SAFE
+      // brand overrides only (no manual per-product weighting — ever).
+      const adv = el("details", { class: "advanced" });
+      const body = el("div", { class: "adv-body" });
+      const sel = el("select", {});
+      ["platform-clean", "luxury-gold-light"].forEach((t) => {
+        const o = el("option", { value: t, text: t });
+        if ((ctx.config.theme || "") === t) o.setAttribute("selected", "selected");
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", () => {
+        ctx.config.theme = sel.value;                                  // edit the draft in place
+        sessionStorage.setItem("ftd:draft-config", JSON.stringify(ctx.config));
+        iframe.src = "../../embed/funnel.html?draft=1&t=" + Date.now(); // re-preview from the draft
+      });
+      body.appendChild(el("div", { class: "adv-row" }, [el("span", { text: "ثيم العلامة:" }), sel]));
+      body.appendChild(el("p", { class: "note", text: "تعديل أعمق (الأسئلة، المنتجات) بيجي مع الحسابات في الخطوة الجاية. الأوزان بتتحدّد بالذكاء الآلي تلقائيًا — مفيش ضبط يدوي لكل منتج." }));
+      adv.appendChild(el("summary", { text: "الإعدادات المتقدّمة" }));
+      adv.appendChild(body);
+      app.appendChild(adv);
     }
 
     (async () => {

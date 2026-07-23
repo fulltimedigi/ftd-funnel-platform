@@ -60,6 +60,13 @@ check("a failing gate → blocked, and the finding is surfaced (never hidden)", 
   assert.ok(m.blockers.some((b) => b.includes("الجودة")));
 });
 
+check("surfaces respondent step count in the 3–5 target (incl. email)", () => {
+  const cfg = { ...CFG, leadForm: { gated: true, fields: [{ name: "email", type: "email" }] } };
+  const m = buildReviewModel({ config: cfg, trust: GREEN, bland: GREEN });
+  assert.equal(m.summary.steps, cfg.questions.length + 1); // 2 Q + email = 3
+  assert.equal(m.summary.stepsInRange, true);
+});
+
 check("productCount prefers the catalog size when a catalog is present", () => {
   const m = buildReviewModel({ config: CFG, trust: GREEN, bland: GREEN, catalog: { products: [1, 2, 3, 4, 5] } });
   assert.equal(m.summary.productCount, 5);

@@ -101,8 +101,12 @@ export function renderLeadCapture(ctx) {
   submitBtn.addEventListener("click", doSubmit);
   if (skipBtn) skipBtn.addEventListener("click", () => onSkip && onSkip());
 
+  // Brand continuity (UX_INTERFACE_DECISION): the capture step wears the same
+  // brand as the funnel — the styling never breaks between quiz and opt-in.
+  const brandName = config.brand && config.brand.name;
   const node = el("section", { class: "ftd-screen ftd-lead" }, [
     el("div", { class: "ftd-lead-head" }, [
+      brandName ? el("p", { class: "ftd-lead-brand", text: brandName }) : null,
       el("h2", { class: "ftd-lead-title", text: "خطوة أخيرة" }),
       el("p", { class: "ftd-lead-sub", text: "أدخل بياناتك لعرض نتيجتك المخصّصة." }),
     ]),

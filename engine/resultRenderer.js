@@ -229,40 +229,52 @@ function renderCommerce(ctx) {
     );
   }
 
+  // DECISIVE mode (UX_INTERFACE_DECISION §6): exactly one pick + 2–3 grounded
+  // reasons + exactly one CTA (the product card's, to a real URL). No "why not",
+  // no contextual grid, no second CTA — zero distraction. Opt-in per config so
+  // reference funnels keep their richer layout; our authoring turns it on.
+  const decisive = config.decisiveResult === true;
+
   // Why it fits / why not the alternatives / next step (the value layer).
   if (built && built.primary) {
-    children.push(reasonList(rcopy.whyTitle || "لماذا تناسبك", built.primary.why, "is-why"));
-    children.push(reasonList(rcopy.whyNotTitle || "لماذا ليست البدائل", built.primary.whyNot, "is-whynot"));
-    if (built.primary.nextAction) {
-      children.push(
-        el("div", { class: "ftd-next" }, [
-          el("h3", { class: "ftd-section-title", text: rcopy.nextTitle || "الخطوة التالية" }),
-          el("p", { class: "ftd-next-action", text: built.primary.nextAction }),
-        ])
-      );
+    const why = decisive ? (built.primary.why || []).slice(0, 3) : built.primary.why;
+    children.push(reasonList(rcopy.whyTitle || "لماذا تناسبك", why, "is-why"));
+    if (!decisive) {
+      children.push(reasonList(rcopy.whyNotTitle || "لماذا ليست البدائل", built.primary.whyNot, "is-whynot"));
+      if (built.primary.nextAction) {
+        children.push(
+          el("div", { class: "ftd-next" }, [
+            el("h3", { class: "ftd-section-title", text: rcopy.nextTitle || "الخطوة التالية" }),
+            el("p", { class: "ftd-next-action", text: built.primary.nextAction }),
+          ])
+        );
+      }
     }
   }
 
-  // Expert tip (generic: archetype.resultExtras.tip)
-  if (extras.tip) {
-    children.push(el("p", { class: "ftd-tip", text: "💡 " + extras.tip }));
+  if (!decisive) {
+    // Expert tip (generic: archetype.resultExtras.tip)
+    if (extras.tip) {
+      children.push(el("p", { class: "ftd-tip", text: "💡 " + extras.tip }));
+    }
+
+    // Contextual recommendation grid (gated for decision funnels, raw otherwise).
+    const contextual = built ? built.contextual : recs.contextual || [];
+    if (contextual.length) {
+      children.push(el("h3", { class: "ftd-section-title", text: copy.contextualTitle || "توصيات إضافية" }));
+      const cards = contextual.map((rec, i) =>
+        recommendationCard(rec, answers, config, {
+          showCta: true,
+          highlight: i === 0,
+          badge: i === 0 ? copy.bestForYou || null : null,
+        })
+      );
+      children.push(el("div", { class: "ftd-grid" }, cards));
+    }
+
+    children.push(ctaLink(config)); // decisive keeps only the product card CTA above
   }
 
-  // Contextual recommendation grid (gated for decision funnels, raw otherwise).
-  const contextual = built ? built.contextual : recs.contextual || [];
-  if (contextual.length) {
-    children.push(el("h3", { class: "ftd-section-title", text: copy.contextualTitle || "توصيات إضافية" }));
-    const cards = contextual.map((rec, i) =>
-      recommendationCard(rec, answers, config, {
-        showCta: true,
-        highlight: i === 0,
-        badge: i === 0 ? copy.bestForYou || null : null,
-      })
-    );
-    children.push(el("div", { class: "ftd-grid" }, cards));
-  }
-
-  children.push(ctaLink(config));
   children.push(restartButton(config, onRestart));
   return el("section", { class: "ftd-screen ftd-result ftd-result-commerce" }, children);
 }

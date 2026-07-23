@@ -37,3 +37,16 @@ export function questionNumber(config, id) {
 export function totalQuestions(config) {
   return (config.questions || []).length;
 }
+
+/**
+ * Respondent-experienced steps (UX_INTERFACE_DECISION: "3–5 steps"). A "step" is
+ * a screen with the progress bar: the question screens PLUS the email-capture
+ * screen that precedes the result (email is captured before the reveal). The
+ * result screen is the payoff, not a counted step. This is the honest way to meet
+ * the 3–5 target without ever padding unjustified questions (anti-bland wins).
+ */
+export function respondentStepCount(config) {
+  const q = totalQuestions(config);
+  const gated = config.leadForm && config.leadForm.gated !== false && (config.leadForm.fields || []).length > 0;
+  return q + (gated ? 1 : 0);
+}

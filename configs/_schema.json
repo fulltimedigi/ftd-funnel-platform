@@ -173,6 +173,7 @@
       }
     },
     "resultLayout": { "enum": ["personas", "commerce", "tracks"] },
+    "decisiveResult": { "type": "boolean", "description": "UX_INTERFACE_DECISION §6: render a DECISIVE result — one pick + 2–3 grounded reasons + exactly one CTA (no why-not, no contextual grid, no second CTA). AI-authored funnels set this true." },
     "flags": {
       "type": "array",
       "description": "flag definitions for weighted-multi adjustments",

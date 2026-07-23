@@ -76,9 +76,26 @@
       const m = $("msg"); m.className = "msg show " + kind; m.innerHTML = html;
     }
     function clearMsg() { $("msg").className = "msg"; }
+
+    // Live anticipation (UX_INTERFACE_DECISION screen 2): never a blank wait — walk
+    // the real phases the pipeline runs, so the wait itself earns trust.
+    const PHASES = [
+      "بنقرأ منتجات المتجر…",
+      "بنستخرج المنتجات الحقيقية…",
+      "بنستنتج محاور القرار…",
+      "بنكتب الأسئلة والنتائج…",
+      "بنتأكّد من الثقة والجودة…",
+    ];
+    let _tick = null;
     function busy(on) {
-      $("go").disabled = on; $("status").className = on ? "status show" : "status";
-      if (on) clearMsg();
+      $("go").disabled = on;
+      $("status").className = on ? "status show" : "status";
+      if (on) {
+        clearMsg();
+        let i = 0;
+        $("status").textContent = PHASES[0];
+        _tick = setInterval(() => { i = (i + 1) % PHASES.length; $("status").textContent = PHASES[i]; }, 1100);
+      } else if (_tick) { clearInterval(_tick); _tick = null; }
     }
 
     async function run() {
@@ -108,9 +125,13 @@
           return;
         }
 
+        // Real milestone before we leave: how many products we actually read.
+        const found = (res.catalog && res.catalog.products && res.catalog.products.length) || 0;
+        if (found) { if (_tick) { clearInterval(_tick); _tick = null; } $("status").textContent = `تمّ! قرأنا ${found} منتج وبنينا الفانل…`; }
+
         // Hand the fresh draft to the review screen (same-origin sessionStorage).
         sessionStorage.setItem("ftd:draft-config", JSON.stringify(res.config));
-        location.href = "../review/review.html?draft=1";
+        setTimeout(() => { location.href = "../review/review.html?draft=1"; }, 500);
       } catch (err) {
         busy(false);
         console.error("[studio] generation error:", err);
