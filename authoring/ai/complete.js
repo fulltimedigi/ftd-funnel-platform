@@ -17,7 +17,10 @@ export function createAnthropicComplete({ apiKey, fetch: injectedFetch, endpoint
   const doFetch = injectedFetch || (typeof fetch === "function" ? fetch : null);
   const url = endpoint || "https://api.anthropic.com/v1/messages";
 
-  return async function complete({ model, system, user, schema, maxTokens = 4000 }) {
+  // 16000 default: a rich design maps every product across every axis, and Arabic is
+  // token-dense — 4000 truncated real 51-product catalogs mid-JSON (ADR-0030). Billing is
+  // on ACTUAL output, so a high cap costs nothing extra; the background job has 15 min.
+  return async function complete({ model, system, user, schema, maxTokens = 16000 }) {
     if (!key) throw new Error("no-api-key");
     if (!doFetch) throw new Error("no-fetch");
     const res = await doFetch(url, {
@@ -34,6 +37,9 @@ export function createAnthropicComplete({ apiKey, fetch: injectedFetch, endpoint
     if (!res || !res.ok) throw new Error("anthropic-http-" + (res && res.status));
     const data = await res.json();
     if (data && data.stop_reason === "refusal") throw new Error("refusal");
+    // Honest truncation signal: a max_tokens stop means the JSON is incomplete — say so
+    // clearly instead of letting JSON.parse fail with a confusing "Unterminated string".
+    if (data && data.stop_reason === "max_tokens") throw new Error("truncated-max-tokens");
     const block = (data && data.content || []).find((b) => b.type === "text");
     if (!block || typeof block.text !== "string") throw new Error("no-text");
     return JSON.parse(block.text);

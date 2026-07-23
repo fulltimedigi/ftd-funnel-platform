@@ -149,10 +149,16 @@ export async function enrichAuthor(catalog, opts = {}) {
   let user = buildUserPrompt(catalog, opts);
   let lastReason = "unknown";
 
+  // The design maps every product across every axis, so output grows with the catalog
+  // (O(products × axes)) and Arabic is token-dense. Scale the cap to the catalog, with a
+  // generous ceiling — billing is on actual output, and the background job has 15 min.
+  const nProducts = (catalog.products || []).length;
+  const maxTokens = Math.min(32000, Math.max(16000, nProducts * 260));
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let design;
     try {
-      design = await complete({ model: DESIGN_MODEL, system, user, schema: DESIGN_SCHEMA });
+      design = await complete({ model: DESIGN_MODEL, system, user, schema: DESIGN_SCHEMA, maxTokens });
     } catch (e) {
       return { ok: false, reason: "model-error", error: String((e && e.message) || e) };
     }
