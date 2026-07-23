@@ -38,12 +38,14 @@ const schema = JSON.parse(readFileSync(new URL("../configs/_schema.json", import
 const vc = validateConfig(res.config, schema);
 
 console.error(`Catalog     : ${res.catalog.products.length} real products`);
-console.error(`Results     : ${res.meta.archetypes} (primary axis: ${res.meta.primaryAxis}; secondary: ${res.meta.secondaryAxes.join(", ") || "none"})`);
+console.error(`Results     : ${res.meta.archetypes} (fact axes: ${res.meta.axes.join(" × ")})`);
 console.error(`Schema gate : ${vc.valid ? "PASS" : "FAIL"}`);
 if (!vc.valid) console.error(formatValidationErrors(vc));
 console.error(`Trust gate  : ${res.trust.ok ? "PASS" : "FAIL"}`);
 if (!res.trust.ok) console.error(JSON.stringify(res.trust.findings.filter((f) => f.severity === "blocker"), null, 2));
+console.error(`Anti-bland  : ${res.bland.ok ? "PASS" : "FAIL"}`);
+if (!res.bland.ok) console.error(res.bland.findings.map((f) => `  • ${f.code}: ${f.message}`).join("\n"));
 
 writeFileSync(out, JSON.stringify(res.config, null, 2));
 console.error(`\nWrote funnel config → ${out}`);
-process.exit(vc.valid && res.trust.ok ? 0 : 2);
+process.exit(vc.valid && res.trust.ok && res.bland.ok ? 0 : 2);

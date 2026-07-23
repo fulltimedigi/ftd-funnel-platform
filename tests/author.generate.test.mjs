@@ -36,6 +36,7 @@ const _ls = {}; globalThis.localStorage = { getItem: (k) => (k in _ls ? _ls[k] :
 const { authorFunnel } = await import("../authoring/author/index.js");
 const { validateConfig, formatValidationErrors } = await import("../engine/validateConfig.js");
 const { trustValidate } = await import("../engine/trustValidate.js");
+const { antiBlandCheck, formatAntiBland } = await import("../authoring/author/qualityGate.js");
 const { createFunnel } = await import("../engine/index.js");
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const schema = JSON.parse(readFileSync(join(__dirname, "../configs/_schema.json"), "utf8"));
@@ -75,10 +76,10 @@ function driveToResult(config) {
 await (async () => {
   console.log("\ngeneration passes BOTH gates:");
   const gen = authorFunnel(CATALOG, { brandName: "Oud Example" });
-  await check("authorFunnel returns ok with a decision-table config", () => {
+  await check("authorFunnel returns ok with a decision-table config from ≥2 fact axes", () => {
     assert.equal(gen.ok, true);
     assert.equal(gen.config.scoring.mode, "decision-table");
-    assert.equal(gen.meta.primaryAxis, "type");
+    assert.ok(gen.meta.axes.length >= 2, "derives the product from ≥2 fact axes (not a mirror)");
     assert.ok(gen.config.archetypes.length >= 2);
   });
   await check("generated config is schema-valid", () => {
@@ -88,6 +89,15 @@ await (async () => {
   await check("generated config passes the trust gate with ZERO blockers", () => {
     const r = trustValidate(gen.config);
     assert.equal(r.ok, true, JSON.stringify(r.findings.filter((f) => f.severity === "blocker"), null, 2));
+  });
+  await check("generated config passes the ANTI-BLAND gate (no mirror/dominance)", () => {
+    const r = antiBlandCheck(gen.config);
+    assert.equal(r.ok, true, formatAntiBland(r));
+  });
+  await check("no question is a mirror — questions ask facts, not 'which product'", () => {
+    // every question maps to a fact axis; the result depends on the combination
+    assert.ok(gen.config.questions.length >= 2);
+    assert.ok(gen.config.derivedSignals.length >= 2, "≥2 decision signals combine to derive the result");
   });
 
   console.log("\nprovenance — every result is a REAL product from the catalog:");

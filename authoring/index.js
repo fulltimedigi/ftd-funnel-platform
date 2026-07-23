@@ -9,6 +9,7 @@
 import { ingestCatalog } from "./ingest/index.js";
 import { authorFunnel } from "./author/index.js";
 import { trustValidate } from "../engine/trustValidate.js";
+import { antiBlandCheck } from "./author/qualityGate.js";
 
 /**
  * @param {string} url - the client's own brand URL (authorized)
@@ -30,11 +31,13 @@ export async function generateFunnelFromUrl(url, opts = {}) {
   }
 
   const trust = trustValidate(authored.config);
+  const bland = antiBlandCheck(authored.config);
   return {
     ok: true,
     config: authored.config,
     catalog: { origin: ing.origin, products: ing.products, report: ing.report },
     trust,               // { ok, findings } — the caller can gate on trust.ok
+    bland,               // { ok, findings } — anti-bland gate (ADR-0016)
     meta: authored.meta,
     notes: ing.notes,
   };

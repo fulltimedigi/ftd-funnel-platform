@@ -1,26 +1,30 @@
 /**
- * authoring/author/index.js — Author a funnel config from a real catalog (ADR-0015).
+ * authoring/author/index.js — Author a funnel config from a real catalog (ADR-0015/0017).
  * ---------------------------------------------------------------------------
- * Stage 2. catalog → a complete, trust-gate-passing decision-table `config`:
- *   - the top DISCRIMINATING axis (axes.js) becomes the primary question; its
- *     values become the results (archetypes), each anchored to a REAL product;
- *   - secondary axes become offer signals that refine the contextual products;
- *   - every recommendation is a real SKU with a real URL, and every reason is a
- *     plain, token-free sentence grounded in the user's choice (so it always
- *     resolves and passes engine/trustValidate.js by construction).
+ * Stage 2. catalog → a complete config that passes ALL gates: schema, the trust
+ * gate, AND the anti-bland gate (ADR-0016). The funnel asks FACTS (budget, style,
+ * use) and DERIVES the product from the COMBINATION of ≥2 signals — never a mirror
+ * question, never a single-question-dominant one (docs/standards/funnel-quality-
+ * anti-bland-standard-v1.md).
  *
- * Deterministic, dependency-free, Node-safe. NEVER invents a product or a claim:
- * if the catalog has no discriminating axis, it returns { ok:false } → the caller
- * falls back to a vertical template (no fabrication).
+ * How: pick ≥2 discriminating fact axes; each product has a value on each axis; the
+ * decision table maps every fact-combination to the REAL product that best matches
+ * it. Because the result depends on the combination, no single answer determines it.
+ * The gate is run in a reject-and-regenerate loop over axis-sets — if no set yields
+ * a non-bland funnel, authoring is REFUSED (honest; use a template — no fabrication).
+ *
+ * Deterministic, dependency-free, Node-safe.
  */
 
-import { deriveAxes } from "./axes.js";
+import { deriveAxes, tokenize } from "./axes.js";
+import { trustValidate } from "../../engine/trustValidate.js";
+import { antiBlandCheck } from "./qualityGate.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
 const fmtPrice = (p) => (p && p.price != null ? `${p.price}${p.currency ? " " + p.currency : ""}` : "");
+const cartesian = (arrs) => arrs.reduce((acc, arr) => acc.flatMap((a) => arr.map((b) => [...a, b])), [[]]);
 
-/** Most complete product wins (priced + imaged + richer text); deterministic. */
 function _bestProduct(list) {
   return [...list].sort((a, b) => {
     const sc = (p) => (p.price != null ? 2 : 0) + (p.image ? 1 : 0);
@@ -28,135 +32,135 @@ function _bestProduct(list) {
   })[0];
 }
 
-/** Choose the primary axis (prefer type/category, then best-scored structured axis). */
-function _pickPrimary(axes) {
-  if (!axes.length) return null;
-  const type = axes.find((a) => a.id === "type");
-  if (type && type.values.length >= 2) return type;
-  return axes[0];
+/* ---- fact axes (categorical, fact-framed, ≤4 values each) ------------------ */
+
+function _priceLabel(v) {
+  const m = { budget: "اقتصادي", mid: "متوسط", premium: "مميّز" };
+  return m[v.value] || v.value;
 }
 
-/**
- * @param {{products:Array, origin?:string, brandUrl?:string}} catalog
- * @param {Object} [opts] - { brandName, theme, lang, sheetsEndpoint }
- * @returns {{ ok:boolean, reason?:string, config?:Object, meta?:Object }}
- */
-export function authorFunnel(catalog, opts = {}) {
-  const products = (catalog && catalog.products) || [];
-  if (products.length < 3) return { ok: false, reason: "too-few-products", meta: { count: products.length } };
+function buildFactAxes(catalog) {
+  const d = deriveAxes(catalog);
+  const products = catalog.products || [];
+  const axes = [];
 
-  const derived = deriveAxes(catalog, opts.axes);
-  const primary = _pickPrimary(derived.axes);
-  if (!primary) return { ok: false, reason: "no-discriminating-axis", meta: { axes: 0 } };
+  const price = d.axes.find((a) => a.id === "price");
+  if (price && price.values.length >= 2) {
+    const profile = new Map();
+    price.values.forEach((v) => v.productUrls.forEach((u) => profile.set(u, v.value)));
+    axes.push({ id: "budget", label: "الميزانية", question: "ما ميزانيتك التقريبية؟", values: price.values.map((v) => ({ value: v.value, label: _priceLabel(v) })), profile });
+  }
 
-  const byUrl = new Map(products.map((p) => [p.url, p]));
-  const secondaries = derived.axes.filter((a) => a.id !== primary.id && a.discrimination >= 0.3).slice(0, 2);
-  // url -> value maps for each secondary axis (for contextual gating)
-  const secMaps = secondaries.map((ax) => {
-    const m = new Map();
-    for (const v of ax.values) for (const u of v.productUrls) m.set(u, v.value);
-    return { ax, m };
-  });
+  // style/attribute axis from top keyword facets (product → its dominant top term)
+  const facets = (d.facets || []).slice(0, 4);
+  if (facets.length >= 2) {
+    const rank = new Map(facets.map((f, i) => [f.term, i]));
+    const profile = new Map();
+    for (const p of products) {
+      const terms = tokenize(`${p.name} ${(p.differentiators || []).join(" ")}`).filter((t) => rank.has(t)).sort((a, b) => rank.get(a) - rank.get(b));
+      if (terms.length) profile.set(p.url, terms[0]);
+    }
+    const present = new Set(profile.values());
+    const values = facets.filter((f) => present.has(f.term)).map((f) => ({ value: f.term, label: f.term }));
+    if (values.length >= 2) axes.push({ id: "style", label: "الطابع", question: "أي طابع تفضّل؟", values, profile });
+  }
 
+  const type = d.axes.find((a) => a.id === "type");
+  if (type && type.values.length >= 2 && type.values.length <= 4) {
+    const profile = new Map();
+    type.values.forEach((v) => v.productUrls.forEach((u) => profile.set(u, v.value)));
+    axes.push({ id: "usetype", label: "الفئة", question: "لأي نوع استخدام تبحث؟", values: type.values.map((v) => ({ value: v.value, label: v.value })), profile });
+  }
+
+  return axes;
+}
+
+/* ---- build a config from a chosen set of fact axes (matching) -------------- */
+
+function buildConfig(catalog, axisSet, opts) {
+  const products = catalog.products;
   const brandName = opts.brandName || (catalog.origin ? new URL(catalog.origin).host.replace(/^www\./, "") : "المتجر");
-  const lang = opts.lang || "ar";
-  const theme = opts.theme || "platform-clean";
   const homeUrl = catalog.origin || catalog.brandUrl || (products[0] && new URL(products[0].url).origin) || "";
 
-  /* ---- signals + questions ------------------------------------------------ */
-  const primaryValues = primary.values;
-  const sigPrimary = {
-    id: "s_primary", role: "decision", required: true, source: "q_primary",
-    domain: primaryValues.map((v) => v.value), map: {},
-  };
-  const qPrimary = {
-    id: "q_primary", label: "السؤال الأول", text: `أي نوع من ${brandName} تبحث عنه؟`,
-    options: primaryValues.map((v, i) => {
-      const oid = `opt_p_${i}`;
-      sigPrimary.map[oid] = v.value;
-      return { id: oid, label: clamp(v.label || v.value, 60) };
-    }),
-  };
+  // 1. match every fact-combination to the best real product
+  const combos = cartesian(axisSet.map((a) => a.values.map((v) => v.value)));
+  const overall = _bestProduct(products);
+  const winnerByCombo = new Map();
+  const winners = new Map(); // url -> product
+  for (const combo of combos) {
+    let best = null, bestScore = -2;
+    for (const p of products) {
+      let score = 0;
+      axisSet.forEach((a, i) => { const pv = a.profile.get(p.url); if (pv != null) score += pv === combo[i] ? 1 : -0.001; });
+      const better = score > bestScore || (score === bestScore && best && _bestProduct([p, best]) === p);
+      if (better) { best = p; bestScore = score; }
+    }
+    best = best || overall;
+    winnerByCombo.set(combo.join("¦"), best);
+    winners.set(best.url, best);
+  }
 
-  const signals = [sigPrimary];
-  const questions = [qPrimary];
-  secMaps.forEach(({ ax }, si) => {
-    const sig = { id: `s_sec_${si}`, role: "offer", required: false, default: ax.values[0].value, source: `q_sec_${si}`, domain: ax.values.map((v) => v.value), map: {} };
-    const q = {
-      id: `q_sec_${si}`, label: `السؤال ${si + 2}`, text: _secQuestionText(ax),
-      options: ax.values.map((v, i) => { const oid = `opt_s${si}_${i}`; sig.map[oid] = v.value; return { id: oid, label: clamp(v.label || v.value, 60) }; }),
-    };
-    signals.push(sig); questions.push(q);
-  });
-
-  const derivedSignals = [{ id: "D_primary", from: ["s_primary"], rule: "identity", domain: primaryValues.map((v) => v.value) }];
-
-  /* ---- archetypes (one per primary value), each anchored to a real product - */
+  // 2. archetypes = the winning real products
+  const archId = new Map();
   const archetypes = [];
-  const table = [];
-  let biggest = { id: null, count: -1 };
-  primaryValues.forEach((v, i) => {
-    const group = v.productUrls.map((u) => byUrl.get(u)).filter(Boolean);
-    if (group.length === 0) return;
+  [...winners.values()].forEach((p, i) => {
     const id = `R${i + 1}`;
-    const hero = _bestProduct(group);
-    if (group.length > biggest.count) biggest = { id, count: group.length };
-
-    // contextual: for each secondary axis value present in the group, the best matching product
-    const contextual = [];
-    secMaps.forEach(({ m }, si) => {
-      const seen = new Set();
-      for (const p of group) {
-        const val = m.get(p.url);
-        if (!val || seen.has(val) || p.url === hero.url) continue;
-        seen.add(val);
-        contextual.push({
-          name: clamp(p.name, 120), url: p.url, price: fmtPrice(p),
-          needs: { [`s_sec_${si}`]: val },
-          becauseTemplate: `خيار «${clamp(p.name, 80)}» يناسب تفضيلك ضمن فئة «${clamp(v.label || v.value, 60)}».`,
-        });
-      }
-    });
-
+    archId.set(p.url, id);
+    // which axis values does this product carry (for answer-grounded why bullets)
+    const carries = axisSet.map((a) => ({ D: `D_${a.id}`, label: a.label, value: a.profile.get(p.url) })).filter((x) => x.value != null);
+    const why = [{ needs: {}, claim: `«${clamp(p.name, 70)}» يطابق ما اخترته من ${axisSet.map((a) => a.label).join(" و")}.` }];
+    for (const c of carries) why.push({ needs: { [c.D]: c.value }, claim: `اخترت ${c.label}، و«${clamp(p.name, 60)}» يوفّرها.` });
     archetypes.push({
-      id, name: clamp(v.label || v.value, 80), icon: "✨",
-      description: `توصيتنا ضمن فئة «${clamp(v.label || v.value, 60)}» من ${brandName}.`,
+      id, name: clamp(p.name, 80), icon: "✨",
+      description: `اختيارنا الأنسب من ${brandName} بناءً على إجاباتك.`,
       recommendations: {
         primary: {
-          name: clamp(hero.name, 120), url: hero.url, price: fmtPrice(hero),
-          becauseTemplate: `اخترت فئة «${clamp(v.label || v.value, 60)}»، و«${clamp(hero.name, 80)}» هو اختيارنا الأنسب فيها من ${brandName}.`,
+          name: clamp(p.name, 120), url: p.url, price: fmtPrice(p),
+          becauseTemplate: `«${clamp(p.name, 80)}» هو الأنسب لأنه يجمع ما تبحث عنه من ${axisSet.map((a) => a.label).join(" و")} في ${brandName}.`,
         },
-        ...(contextual.length ? { contextual: contextual.slice(0, 4) } : {}),
       },
       resultExtras: {
-        why: [{ needs: {}, claim: `«${clamp(hero.name, 80)}» يمثّل فئة «${clamp(v.label || v.value, 60)}» التي اخترتها.` }],
-        nextAction: `تصفّح «${clamp(hero.name, 80)}» وأكمل طلبك.`,
+        why,
+        whyNot: [{ name: "عن البدائل", needs: {}, claim: `«${clamp(p.name, 70)}» يجمع معاييرك معًا (${axisSet.map((a) => a.label).join(" + ")})، بينما البدائل تحقّق جزءًا منها فقط.` }],
+        nextAction: `تصفّح «${clamp(p.name, 70)}» وأكمل طلبك.`,
       },
     });
-    table.push({ id: `r_${id}`, when: { D_primary: v.value }, result: id });
   });
 
-  if (archetypes.length < 2) return { ok: false, reason: "insufficient-groups", meta: { groups: archetypes.length } };
-  // Totality: the safety default reuses the largest group's archetype (no dead end, no extra unreachable archetype).
-  table.push({ id: "r_default", when: {}, result: biggest.id });
+  // 3. signals + derived signals + questions
+  const signals = [], derivedSignals = [], questions = [];
+  axisSet.forEach((a, ai) => {
+    const sid = `s_${a.id}`, qid = `q_${a.id}`;
+    const sig = { id: sid, role: "decision", required: true, source: qid, domain: a.values.map((v) => v.value), map: {} };
+    const q = { id: qid, label: `السؤال ${ai + 1}`, text: a.question, options: a.values.map((v, i) => { const oid = `opt_${a.id}_${i}`; sig.map[oid] = v.value; return { id: oid, label: clamp(v.label, 60) }; }) };
+    signals.push(sig); questions.push(q);
+    derivedSignals.push({ id: `D_${a.id}`, from: [sid], rule: "identity", domain: a.values.map((v) => v.value) });
+  });
 
-  const config = {
+  // 4. decision table: one rule per combo → winner archetype; default → overall best
+  const decisionTable = combos.map((combo, ci) => ({
+    id: `r_${ci}`,
+    when: Object.fromEntries(axisSet.map((a, i) => [`D_${a.id}`, combo[i]])),
+    result: archId.get(winnerByCombo.get(combo.join("¦")).url),
+  }));
+  decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id });
+
+  return {
     _generatedBy: "ftd-authoring/stage2",
     id: slug(brandName) + "-advisor",
     brand: { name: brandName, logo: "", tagline: `مرشدك لاختيار المنتج الأنسب من ${brandName}` },
-    theme, lang,
+    theme: opts.theme || "platform-clean", lang: opts.lang || "ar",
     hero: {
       eyebrow: `${questions.length} أسئلة · نتيجة فورية`,
       headline: `محتار تختار من ${brandName}؟`,
-      subtext: "جاوب على أسئلة سريعة ونوصّلك للمنتج الأنسب لك — مع سبب واضح.",
+      subtext: "جاوب على أسئلة سريعة عن احتياجك ونستنتج لك المنتج الأنسب — مع سبب واضح.",
       chips: [`${questions.length} أسئلة`, "منتجات حقيقية", "سبب لكل توصية"],
       startLabel: "ابدأ الآن ←",
     },
     scoring: { mode: "decision-table" },
-    signals, derivedSignals, decisionTable: table,
+    signals, derivedSignals, decisionTable,
     resultLayout: "commerce",
-    archetypes,
-    questions,
+    archetypes, questions,
     leadForm: {
       gated: true, skippable: true,
       fields: [
@@ -176,13 +180,37 @@ export function authorFunnel(catalog, opts = {}) {
       result: { eyebrow: "توصيتك", recommendationTitle: "نوصيك بـ", whyTitle: "لماذا تناسبك", whyNotTitle: "لماذا ليست البدائل", nextTitle: "الخطوة التالية", contextualTitle: "قد يناسبك أيضاً" },
     },
   };
-
-  return { ok: true, config, meta: { primaryAxis: primary.id, secondaryAxes: secondaries.map((a) => a.id), archetypes: archetypes.length } };
 }
 
-function _secQuestionText(ax) {
-  if (ax.id === "price") return "ما ميزانيتك التقريبية؟";
-  if (ax.id === "type") return "أي فئة تفضّل؟";
-  if (ax.id === "brand") return "هل تفضّل علامة معيّنة؟";
-  return `ما تفضيلك في: ${ax.label}؟`;
+/* ---- orchestrator: reject-and-regenerate over axis-sets until a gate-passing,
+       non-bland funnel is found (or refuse honestly) ------------------------- */
+
+function _axisSets(axes) {
+  const sets = [];
+  for (let i = 0; i < axes.length; i++) for (let j = i + 1; j < axes.length; j++) sets.push([axes[i], axes[j]]); // pairs
+  for (let i = 0; i < axes.length; i++) for (let j = i + 1; j < axes.length; j++) for (let k = j + 1; k < axes.length; k++) sets.push([axes[i], axes[j], axes[k]]); // triples
+  return sets;
+}
+
+export function authorFunnel(catalog, opts = {}) {
+  const products = (catalog && catalog.products) || [];
+  if (products.length < 4) return { ok: false, reason: "too-few-products", meta: { count: products.length } };
+
+  const axes = buildFactAxes(catalog);
+  if (axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
+
+  const attempts = [];
+  for (const set of _axisSets(axes)) {
+    // keep the swept signal-space bounded
+    const combos = set.reduce((n, a) => n * a.values.length, 1);
+    if (combos > 64) continue;
+    const config = buildConfig(catalog, set, opts);
+    const trust = trustValidate(config);
+    const bland = antiBlandCheck(config);
+    attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
+    if (trust.ok && bland.ok) {
+      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos } };
+    }
+  }
+  return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };
 }

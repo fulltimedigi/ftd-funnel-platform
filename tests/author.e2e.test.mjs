@@ -52,11 +52,11 @@ await (async () => {
   console.log("\nURL → funnel, one chain:");
   const res = await generateFunnelFromUrl(`${ORIGIN}/`, { ...OFFLINE, fetch: router(routes), brandName: "OudCo" });
 
-  await check("ingest + author succeed; 6 real products → a decision-table funnel", () => {
+  await check("ingest + author succeed; 6 real products → a fact-based decision funnel", () => {
     assert.equal(res.ok, true, JSON.stringify(res));
     assert.equal(res.catalog.products.length, 6);
     assert.equal(res.config.scoring.mode, "decision-table");
-    assert.equal(res.meta.primaryAxis, "type");
+    assert.ok(res.meta.axes.length >= 2, "derives from ≥2 fact axes");
   });
   await check("the generated funnel passes the schema gate", () => {
     const vc = validateConfig(res.config, schema);
@@ -64,6 +64,9 @@ await (async () => {
   });
   await check("the generated funnel passes the trust gate (zero blockers)", () => {
     assert.equal(res.trust.ok, true, JSON.stringify(res.trust.findings.filter((f) => f.severity === "blocker"), null, 2));
+  });
+  await check("the generated funnel passes the ANTI-BLAND gate", () => {
+    assert.equal(res.bland.ok, true, JSON.stringify(res.bland.findings, null, 2));
   });
   await check("every result is a REAL ingested product URL (provenance end-to-end)", () => {
     const urls = new Set(res.catalog.products.map((p) => p.url));
