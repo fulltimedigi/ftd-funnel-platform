@@ -184,6 +184,26 @@ function buildConfig(catalog, axisSet, opts) {
     });
   });
 
+  // 2b. COVERAGE BACKFILL (ADR-0031): guarantee EVERY product is reachable. Any product
+  //     that the answer-space couldn't give a distinct #1 (a genuine near-duplicate) is
+  //     attached to the archetype it best matches, as a real nearest alternate. Honest:
+  //     it only ever adds a real product to the result it most closely fits; the #1 of
+  //     each result is unchanged. Common results keep ≤3 alternates; only the few
+  //     over-subscribed profiles carry the extras — the ranked-list leaf the spec allows.
+  const present = new Set();
+  for (const a of archetypes) { present.add(a.recommendations.primary.url); for (const c of a.recommendations.contextual || []) present.add(c.url); }
+  const simTo = (p, ap) => axisSet.reduce((s, ax) => s + (ax.profile.get(p.url) != null && ax.profile.get(p.url) === ax.profile.get(ap.url) ? 1 : 0), 0);
+  for (const p of products) {
+    if (present.has(p.url)) continue;
+    let bestA = null, bs = -Infinity;
+    for (const a of archetypes) { const ap = winners.get(a.recommendations.primary.url); const s = simTo(p, ap); if (s > bs) { bs = s; bestA = a; } }
+    if (bestA) {
+      const rc = bestA.recommendations;
+      (rc.contextual || (rc.contextual = [])).push({ name: clamp(p.name, 120), url: p.url, price: fmtPrice(p) });
+      present.add(p.url);
+    }
+  }
+
   // 3. signals + derived signals + questions
   const signals = [], derivedSignals = [], questions = [];
   axisSet.forEach((a, ai) => {

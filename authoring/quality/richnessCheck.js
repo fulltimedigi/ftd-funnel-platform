@@ -34,6 +34,18 @@ function _reachableProductUrls(config) {
   return urls;
 }
 
+/** Distinct products that are the #1 (primary) for some answer path — the stronger form
+ *  of coverage ("each product is someone's top pick"). Reported for transparency (not
+ *  gated: genuine near-duplicates legitimately appear only as ranked alternates). */
+function _primaryProductUrls(config) {
+  const urls = new Set();
+  for (const a of (config.archetypes || [])) {
+    const p = (a.recommendations || {}).primary;
+    if (p && p.url) urls.add(p.url);
+  }
+  return urls;
+}
+
 /**
  * @param {Object} config   the generated funnel config
  * @param {Object} catalog  { products: [...] } the real ingested catalog
@@ -46,6 +58,8 @@ export function richnessCheck(config, catalog, opts = {}) {
   const questions = (config && Array.isArray(config.questions)) ? config.questions.length : 0;
   const reachable = _reachableProductUrls(config || {}).size;
   const coverage = products > 0 ? reachable / products : 0;
+  const primaries = _primaryProductUrls(config || {}).size;
+  const primaryCoverage = products > 0 ? primaries / products : 0;
 
   const findings = [];
   const catalogJustifiesDepth = products >= cfg.richCatalogMin;
@@ -68,6 +82,6 @@ export function richnessCheck(config, catalog, opts = {}) {
   return {
     ok: findings.length === 0,
     findings,
-    metrics: { products, questions, reachable, coverage, catalogJustifiesDepth },
+    metrics: { products, questions, reachable, coverage, primaries, primaryCoverage, catalogJustifiesDepth },
   };
 }

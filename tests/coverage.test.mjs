@@ -99,6 +99,23 @@ await (async () => {
     assert.equal(reachableUrls(r.config).size, 8, "coverage ~100%");
   });
 
+  await check("severe collisions (small answer-space) → backfill still makes ALL reachable", () => {
+    // 20 products but only 4 possible profiles (2 binary axes = 4 combos). Most can't be
+    // a distinct #1, but the coverage backfill attaches every leftover to its best leaf,
+    // so 100% remain reachable (as ranked alternates) — no product is ever orphaned.
+    const N = 20;
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD" }));
+    const base = cartesian([0, 1].map(() => ["0", "1"])); // 4 combos
+    const axes = [0, 1].map((ax) => {
+      const profile = new Map();
+      products.forEach((p, i) => profile.set(p.url, base[i % 4][ax]));
+      return { id: "ax" + ax, label: "محور" + ax, question: "سؤال" + ax + "؟", values: [{ value: "0", label: "a" + ax + "0" }, { value: "1", label: "a" + ax + "1" }], profile };
+    });
+    const r = authorFromAxes({ origin: O, products, brandUrl: O }, axes, { maxQuestions: 4, maxCombos: 64 });
+    assert.equal(r.ok, true, r.reason);
+    assert.equal(reachableUrls(r.config).size, 20, "every product reachable via backfill");
+  });
+
   console.log("\ncoverage gate — a gate that can't fail is theater:");
   await check("a funnel that orphans most of the catalog FAILS the coverage gate", () => {
     // 30-product catalog, but a config that only surfaces 3 → 10% coverage.
