@@ -22,6 +22,13 @@ export const handler = async () => {
     node: process.version,
   };
 
+  const runtime = {
+    hasNetlifyGlobal: typeof globalThis.Netlify !== "undefined",
+    netlifyEnvKeys: (typeof globalThis.Netlify !== "undefined" && globalThis.Netlify.env && typeof globalThis.Netlify.env.has === "function")
+      ? { blobsCtx: globalThis.Netlify.env.has("NETLIFY_BLOBS_CONTEXT"), siteId: globalThis.Netlify.env.has("SITE_ID") }
+      : null,
+  };
+
   let getStoreAuto = null, getStoreErr = null;
   try {
     const { getStore } = await import("@netlify/blobs");
@@ -32,10 +39,28 @@ export const handler = async () => {
     getStoreErr = { name: (e && e.name) || "Error", message: String((e && e.message) || e).slice(0, 200) };
   }
 
+  // Manual config with the SITE_ID we DO have + any token env — proves whether a
+  // token is the only missing piece.
+  let getStoreManual = null, getStoreManualErr = null;
+  const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_API_TOKEN || process.env.NETLIFY_TOKEN;
+  const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+  try {
+    if (token && siteID) {
+      const { getStore } = await import("@netlify/blobs");
+      const s = getStore({ name: "ftd-probe", siteID, token });
+      await s.set("ping", "1");
+      getStoreManual = (await s.get("ping")) === "1";
+    } else {
+      getStoreManualErr = { skipped: true, haveSiteID: !!siteID, haveToken: !!token };
+    }
+  } catch (e) {
+    getStoreManualErr = { name: (e && e.name) || "Error", message: String((e && e.message) || e).slice(0, 200) };
+  }
+
   return {
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ env, getStoreAuto, getStoreErr }, null, 2),
+    body: JSON.stringify({ env, runtime, getStoreAuto, getStoreErr, getStoreManual, getStoreManualErr }, null, 2),
   };
 };
 
