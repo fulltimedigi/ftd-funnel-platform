@@ -35,6 +35,12 @@ await (async () => {
     assert.notEqual(keyFor("a.com"), keyFor("b.com"));
     assert.match(keyFor("a.com"), /^[0-9a-f]{32}$/);
   });
+  await check("a secret salt makes ids unguessable but stable (ADR-0032)", () => {
+    // Same salt + same url → same key (cache still works); a different salt → different id.
+    assert.equal(keyFor("brand.com", "salt-A"), keyFor("https://brand.com/", "salt-A"));
+    assert.notEqual(keyFor("brand.com", "salt-A"), keyFor("brand.com", "salt-B"));
+    assert.notEqual(keyFor("brand.com", "salt-A"), keyFor("brand.com")); // salted != unsalted
+  });
 
   console.log("\nsubmit:");
   await check("invalid url → honest reject", async () => {
@@ -56,6 +62,24 @@ await (async () => {
     assert.equal(r.status, "ready"); assert.equal(r.cached, true);
     assert.equal(triggered, false, "no re-generation on a cache hit");
   });
+  await check("spend guard returning false → rate-limited, NOT triggered (cost cap)", async () => {
+    const store = fakeStore(); let triggered = false;
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, guard: async () => false });
+    assert.equal(r.ok, false); assert.equal(r.reason, "rate-limited");
+    assert.equal(triggered, false, "no generation when over the cap");
+  });
+  await check("a cache HIT is served even when the spend guard is exhausted", async () => {
+    const store = fakeStore(); const id = keyFor("brand.com");
+    store.m.set(id, { status: "ready", config: { id: "f" } });
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => {}, guard: async () => false });
+    assert.equal(r.cached, true, "cache hits never consume budget");
+  });
+  await check("pending record stamps startedAt (for in-flight de-dupe)", async () => {
+    const store = fakeStore();
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => {}, now: () => 12345 });
+    assert.equal(store.m.get(r.id).startedAt, 12345);
+  });
+
   await check("regenerate:true bypasses the cache and re-runs", async () => {
     const store = fakeStore(); const id = keyFor("brand.com");
     store.m.set(id, { status: "ready", config: { id: "old" } });

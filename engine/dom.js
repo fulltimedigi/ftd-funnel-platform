@@ -10,10 +10,25 @@
  *     - "class"   → className
  *     - "text"    → textContent (leaf nodes only; do not combine with children)
  *     - "onClick" → addEventListener('click', fn)
+ *     - "href"    → sanitized via safeHref (blocks javascript:/data:/etc.)
  *     - null/undefined values are skipped
  *   children: a node | string | (node|string|null)[] — strings become text nodes,
  *     null/false are skipped.
  */
+
+/**
+ * Sanitize an href so a poisoned/scraped config can't inject a javascript:/data:
+ * URL (ADR-0032). Allows http/https/mailto and scheme-less (relative/anchor)
+ * values; strips everything else. Control chars are removed before scheme
+ * detection to defeat "java\tscript:" tricks. Returns null when it must be dropped.
+ */
+export function safeHref(v) {
+  const raw = String(v).trim();
+  const probe = raw.replace(/[\x00-\x20]+/g, "").toLowerCase();
+  const m = probe.match(/^([a-z][a-z0-9+.-]*):/);
+  if (m && !["http", "https", "mailto"].includes(m[1])) return null;
+  return raw;
+}
 
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -22,6 +37,7 @@ export function el(tag, attrs = {}, children = []) {
     if (k === "class") node.className = v;
     else if (k === "text") node.textContent = v;
     else if (k === "onClick") node.addEventListener("click", v);
+    else if (k === "href") { const safe = safeHref(v); if (safe != null) node.setAttribute("href", safe); }
     else node.setAttribute(k, v);
   }
   const kids = Array.isArray(children) ? children : [children];

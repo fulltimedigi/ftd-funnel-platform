@@ -108,9 +108,11 @@
       return res.json();
     }
 
+    // Optional interim endpoint token (ADR-0032): sent only if the page defines it.
+    const authHeaders = () => (window.__FTD_TOKEN__ ? { "x-ftd-token": window.__FTD_TOKEN__ } : {});
     async function submit(request) {
       return jsonOnly(await fetch("/.netlify/functions/generate-submit", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true, regenerate: !!request.regenerate }),
       }));
     }
@@ -118,7 +120,7 @@
       const deadline = Date.now() + 180000; // up to 3 min
       while (Date.now() < deadline) {
         let rec = null;
-        try { rec = await jsonOnly(await fetch("/.netlify/functions/generate-status?id=" + encodeURIComponent(id))); } catch { /* transient */ }
+        try { rec = await jsonOnly(await fetch("/.netlify/functions/generate-status?id=" + encodeURIComponent(id), { headers: authHeaders() })); } catch { /* transient */ }
         if (rec && rec.status === "ready") return { ok: true, config: rec.config, catalog: rec.catalog, source: rec.source, richness: rec.richness, ai: rec.ai };
         if (rec && rec.status === "error") return { ok: false, stage: rec.stage, reason: rec.reason, ai: rec.ai };
         await sleep(2500);

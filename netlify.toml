@@ -1,27 +1,37 @@
-# netlify.toml — Stage 3C-1 preview config (ADR-0027).
-# Serverless generator + static preview of the platform. Production is untouched;
+# netlify.toml — Stage 3C preview config (ADR-0027/0029/0032).
+# Serverless async generator + static preview of the platform. Production is untouched;
 # this drives a Netlify Deploy Preview only until the operator approves promotion.
 
 [build]
   # Zero-build project (vanilla ES modules) — publish the repo as-is.
   publish = "."
   functions = "netlify/functions"
+  [build.environment]
+    NODE_VERSION = "20"
 
-# The type=module embed loader is fetched in CORS mode (ADR-0021) — our origin
-# must serve it with an Access-Control-Allow-Origin header.
+# Security headers on every response (ADR-0032). The platform is self-contained (no
+# third-party scripts). 'unsafe-inline' is still needed for the current inline
+# <script type="module"> / <style> blocks until they are externalized in 3ج-2.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
+# The embed loader is fetched cross-origin (ADR-0021) → it must allow any embedding site,
+# and it is framed by third-party pages, so it overrides the global frame rules.
 [[headers]]
   for = "/embed/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
-
-# Friendly paths (defaults are /.netlify/functions/<name>).
-[[redirects]]
-  from = "/api/generate"
-  to = "/.netlify/functions/generate"
-  status = 200
-  force = true
+    X-Frame-Options = ""
+    Content-Security-Policy = "frame-ancestors *"
 
 # Async generation (ADR-0029): submit → poll. Background fn is triggered internally.
+# (The retired sync /api/generate redirect was removed — ADR-0032.)
 [[redirects]]
   from = "/api/generate-submit"
   to = "/.netlify/functions/generate-submit"

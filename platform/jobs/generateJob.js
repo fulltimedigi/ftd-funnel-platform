@@ -10,10 +10,14 @@
 import { createHash } from "node:crypto";
 import { normalizeUrl } from "../intake/intakeModel.js";
 
-/** Stable job id / cache key: sha256(normalized url), first 32 hex chars. */
-export function keyFor(url) {
+/** Stable job id / cache key: sha256(SALT | normalized url), first 32 hex chars.
+ *  The salt is a server secret (FTD_ID_SALT), so a job id — and thus its cached
+ *  result — cannot be derived by guessing the URL (ADR-0032). Same salt + same URL →
+ *  same key, so the per-store design cache still works. */
+export function keyFor(url, salt) {
+  const s = salt != null ? salt : ((typeof process !== "undefined" && process.env && process.env.FTD_ID_SALT) || "");
   const norm = normalizeUrl(url) || String(url || "").trim().toLowerCase();
-  return createHash("sha256").update(norm).digest("hex").slice(0, 32);
+  return createHash("sha256").update(s + "|" + norm).digest("hex").slice(0, 32);
 }
 
 /** Shape the record we persist from a generateFunnelFromUrl result. */
@@ -39,7 +43,7 @@ export function recordFrom(res, url) {
  * `trigger(key, url)` that kicks off the background run (fire-and-forget).
  * @returns {Promise<{ok:true, id, status:'ready'|'pending', cached?:boolean} | {ok:false, reason}>}
  */
-export async function submitJob({ url, regenerate = false, store, trigger }) {
+export async function submitJob({ url, regenerate = false, store, trigger, guard, now = Date.now }) {
   const norm = normalizeUrl(url);
   if (!norm) return { ok: false, reason: "invalid-url" };
   const id = keyFor(norm);
@@ -48,7 +52,11 @@ export async function submitJob({ url, regenerate = false, store, trigger }) {
   if (existing && existing.status === "ready" && !regenerate) {
     return { ok: true, id, status: "ready", cached: true };
   }
-  await store.set(id, { status: "pending", url: norm, startedAt: null });
+  // Abuse/cost cap BEFORE any expensive generation (ADR-0032). Cache hits above never
+  // reach here. `guard()` returns false when the daily budget is spent.
+  if (typeof guard === "function" && !(await guard())) return { ok: false, reason: "rate-limited" };
+
+  await store.set(id, { status: "pending", url: norm, startedAt: now() });
   try { if (typeof trigger === "function") await trigger(id, norm); } catch { /* the poller still surfaces a stuck pending honestly */ }
   return { ok: true, id, status: "pending" };
 }
