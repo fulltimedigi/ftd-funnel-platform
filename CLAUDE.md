@@ -46,6 +46,13 @@ step, still write an ADR for each decision, still keep tests green. It only chan
 - `themes/`, `styles/`, `templates/`, `integrations/`, `analytics/`
 - *(coming, Stage 1–2)* `authoring/` — URL ingestion + AI funnel generation
 
+## Agreed product direction
+
+`docs/PRODUCT_DECISIONS.md` is the **binding** record of product-shape decisions agreed
+with the operator (inputs = URL-first "draft→refine"; output = hosted / **embed** /
+single-file; lead sinks = Sheets-via-AppsScript + a universal **webhook**; integrate with
+GHL/CRMs, never compete). Read it before shaping Stage 2/3; don't silently deviate.
+
 ## Working rules (non-negotiable)
 
 1. **Document before you decide.** Any material choice gets an ADR in `docs/adr/`
