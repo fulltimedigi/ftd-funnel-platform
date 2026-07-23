@@ -32,7 +32,7 @@
   <main id="ftd-root"><!-- engine mounts here --></main>
 
   <script type="module">
-    import { boot } from "../engine/index.js";
+    import { boot, createFunnel } from "../engine/index.js";
     import "./frame.js"; // frame-side auto-resize reporter (self-starts)
 
     /* Resolve which funnel to render — sanitized, honest failure if none. */
@@ -46,20 +46,39 @@
     }
 
     const mountEl = document.getElementById("ftd-root");
-    const configUrl = resolveConfigUrl();
+    const q = new URLSearchParams(location.search);
 
-    if (!configUrl) {
+    function bootError() {
       mountEl.innerHTML =
-        '<div class="ftd-boot-error">لا يوجد فانل محدّد.<br>' +
-        'أضِف <code>?funnel=&lt;id&gt;</code> إلى الرابط.</div>';
+        '<div class="ftd-boot-error">تعذّر تحميل الفانل.<br>' +
+        'تأكّد من صحّة الرابط ثم أعِد المحاولة.</div>';
+    }
+
+    // Draft preview: a freshly generated, in-memory config shared same-origin via
+    // sessionStorage (the Studio review screen sets it). No fetch — render directly.
+    if (q.get("draft")) {
+      try {
+        const raw = sessionStorage.getItem("ftd:draft-config");
+        const config = raw ? JSON.parse(raw) : null;
+        if (!config) throw new Error("no draft in sessionStorage");
+        createFunnel(config, mountEl);
+      } catch (err) {
+        console.error("[ftd] draft preview failed:", err);
+        bootError();
+      }
     } else {
-      boot({ configUrl, mountEl }).catch((err) => {
-        // Rule 4 — honest failure: say it couldn't load, never a fake success.
-        console.error("[ftd] funnel failed to load:", err);
+      const configUrl = resolveConfigUrl();
+      if (!configUrl) {
         mountEl.innerHTML =
-          '<div class="ftd-boot-error">تعذّر تحميل الفانل.<br>' +
-          'تأكّد من صحّة الرابط ثم أعِد المحاولة.</div>';
-      });
+          '<div class="ftd-boot-error">لا يوجد فانل محدّد.<br>' +
+          'أضِف <code>?funnel=&lt;id&gt;</code> إلى الرابط.</div>';
+      } else {
+        boot({ configUrl, mountEl }).catch((err) => {
+          // Rule 4 — honest failure: say it couldn't load, never a fake success.
+          console.error("[ftd] funnel failed to load:", err);
+          bootError();
+        });
+      }
     }
   </script>
 </body>

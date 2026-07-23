@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<!--
+  examples/sample-shop/ — a SYNTHETIC demo store (no real client data). It exists
+  so the paste-URL screen can run the REAL ingest→author→gate pipeline end-to-end
+  same-origin (browsers cannot crawl arbitrary cross-origin sites — that is why
+  live generation runs server-side, ADR-0024). Catalog mirrors the synthetic
+  fixture used in the authoring tests.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sample Oud Shop — FullTimeDigi demo</title>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Product",
+      "name": "Kalimantan Agarwood Oil 3ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/1",
+      "offers": {
+        "@type": "Offer",
+        "price": 180,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/1"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Kalimantan Agarwood Oil 6ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/2",
+      "offers": {
+        "@type": "Offer",
+        "price": 340,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/2"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Indian Oud Oil 3ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/3",
+      "offers": {
+        "@type": "Offer",
+        "price": 150,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/3"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Cambodian Oud Oil 3ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/4",
+      "offers": {
+        "@type": "Offer",
+        "price": 210,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/4"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Malaysian Agarwood Wood Chips Tola",
+      "url": "https://sample-shop.fulltimedigi.com/p/5",
+      "offers": {
+        "@type": "Offer",
+        "price": 400,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/5"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Indian Agarwood Wood Chips Tola",
+      "url": "https://sample-shop.fulltimedigi.com/p/6",
+      "offers": {
+        "@type": "Offer",
+        "price": 520,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/6"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Kalimantan Wood Chips",
+      "url": "https://sample-shop.fulltimedigi.com/p/7",
+      "offers": {
+        "@type": "Offer",
+        "price": 90,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/7"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Cambodian Bakhoor",
+      "url": "https://sample-shop.fulltimedigi.com/p/8",
+      "offers": {
+        "@type": "Offer",
+        "price": 60,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/8"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Indian Bakhoor Premium",
+      "url": "https://sample-shop.fulltimedigi.com/p/9",
+      "offers": {
+        "@type": "Offer",
+        "price": 75,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/9"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Kalimantan Bakhoor",
+      "url": "https://sample-shop.fulltimedigi.com/p/10",
+      "offers": {
+        "@type": "Offer",
+        "price": 55,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/10"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Cambodian Oud Parfum 50ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/11",
+      "offers": {
+        "@type": "Offer",
+        "price": 120,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/11"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Indian Oud Parfum 50ml",
+      "url": "https://sample-shop.fulltimedigi.com/p/12",
+      "offers": {
+        "@type": "Offer",
+        "price": 130,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/12"
+      }
+    },
+    {
+      "@type": "Product",
+      "name": "Gift Card",
+      "url": "https://sample-shop.fulltimedigi.com/p/13",
+      "offers": {
+        "@type": "Offer",
+        "price": 100,
+        "priceCurrency": "USD",
+        "url": "https://sample-shop.fulltimedigi.com/p/13"
+      }
+    }
+  ]
+}
+  </script>
+</head>
+<body>
+  <h1>Sample Oud Shop <small>(demo catalog — not a real store)</small></h1>
+  <p>A synthetic catalog so the Studio can demonstrate real generation.</p>
+  <ul>
+      <li><a href="/p/1">Kalimantan Agarwood Oil 3ml</a> — $180</li>
+      <li><a href="/p/2">Kalimantan Agarwood Oil 6ml</a> — $340</li>
+      <li><a href="/p/3">Indian Oud Oil 3ml</a> — $150</li>
+      <li><a href="/p/4">Cambodian Oud Oil 3ml</a> — $210</li>
+      <li><a href="/p/5">Malaysian Agarwood Wood Chips Tola</a> — $400</li>
+      <li><a href="/p/6">Indian Agarwood Wood Chips Tola</a> — $520</li>
+      <li><a href="/p/7">Kalimantan Wood Chips</a> — $90</li>
+      <li><a href="/p/8">Cambodian Bakhoor</a> — $60</li>
+      <li><a href="/p/9">Indian Bakhoor Premium</a> — $75</li>
+      <li><a href="/p/10">Kalimantan Bakhoor</a> — $55</li>
+      <li><a href="/p/11">Cambodian Oud Parfum 50ml</a> — $120</li>
+      <li><a href="/p/12">Indian Oud Parfum 50ml</a> — $130</li>
+      <li><a href="/p/13">Gift Card</a> — $100</li>
+  </ul>
+</body>
+</html>

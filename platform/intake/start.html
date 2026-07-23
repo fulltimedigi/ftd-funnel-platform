@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<!--
+  platform/intake/start.html — the Studio ENTRY screen (ADR-0024).
+
+  Paste the store URL (+ optional business goal) → the REAL pipeline
+  (ingest → author → trust + anti-bland gates) runs → hand the draft to the
+  review screen. Browsers cannot crawl arbitrary cross-origin sites, so a real
+  external URL fails honestly here ("live generation runs on the server — 3C");
+  the bundled same-origin sample store demonstrates the full journey for real.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ابدأ فانل جديد — FullTimeDigi Studio</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <style>
+    :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f8fafc; --brand:#0f766e; --bad:#b91c1c; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+      font-family:system-ui,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif; line-height:1.7; }
+    .wrap { max-width:640px; margin:0 auto; padding:3rem 1.5rem; }
+    .sub { color:var(--muted); }
+    h1 { font-size:1.8rem; margin:.3rem 0 .4rem; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:1.5rem; margin-top:1.5rem; }
+    label { display:block; font-weight:600; margin:.9rem 0 .35rem; }
+    input[type=text] { width:100%; padding:.8rem .9rem; border:1px solid var(--line); border-radius:10px; font-size:1rem; font-family:inherit; }
+    input[type=text]:focus { outline:2px solid var(--brand); border-color:var(--brand); }
+    .hint { color:var(--muted); font-size:.85rem; margin-top:.25rem; }
+    .chk { display:flex; align-items:flex-start; gap:.5rem; margin-top:1rem; font-size:.9rem; color:var(--muted); }
+    .btn { width:100%; margin-top:1.25rem; background:var(--ink); color:#fff; border:0; border-radius:12px; padding:.9rem 1rem; font-size:1.05rem; cursor:pointer; }
+    .btn:disabled { opacity:.55; cursor:progress; }
+    .sample { text-align:center; margin-top:1rem; }
+    .sample a { color:var(--brand); cursor:pointer; text-decoration:underline; font-size:.9rem; }
+    .msg { margin-top:1rem; padding:.9rem 1rem; border-radius:10px; font-size:.92rem; display:none; }
+    .msg.show { display:block; }
+    .msg.err { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .msg.info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+    .status { margin-top:1rem; color:var(--brand); font-weight:600; display:none; }
+    .status.show { display:block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="sub">FullTimeDigi Studio</div>
+    <h1>حوّل رابط متجرك إلى فانل ذكي</h1>
+    <p class="sub">الصق رابط المتجر، وإحنا نقرأ منتجاته الحقيقية ونبني لك فانل يرشّح المنتج الأنسب لكل زائر — بسبب واضح، من غير تأليف.</p>
+
+    <div class="card">
+      <label for="url">رابط المتجر</label>
+      <input id="url" type="text" placeholder="brand.com" autocomplete="off" spellcheck="false" />
+      <div class="hint">مثال: <code>brand.com</code> أو الرابط الكامل لصفحة المنتجات.</div>
+
+      <label for="goal">هدف الفانل <span class="sub">(اختياري)</span></label>
+      <input id="goal" type="text" placeholder="مثال: بيع الخط عالي الربحية / جمع عملاء محتملين" autocomplete="off" />
+      <div class="hint">حاجة واحدة ما نقدرش نستنتجها من المتجر — بتوجّه أي منتجات نبرزها.</div>
+
+      <label class="chk"><input id="auth" type="checkbox" checked /> <span>أؤكّد أن لديّ إذن صاحب الموقع لقراءة منتجاته (النطاق: مواقعنا/عملائنا المصرّح بها فقط).</span></label>
+
+      <button class="btn" id="go">أنشئ الفانل ←</button>
+      <div class="status" id="status">جارٍ قراءة المتجر وبناء الفانل…</div>
+      <div class="msg" id="msg"></div>
+
+      <div class="sample"><a id="try-sample">أو جرّب الرحلة كاملة على متجر عيّنة تجريبي ←</a></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { generateFunnelFromUrl } from "../../authoring/index.js";
+    import { buildIntake } from "./intakeModel.js";
+
+    const $ = (id) => document.getElementById(id);
+    const SAMPLE = location.origin + "/examples/sample-shop/";
+
+    function setMsg(kind, html) {
+      const m = $("msg"); m.className = "msg show " + kind; m.innerHTML = html;
+    }
+    function clearMsg() { $("msg").className = "msg"; }
+    function busy(on) {
+      $("go").disabled = on; $("status").className = on ? "status show" : "status";
+      if (on) clearMsg();
+    }
+
+    async function run() {
+      const intake = buildIntake({ url: $("url").value, goal: $("goal").value });
+      if (!intake.ok) { setMsg("err", "الرابط غير صحيح. اكتب رابط متجر مثل <code>brand.com</code>."); return; }
+      if (!$("auth").checked) { setMsg("err", "لازم تأكيد الإذن قبل قراءة الموقع."); return; }
+
+      const isSample = /\/examples\/sample-shop\/?/.test(intake.request.url);
+      busy(true);
+      try {
+        const res = await generateFunnelFromUrl(intake.request.url, {
+          authorized: true,
+          goal: intake.request.goal || undefined,
+          brandName: isSample ? "متجر العيّنة (تجريبي)" : undefined,
+        });
+
+        if (!res.ok) {
+          busy(false);
+          // Honest: a browser can't read an arbitrary external site (CORS) — that
+          // is exactly why live generation runs server-side (3C).
+          setMsg("info",
+            "ما قدرناش نقرأ المتجر ده من المتصفّح مباشرة (سبب تقني: المتصفّح ما بيسمحش بقراءة موقع خارجي). " +
+            "القراءة الحيّة للمواقع الحقيقية بتشتغل على السيرفر — بتيجي في الخطوة الجاية. " +
+            'لحد ما ننشر السيرفر، <a id="lnk-sample" href="#">جرّب على متجر العيّنة</a>.' +
+            "<br><span class='sub'>السبب من المحرّك: " + (res.stage ? res.stage + " / " : "") + (res.reason || "غير معروف") + "</span>");
+          const l = $("lnk-sample"); if (l) l.addEventListener("click", (e) => { e.preventDefault(); $("url").value = SAMPLE; run(); });
+          return;
+        }
+
+        // Hand the fresh draft to the review screen (same-origin sessionStorage).
+        sessionStorage.setItem("ftd:draft-config", JSON.stringify(res.config));
+        location.href = "../review/review.html?draft=1";
+      } catch (err) {
+        busy(false);
+        console.error("[studio] generation error:", err);
+        setMsg("err", "حصل خطأ غير متوقّع أثناء التوليد. جرّب تاني أو استخدم متجر العيّنة.");
+      }
+    }
+
+    $("go").addEventListener("click", run);
+    $("url").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+    $("try-sample").addEventListener("click", () => { $("url").value = SAMPLE; run(); });
+  </script>
+</body>
+</html>
