@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<!--
+  platform/review/review.html — the Studio REVIEW screen (ADR-0023).
+
+  The first screen a client sees: the AI draft, proof it's trustworthy (both
+  gates recomputed live), a plain summary of what it asks/recommends, a live
+  preview (the real funnel in an iframe), and a publish panel that hands back the
+  real embed snippet + hosted URL. A BLOCKED draft shows the findings and hides
+  publish — never a hidden failure.
+
+  Resolves ?funnel=<id> (→ ../../configs/<id>.json) or ?config=<url>. Accounts +
+  server persistence are 3C; this page is host-agnostic and runs on `npm run serve`.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مراجعة الفانل — FullTimeDigi Studio</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <style>
+    :root { --ok:#0f766e; --bad:#b91c1c; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f8fafc; --card:#fff; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+      font-family: system-ui,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif; line-height:1.6; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 1.5rem; }
+    header.top { padding: .5rem 0 1.25rem; border-bottom:1px solid var(--line); margin-bottom:1.5rem; }
+    header.top h1 { margin:.2rem 0; font-size:1.5rem; }
+    header.top .sub { color:var(--muted); font-size:.95rem; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:1rem; }
+    @media (max-width:800px){ .grid{ grid-template-columns:1fr; } }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1.1rem 1.25rem; }
+    .card h2 { margin:0 0 .6rem; font-size:1.05rem; }
+    .gate { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; }
+    .badge { font-weight:700; padding:.15rem .6rem; border-radius:999px; font-size:.85rem; }
+    .badge.ok { background:#ccfbf1; color:var(--ok); }
+    .badge.bad { background:#fee2e2; color:var(--bad); }
+    .findings { margin:.3rem 0 0; padding-inline-start:1.1rem; color:var(--bad); font-size:.9rem; }
+    .stat { display:flex; justify-content:space-between; border-bottom:1px dashed var(--line); padding:.35rem 0; }
+    .stat:last-child{ border-bottom:0; }
+    .stat b { font-weight:700; }
+    .pills { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.4rem; }
+    .pill { background:#eef2ff; color:#3730a3; border-radius:999px; padding:.2rem .7rem; font-size:.85rem; }
+    .previewbox { margin-top:1.5rem; }
+    iframe.preview { width:100%; min-height:560px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+    .publish { margin-top:1.5rem; }
+    .btn { background:var(--ink); color:#fff; border:0; border-radius:10px; padding:.7rem 1.2rem; font-size:1rem; cursor:pointer; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .artifact { margin-top:1rem; display:none; }
+    .artifact.show { display:block; }
+    .snippet { background:#0f172a; color:#e2e8f0; padding:1rem; border-radius:10px; overflow:auto; direction:ltr; text-align:left; font-size:.82rem; white-space:pre-wrap; word-break:break-all; }
+    .row { display:flex; align-items:center; gap:.5rem; margin:.5rem 0 .2rem; }
+    .row h3 { margin:0; font-size:.95rem; }
+    .copy { background:#334155; color:#fff; border:0; border-radius:8px; padding:.25rem .7rem; font-size:.8rem; cursor:pointer; }
+    .note { color:var(--muted); font-size:.85rem; margin-top:.6rem; }
+    .blocked-banner { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
+    .err { color:var(--bad); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="sub">FullTimeDigi Studio</div>
+      <h1>مراجعة الفانل قبل النشر</h1>
+      <div class="sub" id="brandline">…</div>
+    </header>
+    <div id="app"><p>جارٍ التحميل…</p></div>
+  </div>
+
+  <script type="module">
+    import { trustValidate } from "../../engine/trustValidate.js";
+    import { antiBlandCheck } from "../../authoring/author/qualityGate.js";
+    import { buildReviewModel } from "./reviewModel.js";
+    import { buildArtifact } from "../publish.js";
+
+    const app = document.getElementById("app");
+    const brandline = document.getElementById("brandline");
+
+    function resolve() {
+      const q = new URLSearchParams(location.search);
+      const config = (q.get("config") || "").trim();
+      if (config && /^(https?:)?\/\/|^\.?\.?\//.test(config)) return { configUrl: config, preview: "config=" + encodeURIComponent(config), funnelId: null };
+      const id = (q.get("funnel") || "").trim().toLowerCase();
+      if (id && /^[a-z0-9-]+$/.test(id)) return { configUrl: "../../configs/" + id + ".json", preview: "funnel=" + id, funnelId: id };
+      return null;
+    }
+
+    function el(tag, props = {}, kids = []) {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+      }
+      for (const c of [].concat(kids)) if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+      return n;
+    }
+
+    function gateCard(g) {
+      const badge = el("span", { class: "badge " + (g.ok ? "ok" : "bad"), text: g.ok ? "✓ اجتازت" : "✗ لم تجتَز" });
+      const kids = [el("div", { class: "gate" }, [badge, el("span", { text: g.label })])];
+      if (!g.ok && g.findingCount) {
+        const ul = el("ul", { class: "findings" });
+        g.findings.slice(0, 6).forEach((f) => ul.appendChild(el("li", { text: (f.code || f.rule || "") + " " + (f.message || f.detail || JSON.stringify(f)) })));
+        kids.push(ul);
+      }
+      return el("div", {}, kids);
+    }
+
+    function render(model, ctx) {
+      brandline.textContent = model.summary ? ("لـ " + (model.summary.brand || "متجرك")) : "";
+      app.innerHTML = "";
+
+      if (!model.ok) {
+        const b = el("div", { class: "blocked-banner" }, [el("b", { text: "هذه المسودّة محظورة من النشر — وده تصرّف سليم، مش خطأ." })]);
+        const ul = el("ul", {});
+        model.blockers.forEach((x) => ul.appendChild(el("li", { text: x })));
+        b.appendChild(ul);
+        app.appendChild(b);
+      }
+
+      const gates = el("div", { class: "card" }, [el("h2", { text: "إثبات الثقة" }), ...model.gates.map(gateCard)]);
+
+      const s = model.summary;
+      const sum = el("div", { class: "card" }, [el("h2", { text: "ملخّص الفانل" })]);
+      if (s) {
+        [["عدد الأسئلة", s.questionCount], ["عدد النتائج", s.resultCount], ["عدد المنتجات", s.productCount]]
+          .forEach(([k, v]) => sum.appendChild(el("div", { class: "stat" }, [el("span", { text: k }), el("b", { text: String(v) })])));
+        if (s.firstQuestion) sum.appendChild(el("div", { class: "stat" }, [el("span", { text: "أول سؤال" }), el("b", { text: s.firstQuestion })]));
+        if (s.recommends && s.recommends.length) {
+          sum.appendChild(el("div", { class: "note", text: "يرشّح هذه المنتجات:" }));
+          const pills = el("div", { class: "pills" });
+          s.recommends.forEach((n) => pills.appendChild(el("span", { class: "pill", text: n })));
+          sum.appendChild(pills);
+        }
+      }
+
+      app.appendChild(el("div", { class: "grid" }, [gates, sum]));
+
+      // Live preview — the REAL funnel in an isolated iframe.
+      const iframe = el("iframe", { class: "preview", src: "../../embed/funnel.html?" + ctx.preview, title: "معاينة حيّة", sandbox: "allow-scripts allow-forms allow-popups allow-same-origin" });
+      app.appendChild(el("div", { class: "previewbox card" }, [el("h2", { text: "معاينة حيّة" }), iframe]));
+
+      // Publish panel — honest: produces the REAL embed artifact locally.
+      if (model.ok) {
+        const btn = el("button", { class: "btn", text: "احصل على كود التضمين ←" });
+        const box = el("div", { class: "artifact" });
+        btn.addEventListener("click", () => {
+          const funnelId = ctx.funnelId || (ctx.config && ctx.config.id) || "funnel";
+          const art = buildArtifact({ origin: location.origin, funnelId, config: ctx.config });
+          box.innerHTML = "";
+          [["رابط الفانل المستقل", art.hostedUrl], ["كود التضمين (سطر واحد في موقع العميل)", art.embedSnippet]].forEach(([label, val]) => {
+            const pre = el("pre", { class: "snippet", text: val });
+            const copy = el("button", { class: "copy", text: "نسخ" });
+            copy.addEventListener("click", () => { navigator.clipboard && navigator.clipboard.writeText(val); copy.textContent = "تم النسخ ✓"; });
+            box.appendChild(el("div", { class: "row" }, [el("h3", { text: label }), copy]));
+            box.appendChild(pre);
+          });
+          box.appendChild(el("p", { class: "note", text: "ملاحظة: الحفظ في حسابك والاستضافة على نطاقنا بيجوا مع الحسابات (المرحلة الجاية). دلوقتي الكود ده حقيقي وجاهز للصق." }));
+          box.classList.add("show");
+        });
+        app.appendChild(el("div", { class: "publish card" }, [el("h2", { text: "النشر" }), btn, box]));
+      }
+    }
+
+    (async () => {
+      const ctx = resolve();
+      if (!ctx) { app.innerHTML = '<p class="err">لا يوجد فانل محدّد. أضِف <code>?funnel=&lt;id&gt;</code> إلى الرابط.</p>'; return; }
+      let config;
+      try {
+        const r = await fetch(ctx.configUrl);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        config = await r.json();
+      } catch (e) {
+        app.innerHTML = '<p class="err">تعذّر تحميل إعداد الفانل. تأكّد من الرابط.</p>';
+        console.error("[studio] config load failed:", e);
+        return;
+      }
+      ctx.config = config;
+      // Recompute both gates live → the review is self-verifying (can't show stale green).
+      const trust = trustValidate(config);
+      const bland = antiBlandCheck(config);
+      render(buildReviewModel({ config, trust, bland }), ctx);
+    })();
+  </script>
+</body>
+</html>
