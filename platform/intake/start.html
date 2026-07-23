@@ -98,6 +98,32 @@
       } else if (_tick) { clearInterval(_tick); _tick = null; }
     }
 
+    // Prefer the SERVER-SIDE generator (Netlify Function) — it reads real external
+    // sites (no browser CORS limit). Fall back to the in-browser pipeline when the
+    // function isn't there (local `npm run serve`, or the bundled sample store).
+    async function generate(request, isSample) {
+      // Use the server function only when it answers with OUR JSON contract
+      // ({ok} / {reason}). Anything else (404/501 from a static host, non-JSON,
+      // network error) means the function isn't there → fall back in-browser.
+      try {
+        const r = await fetch("/.netlify/functions/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: request.url, goal: request.goal, authorized: true }),
+        });
+        const ct = (r.headers.get("content-type") || "");
+        if (ct.includes("application/json")) {
+          const j = await r.json().catch(() => null);
+          if (j && (j.ok === true || typeof j.reason === "string")) return j;
+        }
+      } catch (e) { /* function unreachable (local dev) → fall through */ }
+      return generateFunnelFromUrl(request.url, {
+        authorized: true,
+        goal: request.goal || undefined,
+        brandName: isSample ? "متجر العيّنة (تجريبي)" : undefined,
+      });
+    }
+
     async function run() {
       const intake = buildIntake({ url: $("url").value, goal: $("goal").value });
       if (!intake.ok) { setMsg("err", "الرابط غير صحيح. اكتب رابط متجر مثل <code>brand.com</code>."); return; }
@@ -106,11 +132,7 @@
       const isSample = /\/examples\/sample-shop\/?/.test(intake.request.url);
       busy(true);
       try {
-        const res = await generateFunnelFromUrl(intake.request.url, {
-          authorized: true,
-          goal: intake.request.goal || undefined,
-          brandName: isSample ? "متجر العيّنة (تجريبي)" : undefined,
-        });
+        const res = await generate(intake.request, isSample);
 
         if (!res.ok) {
           busy(false);
@@ -126,7 +148,8 @@
         }
 
         // Real milestone before we leave: how many products we actually read.
-        const found = (res.catalog && res.catalog.products && res.catalog.products.length) || 0;
+        // (server function returns catalog.count; in-browser returns catalog.products)
+        const found = (res.catalog && (res.catalog.count ?? (res.catalog.products && res.catalog.products.length))) || 0;
         if (found) { if (_tick) { clearInterval(_tick); _tick = null; } $("status").textContent = `تمّ! قرأنا ${found} منتج وبنينا الفانل…`; }
 
         // Hand the fresh draft to the review screen (same-origin sessionStorage).

@@ -1,0 +1,22 @@
+# netlify.toml — Stage 3C-1 preview config (ADR-0027).
+# Serverless generator + static preview of the platform. Production is untouched;
+# this drives a Netlify Deploy Preview only until the operator approves promotion.
+
+[build]
+  # Zero-build project (vanilla ES modules) — publish the repo as-is.
+  publish = "."
+  functions = "netlify/functions"
+
+# The type=module embed loader is fetched in CORS mode (ADR-0021) — our origin
+# must serve it with an Access-Control-Allow-Origin header.
+[[headers]]
+  for = "/embed/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
+# Friendly path for the generator (default is /.netlify/functions/generate).
+[[redirects]]
+  from = "/api/generate"
+  to = "/.netlify/functions/generate"
+  status = 200
+  force = true
