@@ -75,6 +75,33 @@ function loadTheme(name) {
   }
 }
 
+/**
+ * Brand auto-styling (ADR-0028): apply `config.themeVars` as :root CSS custom
+ * property overrides so an AI/deterministically-authored funnel visually matches
+ * the store (logo + palette extracted from the site). A few SAFE overrides only —
+ * not a free-form theme editor. No-op outside a browser DOM.
+ */
+function applyThemeVars(vars) {
+  if (!vars || typeof vars !== "object") return;
+  try {
+    if (typeof document === "undefined" || !document.head || typeof document.createElement !== "function") return;
+    // Safe CSS colour grammar only: hex, or rgb()/rgba()/hsl()/hsla(). Anything
+    // else (url(), expression(), keywords) is dropped — brand overrides are colours.
+    const SAFE = /^#[0-9a-f]{3,8}$|^(?:rgb|rgba|hsl|hsla)\(\s*[0-9.,%\s]+\)$/i;
+    const decls = Object.entries(vars)
+      .filter(([k, v]) => /^--[a-z0-9-]+$/i.test(k) && typeof v === "string" && SAFE.test(v.trim()))
+      .map(([k, v]) => `${k}:${v.trim()};`)
+      .join("");
+    if (!decls) return;
+    const style = document.createElement("style");
+    style.setAttribute("data-ftd-brand", "1");
+    style.textContent = ":root{" + decls + "}";
+    document.head.appendChild(style);
+  } catch {
+    /* brand injection is non-fatal */
+  }
+}
+
 export function createFunnel(config, mountEl, deps = {}) {
   const state = State.createState(config.id);
 
@@ -108,6 +135,7 @@ export function createFunnel(config, mountEl, deps = {}) {
   }
   const theme = config.theme || null;
   loadTheme(theme);
+  applyThemeVars(config.themeVars);
 
   // Analytics: init the bus and register any sinks the config asks for. Sink
   // registration is best-effort — a sink that fails to register must not stop

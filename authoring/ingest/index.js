@@ -136,5 +136,5 @@ export async function ingestCatalog(startUrl, opts = {}) {
   if (products.length === 0) notes.push("No products extracted — a vertical template fallback is required (no fabrication).");
   else if (report.thin) notes.push(`Thin catalog (${products.length}) — recommend a vertical template fallback.`);
 
-  return { ok: true, brandUrl: startUrl, origin, products, report, notes };
+  return { ok: true, brandUrl: startUrl, origin, products, report, notes, startHtml: startRes.text || "" };
 }

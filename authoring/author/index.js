@@ -186,6 +186,56 @@ function _axisSets(axes) {
   return sets;
 }
 
+/* Combinations of `arr` of size `k` (bounded by `cap` results). */
+function _combos(arr, k, cap) {
+  const out = [];
+  const rec = (start, acc) => {
+    if (out.length >= cap) return;
+    if (acc.length === k) { out.push(acc.slice()); return; }
+    for (let i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
+  };
+  rec(0, []);
+  return out;
+}
+
+/**
+ * Author a funnel from EXTERNALLY-SUPPLIED axes (ADR-0028, Track C). Same
+ * gate-passing `buildConfig` machinery as authorFunnel, but the axes come from
+ * grounded AI enrichment (rich category dimensions the catalog didn't expose),
+ * each carrying a `profile` Map(productUrl → value). Searches LARGEST axis-sets
+ * first so it maximizes question depth (richness) while staying within a combo
+ * budget, and only returns a set that passes BOTH gates. Never fabricates: every
+ * recommendation is chosen by buildConfig from the real catalog.
+ * @param {{origin?,brandUrl?,products:Array}} catalog
+ * @param {Array<{id,label,question,values:Array,profile:Map}>} axes
+ */
+export function authorFromAxes(catalog, axes, opts = {}) {
+  const products = cleanCatalog((catalog && catalog.products) || []);
+  if (products.length < 4) return { ok: false, reason: "too-few-products", meta: { count: products.length } };
+  const cleanCat = { ...catalog, products };
+
+  const usable = (axes || []).filter((a) => a && a.values && a.values.length >= 2 && a.profile && a.profile.size);
+  if (usable.length < 2) return { ok: false, reason: "not-enough-axes", meta: { axes: usable.length } };
+
+  const maxCombos = opts.maxCombos || 200;
+  const maxSize = Math.min(usable.length, opts.maxQuestions || 5);
+  const attempts = [];
+  for (let size = maxSize; size >= 2; size--) {
+    for (const set of _combos(usable, size, 24)) {
+      const combos = set.reduce((n, a) => n * a.values.length, 1);
+      if (combos > maxCombos) continue;
+      const config = buildConfig(cleanCat, set, opts);
+      const trust = trustValidate(config);
+      const bland = antiBlandCheck(config);
+      attempts.push({ axes: set.map((a) => a.id), size, trust: trust.ok, bland: bland.ok });
+      if (trust.ok && bland.ok) {
+        return { ok: true, config, meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos } };
+      }
+    }
+  }
+  return { ok: false, reason: "no-gatepassing-axis-set", meta: { attempts } };
+}
+
 export function authorFunnel(catalog, opts = {}) {
   const products = cleanCatalog((catalog && catalog.products) || []);
   if (products.length < 4) return { ok: false, reason: "too-few-products", meta: { count: products.length } };

@@ -14,6 +14,18 @@
 
 import { generateFunnelFromUrl } from "../../authoring/index.js";
 import { buildIntake } from "../../platform/intake/intakeModel.js";
+import { enrichAuthor } from "../../authoring/ai/enrichAuthor.js";
+import { createAnthropicComplete } from "../../authoring/ai/complete.js";
+
+// Grounded AI enrichment (ADR-0028) — only when an API key is configured on the
+// site (a server secret). Without it, generation falls back to the deterministic
+// author, honestly. The design step runs server-side with claude-sonnet-5.
+function buildEnricher() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return undefined;
+  const complete = createAnthropicComplete({ apiKey: key });
+  return (catalog, ctx) => enrichAuthor(catalog, { ...ctx, complete });
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +58,7 @@ export const handler = async (event = {}) => {
     res = await generateFunnelFromUrl(intake.request.url, {
       authorized: true,
       goal: intake.request.goal || undefined,
+      enrich: buildEnricher(),
     });
   } catch (err) {
     return json(500, { ok: false, reason: "server-error", error: String((err && err.message) || err) });
@@ -61,8 +74,10 @@ export const handler = async (event = {}) => {
   return json(200, {
     ok: true,
     config: res.config,
+    source: res.source,       // "deterministic" | "ai" (ADR-0028)
     trust: res.trust,
     bland: res.bland,
+    richness: res.richness,    // the "too thin" gate report
     catalog: { origin: res.catalog && res.catalog.origin, count: (res.catalog && res.catalog.products && res.catalog.products.length) || 0 },
   });
 };
