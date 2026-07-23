@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Static, config-driven engine for Arabic-first diagnostic funnels. No build step; type:module enables native ES modules in Node and the browser.",
   "scripts": {
-    "test": "node tests/scoring.test.mjs && node tests/funnel.freelancex.test.mjs && node tests/leadloop.test.mjs && node tests/asq.test.mjs && node tests/signals.test.mjs && node tests/questions.test.mjs && node tests/decision.test.mjs && node tests/explanation.test.mjs && node tests/trust.test.mjs && node tests/conversion.test.mjs && node tests/houseplant.decision.test.mjs && node tests/houseplant.explanation.test.mjs && node tests/houseplant.trust.test.mjs && node tests/houseplant.conversion.test.mjs && node tests/errormonitor.test.mjs && node tests/leadqueue.test.mjs && node tests/analytics.test.mjs && node tests/i18n.test.mjs && node tests/validateConfig.test.mjs && node tests/personas.test.mjs && node tests/carriedBugs.test.mjs && node tests/backend.test.mjs && node tests/ingest.compliance.test.mjs && node tests/ingest.extract.test.mjs && node tests/ingest.pipeline.test.mjs && node tests/author.axes.test.mjs && node tests/author.generate.test.mjs && node tests/author.e2e.test.mjs && node tests/author.antibland.test.mjs && node tests/author.oudshape.test.mjs && node tests/webhook.test.mjs && node tests/embed.test.mjs",
+    "test": "node tests/scoring.test.mjs && node tests/funnel.freelancex.test.mjs && node tests/leadloop.test.mjs && node tests/asq.test.mjs && node tests/signals.test.mjs && node tests/questions.test.mjs && node tests/decision.test.mjs && node tests/explanation.test.mjs && node tests/trust.test.mjs && node tests/conversion.test.mjs && node tests/houseplant.decision.test.mjs && node tests/houseplant.explanation.test.mjs && node tests/houseplant.trust.test.mjs && node tests/houseplant.conversion.test.mjs && node tests/errormonitor.test.mjs && node tests/leadqueue.test.mjs && node tests/analytics.test.mjs && node tests/i18n.test.mjs && node tests/validateConfig.test.mjs && node tests/personas.test.mjs && node tests/carriedBugs.test.mjs && node tests/backend.test.mjs && node tests/ingest.compliance.test.mjs && node tests/ingest.extract.test.mjs && node tests/ingest.pipeline.test.mjs && node tests/author.axes.test.mjs && node tests/author.generate.test.mjs && node tests/author.e2e.test.mjs && node tests/author.antibland.test.mjs && node tests/author.oudshape.test.mjs && node tests/webhook.test.mjs && node tests/embed.test.mjs && node tests/platform.tenant.test.mjs && node tests/platform.studio.test.mjs",
     "test:scoring": "node tests/scoring.test.mjs",
     "test:signals": "node tests/signals.test.mjs",
     "test:questions": "node tests/questions.test.mjs",
@@ -36,6 +36,8 @@
     "test:antibland": "node tests/author.antibland.test.mjs",
     "test:oudshape": "node tests/author.oudshape.test.mjs",
     "test:webhook": "node tests/webhook.test.mjs",
-    "test:embed": "node tests/embed.test.mjs"
+    "test:embed": "node tests/embed.test.mjs",
+    "test:platform-tenant": "node tests/platform.tenant.test.mjs",
+    "test:platform-studio": "node tests/platform.studio.test.mjs"
   }
 }
