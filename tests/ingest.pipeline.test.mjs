@@ -134,6 +134,29 @@ await (async () => {
     assert.equal(res.products.length, 1); // still got the start-page JSON-LD product
   });
 
+  console.log("\ningest — follows the start-URL redirect to the canonical origin:");
+  await check("apex → www redirect: robots/products read from the canonical (www) origin", async () => {
+    const SHOP = JSON.stringify({ products: [
+      { id: 1, title: "P1", handle: "p1", variants: [{ price: "10" }] },
+      { id: 2, title: "P2", handle: "p2", variants: [{ price: "20" }] },
+      { id: 3, title: "P3", handle: "p3", variants: [{ price: "30" }] },
+    ] });
+    const calls = [];
+    const routes = {
+      // apex start page redirects to www (fake sets finalUrl)
+      "https://oud.example/": { body: "<html>home</html>", finalUrl: "https://www.oud.example/" },
+      "https://www.oud.example/robots.txt": { body: "User-agent: *\nAllow: /" },
+      "https://www.oud.example/products.json?limit=250&page=1": { body: SHOP, ct: "application/json" },
+    };
+    const res = await ingestCatalog("https://oud.example/", { ...OFFLINE, fetch: router(routes, calls) });
+    assert.equal(res.ok, true);
+    assert.equal(res.origin, "https://www.oud.example");
+    assert.equal(res.products.length, 3);
+    assert.ok(res.products.every((p) => p.url.startsWith("https://www.oud.example/products/")), "product URLs on canonical origin");
+    assert.ok(res.notes.some((n) => /Canonical origin/i.test(n)));
+    assert.ok(calls.includes("https://www.oud.example/robots.txt"), "robots read from www");
+  });
+
   console.log("\ningest — empty site is honest (no fabrication):");
   await check("a site with nothing structured returns 0 products + a template-fallback note", async () => {
     const routes = {

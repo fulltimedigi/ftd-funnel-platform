@@ -50,6 +50,17 @@ export async function ingestCatalog(startUrl, opts = {}) {
   const maxProductPages = opts.maxProductPages ?? 50;
   const lists = [];
 
+  // 1b. Resolve the CANONICAL origin by following the start URL's redirect
+  //     (e.g. example.com → www.example.com), and keep the HTML for step 4 so
+  //     we don't fetch the start page twice.
+  const startRes = await fetcher.get(startUrl);
+  if (startRes.ok && startRes.finalUrl) {
+    try {
+      const canon = new URL(startRes.finalUrl).origin;
+      if (canon !== origin) { notes.push(`Canonical origin: ${canon} (redirected from ${origin}).`); origin = canon; }
+    } catch { /* keep origin */ }
+  }
+
   // 2. robots.txt — obey it for every subsequent read; adopt crawl-delay.
   let robots = parseRobots("");
   const robotsRes = await fetcher.get(origin + "/robots.txt");
@@ -79,13 +90,10 @@ export async function ingestCatalog(startUrl, opts = {}) {
     if (shopifyGot) notes.push(`Shopify products.json: ${shopifyGot} product(s).`);
   }
 
-  // 4. JSON-LD on the start page (cheap, one request).
-  if (allow(startUrl)) {
-    const r = await fetcher.get(startUrl);
-    if (r.ok && r.text) {
-      const ps = productsFromJsonLd(r.text, r.finalUrl || startUrl);
-      if (ps.length) { lists.push(ps); notes.push(`JSON-LD on start page: ${ps.length}.`); }
-    }
+  // 4. JSON-LD on the start page (reuse the fetch from step 1b — no double GET).
+  if (startRes.ok && startRes.text && allow(startRes.finalUrl || startUrl)) {
+    const ps = productsFromJsonLd(startRes.text, startRes.finalUrl || startUrl);
+    if (ps.length) { lists.push(ps); notes.push(`JSON-LD on start page: ${ps.length}.`); }
   }
 
   // 5. Sitemap discovery → product pages → JSON-LD (skipped if Shopify already delivered).
