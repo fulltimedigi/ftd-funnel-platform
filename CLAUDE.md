@@ -53,6 +53,14 @@ with the operator (inputs = URL-first "draft→refine"; output = hosted / **embe
 single-file; lead sinks = Sheets-via-AppsScript + a universal **webhook**; integrate with
 GHL/CRMs, never compete). Read it before shaping Stage 2/3; don't silently deviate.
 
+`docs/UX_INTERFACE_DECISION.md` is the **binding** interface standard (Studio + respondent
+funnel), derived from a UX teardown of 12 competitors and approved by the operator: **one
+magic input → value in seconds → signup deferred**, a default surface that never gets
+cluttered (advanced hidden), one-question respondent flow (progress from ~15%, 3–5 steps,
+email before result), a decisive result (one pick + 2–3 grounded reasons + one CTA), and a
+hard **no** to silent caps that disable live funnels and to manual per-product weighting.
+Read it before building any UI; don't silently deviate.
+
 ## Working rules (non-negotiable)
 
 1. **Document before you decide.** Any material choice gets an ADR in `docs/adr/`
