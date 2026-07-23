@@ -164,52 +164,56 @@ export async function enrichAuthor(catalog, opts = {}) {
   const nProducts = (catalog.products || []).length;
   const maxTokens = Math.min(32000, Math.max(16000, nProducts * 260));
 
-  // Keep the BEST valid attempt (highest coverage). If none fully passes the gate we
-  // still return the best — it beats the thin deterministic fallback and its real
-  // coverage is reported honestly upstream (ADR-0031). We never downgrade to a worse
-  // funnel, and never fabricate coverage.
-  let best = null; // { config, meta, coverage }
+  // Keep the BEST valid attempt (highest coverage) across ALL attempts — we don't stop
+  // at "just barely passed the gate"; we push for ~full coverage. `bestPass` = gate-
+  // passing (≥ target); `bestEffort` = enough questions but coverage-short. We return
+  // the best passing one, else the best effort (real coverage reported honestly, never
+  // a worse fallback, never fabricated). ADR-0031.
+  const NEAR_PERFECT = 0.97;
+  const maxQuestions = opts.maxQuestions || 6; // allow a 5th–6th discriminating axis for full reachability
+  let bestPass = null, bestEffort = null;
+  const nProd = (catalog.products || []).length;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let design;
     try {
       design = await complete({ model: DESIGN_MODEL, system, user, schema: DESIGN_SCHEMA, maxTokens });
     } catch (e) {
-      if (best) return { ok: true, config: best.config, meta: { ...best.meta, source: "ai", coverageBelowTarget: true }, reason: "model-error-after-best" };
+      if (bestPass) break;
+      if (bestEffort) return { ok: true, config: bestEffort.config, meta: { ...bestEffort.meta, source: "ai", coverageBelowTarget: true }, reason: "model-error-after-best" };
       return { ok: false, reason: "model-error", error: String((e && e.message) || e) };
     }
 
+    let cov = 0, unreached = nProd;
     const axes = designToAxes(design, catalog);
     if (axes.length >= 2) {
-      const authored = authorFromAxes(catalog, axes, { brandName: design && design.brandName, goal: opts.goal, maxQuestions: opts.maxQuestions || 5 });
+      const authored = authorFromAxes(catalog, axes, { brandName: design && design.brandName, goal: opts.goal, maxQuestions });
       if (authored.ok) {
         const rich = richnessCheck(authored.config, catalog);
-        if (rich.ok) return { ok: true, config: authored.config, meta: { ...authored.meta, source: "ai", attempt, coverage: rich.metrics.coverage } };
-        // Best-effort is ONLY for a coverage shortfall — a funnel with too FEW questions
-        // is genuinely thin and never eligible (the depth bar is not negotiable).
-        const codes = rich.findings.map((f) => f.code);
-        const onlyCoverage = codes.length > 0 && codes.every((c) => c === "RICHNESS_LOW_COVERAGE");
-        const cov = rich.metrics.coverage || 0;
-        if (onlyCoverage && (!best || cov > best.coverage)) best = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
-        lastReason = "thin:" + codes.join(",");
-      } else {
-        lastReason = authored.reason || "compile-failed";
-      }
-    } else {
-      lastReason = "too-few-grounded-axes";
-    }
+        cov = rich.metrics.coverage || 0;
+        unreached = Math.max(0, nProd - (rich.metrics.reachable || 0));
+        if (rich.ok) {
+          if (!bestPass || cov > bestPass.coverage) bestPass = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
+          if (cov >= NEAR_PERFECT) break; // near-perfect — stop spending attempts
+        } else {
+          const codes = rich.findings.map((f) => f.code);
+          const onlyCoverage = codes.length > 0 && codes.every((c) => c === "RICHNESS_LOW_COVERAGE");
+          if (onlyCoverage && (!bestEffort || cov > bestEffort.coverage)) bestEffort = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
+          lastReason = "thin:" + codes.join(",");
+        }
+      } else lastReason = authored.reason || "compile-failed";
+    } else lastReason = "too-few-grounded-axes";
 
-    // Repair: tell the model exactly what was wrong and ask again. Low coverage means
-    // too many products share a profile — the fix is to SPREAD them (more distinct
-    // profiles), adding a discriminating axis if needed.
-    const coverageHint = /coverage/i.test(lastReason)
-      ? " Too many products share the same profile, so most of the catalog is unreachable. Re-spread the productValues so each product has a DISTINCT profile, and/or add another discriminating axis, until #answer-combinations ≥ #products."
-      : "";
-    user = buildUserPrompt(catalog, opts) + "\n\nYour previous design was rejected: " + lastReason +
-      "." + coverageHint + " Fix it — keep ≥4 discriminating questions, map every product on every axis, and make each product reachable as the #1 for some answer path.";
+    // Repair: push for FULL coverage. Even a passing-but-imperfect design is asked to
+    // reach the last few products by spreading profiles / adding a discriminating axis.
+    const stillShort = Math.max(unreached, 0);
+    user = buildUserPrompt(catalog, opts) +
+      `\n\nYour previous design left ${stillShort} of ${nProd} products unreachable (coverage ${(cov * 100).toFixed(0)}%). ` +
+      "Every product must be the #1 for some answer path. Too many products share the same profile — re-spread the productValues so each product has a DISTINCT combination, and ADD another discriminating axis (up to 6 questions) if needed so #answer-combinations ≥ #products. Keep ≥4 questions and map every product on every axis.";
   }
-  // No attempt fully passed the gate. Return the BEST valid one (honest best-effort,
-  // real coverage reported) — never the worse deterministic fallback.
-  if (best) return { ok: true, config: best.config, meta: { ...best.meta, source: "ai", coverageBelowTarget: true }, reason: lastReason };
+  // Prefer the best gate-PASSING design; else the best coverage-short effort (honest,
+  // real coverage reported) — never the worse deterministic fallback, never fabricated.
+  if (bestPass) return { ok: true, config: bestPass.config, meta: { ...bestPass.meta, source: "ai", coverage: bestPass.coverage } };
+  if (bestEffort) return { ok: true, config: bestEffort.config, meta: { ...bestEffort.meta, source: "ai", coverageBelowTarget: true, coverage: bestEffort.coverage }, reason: lastReason };
   return { ok: false, reason: lastReason };
 }
