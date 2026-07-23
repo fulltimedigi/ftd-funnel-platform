@@ -56,8 +56,13 @@ export async function generateFunnelFromUrl(url, opts = {}) {
       if (en && en.ok && en.config) {
         const enRich = richnessCheck(en.config, catalog);
         const betterDepth = (enRich.metrics.questions || 0) > (richness.metrics.questions || 0);
-        if (!config || enRich.ok || betterDepth) {
+        const betterCoverage = (enRich.metrics.coverage || 0) > (richness.metrics.coverage || 0) + 0.05;
+        // Prefer the AI funnel when it's richer OR reaches more of the catalog — even if
+        // it's below the coverage target, its real coverage is reported honestly (never
+        // fall back to a thinner, lower-coverage funnel). ADR-0031.
+        if (!config || enRich.ok || betterDepth || betterCoverage) {
           config = en.config; source = "ai"; meta = en.meta || meta; richness = enRich; ai.accepted = true;
+          if (!enRich.ok) ai.coverageBelowTarget = true;
         } else { ai.accepted = false; ai.reason = "not-deeper-than-deterministic"; }
       }
     } catch (e) { ai.reason = "threw"; ai.error = String((e && e.message) || e); /* honest fallback */ }

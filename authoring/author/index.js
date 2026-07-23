@@ -19,6 +19,7 @@
 import { deriveAxes, cleanCatalog } from "./axes.js";
 import { trustValidate } from "../../engine/trustValidate.js";
 import { antiBlandCheck } from "./qualityGate.js";
+import { richnessCheck } from "../quality/richnessCheck.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -69,26 +70,33 @@ function _assignCovering(products, axisSet, combos, overall) {
 
   const winnerByCombo = new Map();
   const altByUrl = new Map();
+  const reached = new Set(); // product urls that are the #1 for some combo
+
+  // Pass 1 — every product OWNS the combo matching its own profile (primary), twins ranked.
   for (const combo of combos) {
     const k = key(combo);
-    let primary;
-    if (contenders.has(k)) {
-      const list = contenders.get(k);
-      primary = list[0];
-      if (list.length > 1) {
-        const acc = altByUrl.get(primary.url) || [];
-        for (const a of list.slice(1)) if (!acc.some((x) => x.url === a.url)) acc.push(a);
-        altByUrl.set(primary.url, acc);
-      }
-    } else {
-      let best = overall, bs = -Infinity;
-      for (const p of products) {
-        const s = score(p, combo);
-        if (s > bs || (s === bs && best && _bestProduct([p, best]) === p)) { best = p; bs = s; }
-      }
-      primary = best;
-    }
+    if (!contenders.has(k)) continue;
+    const list = contenders.get(k);
+    const primary = list[0];
     winnerByCombo.set(k, primary);
+    reached.add(primary.url);
+    if (list.length > 1) altByUrl.set(primary.url, list.slice(1));
+  }
+
+  // Pass 2 — fill the remaining (home-less) combos. Among the products that match the
+  // combo BEST (top score — honest, never a poor match), PREFER one that is not yet any
+  // shopper's #1, so genuine profile-twins each get their own answer path where the
+  // answer-space allows. Coverage → ~100% when #combos ≥ #distinct-needs. No fabrication.
+  for (const combo of combos) {
+    const k = key(combo);
+    if (winnerByCombo.has(k)) continue;
+    let bs = -Infinity;
+    for (const p of products) { const s = score(p, combo); if (s > bs) bs = s; }
+    const top = products.filter((p) => score(p, combo) === bs);
+    const fresh = top.filter((p) => !reached.has(p.url));
+    const primary = (fresh.length ? _bestProduct(fresh) : _bestProduct(top)) || overall;
+    winnerByCombo.set(k, primary);
+    reached.add(primary.url);
   }
   return { winnerByCombo, altByUrl };
 }
@@ -276,6 +284,11 @@ export function authorFromAxes(catalog, axes, opts = {}) {
   const maxCombos = opts.maxCombos || 200;
   const maxSize = Math.min(usable.length, opts.maxQuestions || 5);
   const attempts = [];
+  // Among trust+bland-passing axis-sets, choose the one with the HIGHEST catalog
+  // COVERAGE (ADR-0031) — "Results First": we want the arrangement that makes the most
+  // of the store reachable, not merely the first that passes. Larger sets first (depth),
+  // ties broken by coverage then depth.
+  let best = null;
   for (let size = maxSize; size >= 2; size--) {
     for (const set of _combos(usable, size, 24)) {
       const combos = set.reduce((n, a) => n * a.values.length, 1);
@@ -285,10 +298,17 @@ export function authorFromAxes(catalog, axes, opts = {}) {
       const bland = antiBlandCheck(config);
       attempts.push({ axes: set.map((a) => a.id), size, trust: trust.ok, bland: bland.ok });
       if (trust.ok && bland.ok) {
-        return { ok: true, config, meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos } };
+        const rich = richnessCheck(config, cleanCat);
+        const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size,
+          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage } };
+        if (!best || cand.coverage > best.coverage + 1e-9 || (Math.abs(cand.coverage - best.coverage) <= 1e-9 && cand.size > best.size)) best = cand;
+        // A set that both passes richness AND covers ~everything is optimal — stop early.
+        if (rich.ok && rich.metrics.coverage >= 0.999) break;
       }
     }
+    if (best && best.richOk && best.coverage >= 0.999) break;
   }
+  if (best) return { ok: true, config: best.config, meta: best.meta };
   return { ok: false, reason: "no-gatepassing-axis-set", meta: { attempts } };
 }
 

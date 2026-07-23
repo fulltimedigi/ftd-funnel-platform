@@ -80,6 +80,25 @@ await (async () => {
     assert.equal(reach.size, 24, "coverage stays ~100% via the ranked-alternate leaf");
   });
 
+  await check("colliding profiles + spare answer-combinations → twins recovered as distinct #1s", () => {
+    // 8 products but only 4 distinct profiles (4 groups of 2), on 4 binary axes = 16
+    // combos. The fill pass should give each orphaned twin its own matching empty combo,
+    // so all 8 become PRIMARIES (not just alternates) — coverage ~100% by construction.
+    const N = 8;
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD" }));
+    const base = cartesian([0, 1, 2, 3].map(() => ["0", "1"])); // 16 combos
+    const axes = [0, 1, 2, 3].map((ax) => {
+      const profile = new Map();
+      products.forEach((p, i) => profile.set(p.url, base[i % 4][ax])); // only 4 distinct profiles
+      return { id: "ax" + ax, label: "محور" + ax, question: "سؤال" + ax + "؟", values: [{ value: "0", label: "a" + ax + "0" }, { value: "1", label: "a" + ax + "1" }], profile };
+    });
+    const r = authorFromAxes({ origin: O, products, brandUrl: O }, axes, { maxQuestions: 4, maxCombos: 64 });
+    assert.equal(r.ok, true, r.reason);
+    const primaries = new Set((r.config.archetypes || []).map((a) => a.recommendations.primary.url));
+    assert.equal(primaries.size, 8, `all 8 twins recovered as distinct primaries, got ${primaries.size}`);
+    assert.equal(reachableUrls(r.config).size, 8, "coverage ~100%");
+  });
+
   console.log("\ncoverage gate — a gate that can't fail is theater:");
   await check("a funnel that orphans most of the catalog FAILS the coverage gate", () => {
     // 30-product catalog, but a config that only surfaces 3 → 10% coverage.

@@ -153,7 +153,7 @@ export function designToAxes(design, catalog) {
 export async function enrichAuthor(catalog, opts = {}) {
   const complete = opts.complete;
   if (typeof complete !== "function") return { ok: false, reason: "no-model" };
-  const maxAttempts = Math.max(1, opts.attempts || 2);
+  const maxAttempts = Math.max(1, opts.attempts || 3);
   const system = SYSTEM_PROMPT;
   let user = buildUserPrompt(catalog, opts);
   let lastReason = "unknown";
@@ -164,11 +164,18 @@ export async function enrichAuthor(catalog, opts = {}) {
   const nProducts = (catalog.products || []).length;
   const maxTokens = Math.min(32000, Math.max(16000, nProducts * 260));
 
+  // Keep the BEST valid attempt (highest coverage). If none fully passes the gate we
+  // still return the best — it beats the thin deterministic fallback and its real
+  // coverage is reported honestly upstream (ADR-0031). We never downgrade to a worse
+  // funnel, and never fabricate coverage.
+  let best = null; // { config, meta, coverage }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let design;
     try {
       design = await complete({ model: DESIGN_MODEL, system, user, schema: DESIGN_SCHEMA, maxTokens });
     } catch (e) {
+      if (best) return { ok: true, config: best.config, meta: { ...best.meta, source: "ai", coverageBelowTarget: true }, reason: "model-error-after-best" };
       return { ok: false, reason: "model-error", error: String((e && e.message) || e) };
     }
 
@@ -177,8 +184,14 @@ export async function enrichAuthor(catalog, opts = {}) {
       const authored = authorFromAxes(catalog, axes, { brandName: design && design.brandName, goal: opts.goal, maxQuestions: opts.maxQuestions || 5 });
       if (authored.ok) {
         const rich = richnessCheck(authored.config, catalog);
-        if (rich.ok) return { ok: true, config: authored.config, meta: { ...authored.meta, source: "ai", attempt } };
-        lastReason = "thin:" + rich.findings.map((f) => f.code).join(",");
+        if (rich.ok) return { ok: true, config: authored.config, meta: { ...authored.meta, source: "ai", attempt, coverage: rich.metrics.coverage } };
+        // Best-effort is ONLY for a coverage shortfall — a funnel with too FEW questions
+        // is genuinely thin and never eligible (the depth bar is not negotiable).
+        const codes = rich.findings.map((f) => f.code);
+        const onlyCoverage = codes.length > 0 && codes.every((c) => c === "RICHNESS_LOW_COVERAGE");
+        const cov = rich.metrics.coverage || 0;
+        if (onlyCoverage && (!best || cov > best.coverage)) best = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
+        lastReason = "thin:" + codes.join(",");
       } else {
         lastReason = authored.reason || "compile-failed";
       }
@@ -195,5 +208,8 @@ export async function enrichAuthor(catalog, opts = {}) {
     user = buildUserPrompt(catalog, opts) + "\n\nYour previous design was rejected: " + lastReason +
       "." + coverageHint + " Fix it — keep ≥4 discriminating questions, map every product on every axis, and make each product reachable as the #1 for some answer path.";
   }
+  // No attempt fully passed the gate. Return the BEST valid one (honest best-effort,
+  // real coverage reported) — never the worse deterministic fallback.
+  if (best) return { ok: true, config: best.config, meta: { ...best.meta, source: "ai", coverageBelowTarget: true }, reason: lastReason };
   return { ok: false, reason: lastReason };
 }
