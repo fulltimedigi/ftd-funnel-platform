@@ -90,11 +90,20 @@ function catalogForPrompt(products, cap = 120) {
   }));
 }
 
-export function buildUserPrompt(catalog, { goal, brand } = {}) {
+/** Human name for a funnel language code, so the model authors in the audience's tongue. */
+export function langName(lang) {
+  const map = { ar: "Arabic (Modern Standard, natural for a Gulf/Khaleeji audience)", en: "English", fr: "French", tr: "Turkish", ur: "Urdu", fa: "Persian" };
+  return map[(lang || "ar").toLowerCase()] || map.ar;
+}
+
+export function buildUserPrompt(catalog, { goal, brand, lang } = {}) {
   const products = catalog.products || [];
   return [
     goal ? `Business goal: ${goal}` : "Business goal: (not specified — optimize for a confident, well-matched recommendation).",
     brand && brand.colors ? `Brand palette: ${JSON.stringify(brand.colors)}` : "",
+    // Author shopper-facing copy in the funnel's language — an Arabic funnel must not ask
+    // English questions. Product NAMES stay as they appear in the catalog.
+    `LANGUAGE: Write every shopper-facing string — each axis 'question' and every answer 'label' — in ${langName(lang)}. Keep product names exactly as in the catalog.`,
     `Catalog (${products.length} products):`,
     JSON.stringify(catalogForPrompt(products)),
     "",

@@ -49,7 +49,8 @@ export async function generateFunnelFromUrl(url, opts = {}) {
   if ((!config || !richness.ok) && typeof opts.enrich === "function") {
     ai = { attempted: true };
     try {
-      const en = await opts.enrich(catalog, { goal: opts.goal, brand });
+      // lang drives the AI's shopper-facing copy — an Arabic funnel must ask in Arabic.
+      const en = await opts.enrich(catalog, { goal: opts.goal, brand, lang: opts.lang || "ar" });
       ai.enrichOk = !!(en && en.ok);
       if (en && !en.ok) { ai.reason = en.reason; if (en.error) ai.error = en.error; }
       if (en && en.ok && en.config) {

@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { enrichAuthor, designToAxes, DESIGN_SCHEMA } from "../authoring/ai/enrichAuthor.js";
+import { enrichAuthor, designToAxes, DESIGN_SCHEMA, buildUserPrompt, langName } from "../authoring/ai/enrichAuthor.js";
 import { generateFunnelFromUrl } from "../authoring/index.js";
 import { trustValidate } from "../engine/trustValidate.js";
 import { antiBlandCheck } from "../authoring/author/qualityGate.js";
@@ -70,6 +70,17 @@ await (async () => {
       for (const k of Object.keys(node.properties || {})) walk(node.properties[k], `${path}.${k}`);
       if (node.items) walk(node.items, `${path}[]`);
     })(DESIGN_SCHEMA, "$");
+  });
+
+  console.log("\nenrich — the prompt authors copy in the funnel's language (no English questions in an Arabic funnel):");
+  await check("buildUserPrompt carries a LANGUAGE directive naming the target tongue", () => {
+    const ar = buildUserPrompt(CATALOG, { lang: "ar" });
+    assert.match(ar, /LANGUAGE:/, "prompt states the language rule");
+    assert.match(ar, /Arabic/, "Arabic funnel → asks for Arabic copy");
+    const en = buildUserPrompt(CATALOG, { lang: "en" });
+    assert.match(en, /English/, "en funnel → English copy");
+    assert.equal(langName("ar").includes("Arabic"), true);
+    assert.equal(langName(undefined).includes("Arabic"), true, "defaults to Arabic");
   });
 
   console.log("\nenrich — compile a rich design into a gate-passing deep funnel:");
