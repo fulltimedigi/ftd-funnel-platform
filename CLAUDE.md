@@ -63,7 +63,16 @@ step, still write an ADR for each decision, still keep tests green. It only chan
 ## MANDATORY DESIGN STANDARD
 
 Before designing any funnel/recommendation/diagnostic, read and apply
-`docs/standards/decision-funnel-design-standard-v1.md`. Core law: **Results First,
-Questions Last.** To build one, follow `docs/standards/funnel-engine-reference-v1.md`;
-`configs/pm-certification-advisor.json` is the reference bar (deterministic decision,
-signal-gated explanation, passing trust gate, browser-verified).
+`docs/standards/decision-funnel-design-standard-v1.md` (the 12 rules). Core law:
+**Results First, Questions Last.** To build one, follow
+`docs/standards/funnel-engine-reference-v1.md`; `configs/pm-certification-advisor.json`
+is the reference bar (deterministic decision, signal-gated explanation, passing trust
+gate, browser-verified).
+
+**No bland funnels (binding).** Every funnel — AI-authored or hand-built — must pass
+`docs/standards/funnel-quality-anti-bland-standard-v1.md`: no mirror/exposed question
+(ask facts, derive the product), no single-question dominance (>40%), no unjustified
+question, no unjustified result. This is an **automated** gate the authoring layer runs
+alongside `trustValidate` — note the runtime trust gate catches a *dead* question but
+not a *mirror* question, so the anti-bland gate must add that check. Never weaken it to
+pass; fix the funnel.
