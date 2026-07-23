@@ -16,6 +16,15 @@ const STOPWORDS = new Set([
   "new", "sale", "set", "pack", "box", "piece", "pieces", "size", "ml", "gm", "g",
 ]);
 
+/** Entries that are not shoppable products — excluded before deriving a decision. */
+const NON_PRODUCT = /gift\s*-?\s*card|e-?\s*gift|\bvoucher\b|\bsample\b|\btester\b|\bshipping\b|fragrance\s+experience|\bwarranty\b|\bsubscription\b/i;
+
+/** Drop obvious non-products (gift cards, samples, shipping, experiences…) so the
+ *  decision is derived from real, differentiating products only (ADR-0018). */
+export function cleanCatalog(products) {
+  return (products || []).filter((p) => p && p.name && !NON_PRODUCT.test(`${p.name} ${(p.attributes && p.attributes.type) || ""}`));
+}
+
 /** Tokenize text → normalized terms with a letter (Latin or Arabic); drop noise. */
 export function tokenize(text) {
   return String(text || "")
@@ -115,7 +124,70 @@ export function keywordFacets(products, opts = {}) {
 }
 
 /**
- * Derive ranked decision axes from a catalog.
+ * Cluster discriminating name/tag terms into MUTUALLY-EXCLUSIVE categorical axes
+ * (e.g. form, origin, size) using co-occurrence. Terms that co-occur in the same
+ * product go to DIFFERENT axes (they describe different dimensions); terms that
+ * don't co-occur are alternatives on the SAME axis. This mines catalogs whose
+ * richness lives in product NAMES (like oud), and is general + deterministic —
+ * no hardcoded vocabulary. Each returned axis carries a `.profile` (url→value).
+ */
+export function facetAxes(products, opts = {}) {
+  const total = products.length;
+  if (total < 4) return [];
+  const minDf = opts.minDf ?? Math.max(2, Math.round(total * 0.06));
+  const maxFrac = opts.maxFrac ?? 0.6;
+  const maxTerms = opts.maxTerms ?? 30;
+
+  const df = new Map(); // term -> Set(productIndex)
+  products.forEach((p, i) => {
+    for (const t of new Set(tokenize(`${p.name} ${(p.differentiators || []).join(" ")}`))) {
+      if (!df.has(t)) df.set(t, new Set());
+      df.get(t).add(i);
+    }
+  });
+  const terms = [...df.entries()]
+    .filter(([, s]) => s.size >= minDf && s.size <= total * maxFrac)
+    .map(([term, s]) => ({ term, set: s, count: s.size }))
+    .sort((a, b) => b.count - a.count || a.term.localeCompare(b.term))
+    .slice(0, maxTerms);
+
+  const inter = (a, b) => { let n = 0; for (const i of a.set) if (b.set.has(i)) n++; return n; };
+  // "co-occur" (⇒ different axes) when they share a non-trivial fraction of products.
+  const coOccur = (a, b) => inter(a, b) >= Math.max(1, Math.floor(Math.min(a.count, b.count) * 0.25));
+
+  // Greedy graph-coloring: a term joins the first axis whose members it never co-occurs with.
+  const groups = [];
+  for (const t of terms) {
+    const g = groups.find((grp) => grp.every((m) => !coOccur(t, m)));
+    if (g) g.push(t); else groups.push([t]);
+  }
+
+  const axes = [];
+  for (const grp of groups) {
+    if (grp.length < 2) continue;
+    const profile = new Map();
+    products.forEach((p, i) => {
+      const has = grp.filter((t) => t.set.has(i)).sort((a, b) => b.count - a.count || a.term.localeCompare(b.term));
+      if (has.length) profile.set(p.url, has[0].term);
+    });
+    const present = new Set(profile.values());
+    const values = grp.filter((t) => present.has(t.term)).map((t) => ({
+      value: t.term, label: t.term, count: t.count,
+      productUrls: products.filter((_, i) => t.set.has(i)).map((p) => p.url),
+    }));
+    if (values.length < 2) continue;
+    const axis = _scoreAxis({ id: "facet", label: "attribute", source: "name", values }, total);
+    axis.profile = profile;
+    axes.push(axis);
+  }
+  axes.sort((a, b) => b.score - a.score || (b.values.length - a.values.length));
+  axes.forEach((a, i) => { a.id = `facet${i + 1}`; });
+  return axes;
+}
+
+/**
+ * Derive ranked decision axes from a catalog: structured (price / type / brand)
+ * plus name-mined mutually-exclusive facet axes (form / origin / size).
  * @param {{products:Array}} catalog
  * @param {Object} [opts] - { minCoverage=0.2, topFacets=15 }
  * @returns {{ productCount:number, axes:Array, facets:Array }}
@@ -128,6 +200,7 @@ export function deriveAxes(catalog, opts = {}) {
     _priceAxis(products),
     _categoricalAxis(products, (p) => p.attributes?.type, { id: "type", label: "Product type", source: "attributes.type" }, minCoverage),
     _categoricalAxis(products, (p) => p.brand, { id: "brand", label: "Brand", source: "brand" }, minCoverage),
+    ...facetAxes(products, opts.facets),
   ].filter(Boolean).filter((a) => a.discrimination > 0);
 
   candidates.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
