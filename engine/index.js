@@ -26,7 +26,8 @@ import { renderLeadCapture } from "./leadCapture.js";
 import { score } from "./scoring.js";
 import { resolve } from "./resolver.js";
 import { buildRecommendations } from "./recommend.js";
-import { createSheetsSink, registerSink as registerSheetsEventSink } from "../analytics/sheets-sink.js";
+import { registerSink as registerSheetsEventSink } from "../analytics/sheets-sink.js";
+import { createLeadTransport } from "./leadTransport.js";
 import { registerSink as registerGa4Sink } from "../analytics/ga4-sink.js";
 import { createResilientSink } from "./leadQueue.js";
 import * as analytics from "./analytics.js";
@@ -89,15 +90,19 @@ export function createFunnel(config, mountEl, deps = {}) {
     }
   }
 
-  // Injected transport (tests) is used raw; the default production Sheets sink is
-  // wrapped in an offline outbox so a mid-submit network drop never loses the lead
-  // and stranded leads are retried at boot / when the network returns (ADR-0006).
+  // Injected transport (tests) is used raw; otherwise leads fan out to every
+  // configured destination — Google Sheets and/or a universal Webhook (GHL/Zapier/
+  // CRMs) — wrapped in an offline outbox so a mid-submit network drop never loses
+  // the lead and stranded leads are retried (ADR-0006 / ADR-0020).
   let leadSink = null;
   let submitLead;
   if (typeof deps.submitLead === "function") {
     submitLead = deps.submitLead;
   } else {
-    const base = createSheetsSink(config.analytics?.sheetsEndpoint).submit;
+    const base = createLeadTransport({
+      sheetsEndpoint: config.analytics?.sheetsEndpoint,
+      webhookUrl: config.leadForm?.webhookUrl || config.analytics?.webhookEndpoint,
+    }).submit;
     leadSink = createResilientSink(base, config.id);
     submitLead = leadSink.submit;
   }

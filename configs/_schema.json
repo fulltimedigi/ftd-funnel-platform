@@ -205,7 +205,8 @@
           }
         },
         "privacyNote": { "type": "string" },
-        "submitLabel": { "type": "string" }
+        "submitLabel": { "type": "string" },
+        "webhookUrl": { "type": "string", "description": "Universal lead webhook (GHL/Zapier/Make/CRM). Receives the full lead payload." }
       }
     },
     "cta": {
@@ -223,7 +224,8 @@
       "properties": {
         "sinks": { "type": "array", "items": { "enum": ["sheets", "ga4"] } },
         "ga4Id": { "type": "string" },
-        "sheetsEndpoint": { "type": "string", "description": "Apps Script /exec URL" }
+        "sheetsEndpoint": { "type": "string", "description": "Apps Script /exec URL" },
+        "webhookEndpoint": { "type": "string", "description": "Alt location for the lead webhook (leadForm.webhookUrl takes precedence)" }
       }
     },
     "copy": {
