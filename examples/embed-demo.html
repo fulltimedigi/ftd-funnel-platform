@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!--
+  examples/embed-demo.html — a stand-in for a CLIENT'S OWN SITE, showing the
+  one-line embed (ADR-0021). Run `npm run serve`, open
+  http://localhost:8000/examples/embed-demo.html — the funnel drops in as a
+  sandboxed, auto-resizing iframe between the page's own content.
+
+  The client's real snippet is just the <script> line below (with their funnel id).
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>موقع العميل (تجربة الـEmbed)</title>
+  <style>
+    body { font-family: system-ui, "Segoe UI", Tahoma, sans-serif; max-width: 760px; margin: 0 auto; padding: 2rem; color: #111827; }
+    header { padding: 2rem 0; border-bottom: 1px solid #e5e7eb; }
+    .note { color: #6b7280; font-size: .95rem; }
+    .snippet { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 10px; overflow: auto; direction: ltr; text-align: left; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>متجر العميل</h1>
+    <p class="note">هذا محتوى موقع العميل نفسه. الفانل بيتحطّ في المكان اللي نختاره — من غير ما يلمس تنسيق الموقع.</p>
+  </header>
+
+  <!-- ⬇️ الفانل بيظهر هنا -->
+  <div data-ftd-funnel="pm-certification-advisor"></div>
+
+  <p class="note">↑ ده الفانل، متضمّن كـ iframe معزول بيكبر مع محتواه تلقائيًا.</p>
+
+  <h3>سطر التضمين الوحيد اللي بياخده العميل:</h3>
+  <pre class="snippet">&lt;div data-ftd-funnel="pm-certification-advisor"&gt;&lt;/div&gt;
+&lt;script type="module" src="https://fulltimedigi.com/embed/embed.js"&gt;&lt;/script&gt;</pre>
+
+  <!-- The loader (root-absolute path so it works from any page on this origin). -->
+  <script type="module" src="/embed/embed.js"></script>
+</body>
+</html>

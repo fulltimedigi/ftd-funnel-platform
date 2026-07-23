@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  embed/funnel.html — the hosted funnel page (ADR-0021).
+
+  Two formats from one page (PRODUCT_DECISIONS §2):
+    • Standalone HOSTED URL:  /embed/funnel.html?funnel=<id>
+    • EMBED frame content:    embed/embed.js points a sandboxed iframe here.
+
+  It reads the funnel to render from the query string:
+    ?funnel=<id>    → ../configs/<id>.json   (id sanitized to [a-z0-9-])
+    ?config=<url>   → an explicit config URL (tenant-scoped in Stage 3B)
+  then boots the engine. frame.js reports height so the embed auto-resizes.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FullTimeDigi</title>
+  <link rel="stylesheet" href="../themes/_tokens.css" />
+  <link rel="stylesheet" href="../styles/base.css" />
+  <link rel="stylesheet" href="../styles/rtl.css" />
+  <style>
+    html, body { margin: 0; background: transparent; }
+    /* Honest, minimal error state — never a blank frame. */
+    .ftd-boot-error {
+      font-family: system-ui, "Segoe UI", Tahoma, sans-serif;
+      padding: 2rem; text-align: center; color: #6b7280; line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <main id="ftd-root"><!-- engine mounts here --></main>
+
+  <script type="module">
+    import { boot } from "../engine/index.js";
+    import "./frame.js"; // frame-side auto-resize reporter (self-starts)
+
+    /* Resolve which funnel to render — sanitized, honest failure if none. */
+    function resolveConfigUrl() {
+      const q = new URLSearchParams(location.search);
+      const explicit = (q.get("config") || "").trim();
+      if (explicit && /^(https?:)?\/\/|^\.?\.?\//.test(explicit)) return explicit;
+      const id = (q.get("funnel") || "").trim().toLowerCase();
+      if (id && /^[a-z0-9-]+$/.test(id)) return "../configs/" + id + ".json";
+      return null;
+    }
+
+    const mountEl = document.getElementById("ftd-root");
+    const configUrl = resolveConfigUrl();
+
+    if (!configUrl) {
+      mountEl.innerHTML =
+        '<div class="ftd-boot-error">لا يوجد فانل محدّد.<br>' +
+        'أضِف <code>?funnel=&lt;id&gt;</code> إلى الرابط.</div>';
+    } else {
+      boot({ configUrl, mountEl }).catch((err) => {
+        // Rule 4 — honest failure: say it couldn't load, never a fake success.
+        console.error("[ftd] funnel failed to load:", err);
+        mountEl.innerHTML =
+          '<div class="ftd-boot-error">تعذّر تحميل الفانل.<br>' +
+          'تأكّد من صحّة الرابط ثم أعِد المحاولة.</div>';
+      });
+    }
+  </script>
+</body>
+</html>
