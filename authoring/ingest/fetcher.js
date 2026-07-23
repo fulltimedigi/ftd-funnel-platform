@@ -30,6 +30,9 @@ export function createFetcher(opts = {}) {
   let minDelayMs = typeof opts.minDelayMs === "number" ? opts.minDelayMs : 1000;
   const timeoutMs = typeof opts.timeoutMs === "number" ? opts.timeoutMs : 15000;
   const maxPages = typeof opts.maxPages === "number" ? opts.maxPages : 200;
+  const maxRetries = typeof opts.maxRetries === "number" ? opts.maxRetries : 3;
+  const retryBaseMs = typeof opts.retryBaseMs === "number" ? opts.retryBaseMs : 3000;
+  const maxBackoffMs = 30000;
 
   let count = 0;
   let lastAt = -Infinity;
@@ -37,8 +40,18 @@ export function createFetcher(opts = {}) {
   /** Raise/lower the politeness gap (e.g. to honor robots.txt crawl-delay). */
   function setMinDelay(ms) { if (typeof ms === "number" && ms >= 0) minDelayMs = ms; }
 
+  /** Backoff for a 429/503: honor a numeric Retry-After, else exponential. */
+  function _retryDelay(res, attempt) {
+    const ra = res && res.headers && typeof res.headers.get === "function" ? res.headers.get("retry-after") : null;
+    const s = ra != null ? parseInt(ra, 10) : NaN;
+    const ms = !isNaN(s) ? s * 1000 : retryBaseMs * Math.pow(2, attempt);
+    return Math.min(ms, maxBackoffMs);
+  }
+
   /**
-   * GET a URL. Never throws.
+   * GET a URL. Never throws. Retries 429/503 (Retry-After / exponential backoff)
+   * and transient network errors up to maxRetries — one rate-limit reply must not
+   * abandon the whole ingest.
    * @returns {Promise<{ok:boolean, status?:number, url:string, finalUrl?:string,
    *   contentType?:string, text?:string, reason?:string}>}
    */
@@ -48,30 +61,37 @@ export function createFetcher(opts = {}) {
 
     const wait = minDelayMs - (now() - lastAt);
     if (wait > 0) await sleep(wait);
-    lastAt = now();
     count++;
 
-    let controller = null, timer = null;
-    if (typeof AbortController === "function") {
-      controller = new AbortController();
-      timer = setTimeout(() => { try { controller.abort(); } catch { /* noop */ } }, timeoutMs);
-    }
-    try {
-      const res = await _fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        headers: { "User-Agent": userAgent, "Accept": "*/*" },
-        signal: controller ? controller.signal : undefined,
-      });
-      const text = typeof res.text === "function" ? await res.text() : "";
-      const ct = res.headers && typeof res.headers.get === "function" ? res.headers.get("content-type") || "" : "";
-      if (!res.ok) return { ok: false, url, finalUrl: res.url || url, status: res.status, contentType: ct, text, reason: "http-" + res.status };
-      return { ok: true, url, finalUrl: res.url || url, status: res.status, contentType: ct, text };
-    } catch (err) {
-      const aborted = err && (err.name === "AbortError");
-      return { ok: false, url, reason: aborted ? "timeout" : "network", error: String(err && err.message || err) };
-    } finally {
-      if (timer) clearTimeout(timer);
+    for (let attempt = 0; ; attempt++) {
+      lastAt = now();
+      let controller = null, timer = null;
+      if (typeof AbortController === "function") {
+        controller = new AbortController();
+        timer = setTimeout(() => { try { controller.abort(); } catch { /* noop */ } }, timeoutMs);
+      }
+      try {
+        const res = await _fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          headers: { "User-Agent": userAgent, "Accept": "*/*" },
+          signal: controller ? controller.signal : undefined,
+        });
+        if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
+          await sleep(_retryDelay(res, attempt));
+          continue; // back off and retry the same URL
+        }
+        const text = typeof res.text === "function" ? await res.text() : "";
+        const ct = res.headers && typeof res.headers.get === "function" ? res.headers.get("content-type") || "" : "";
+        if (!res.ok) return { ok: false, url, finalUrl: res.url || url, status: res.status, contentType: ct, text, reason: "http-" + res.status };
+        return { ok: true, url, finalUrl: res.url || url, status: res.status, contentType: ct, text };
+      } catch (err) {
+        const aborted = err && (err.name === "AbortError");
+        if (!aborted && attempt < maxRetries) { await sleep(Math.min(retryBaseMs * Math.pow(2, attempt), maxBackoffMs)); continue; }
+        return { ok: false, url, reason: aborted ? "timeout" : "network", error: String(err && err.message || err) };
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     }
   }
 

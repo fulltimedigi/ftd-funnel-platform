@@ -102,6 +102,34 @@ await (async () => {
     assert.equal(res.reason, "http-404");
   });
 
+  console.log("\npolite fetcher — 429/503 back-off + retry:");
+  await check("retries a 429 (honoring Retry-After) then succeeds", async () => {
+    let n = 0; const sleeps = [];
+    const f = createFetcher({
+      fetch: async (url) => {
+        n++;
+        if (n < 3) return { ok: false, status: 429, url, headers: { get: (h) => (h === "retry-after" ? "1" : "") }, text: async () => "rate limited" };
+        return { ok: true, status: 200, url, headers: { get: () => "application/json" }, text: async () => "OK" };
+      },
+      sleep: async (ms) => { sleeps.push(ms); }, now: () => 0, minDelayMs: 0, maxRetries: 3,
+    });
+    const res = await f.get("https://x/products.json");
+    assert.equal(res.ok, true);
+    assert.equal(res.text, "OK");
+    assert.equal(n, 3, "two 429s then a 200");
+    assert.deepEqual(sleeps, [1000, 1000], "waited Retry-After=1s before each retry");
+    assert.equal(f.stats().requests, 1, "one logical page, not three");
+  });
+  await check("gives up honestly after maxRetries of 429", async () => {
+    const f = createFetcher({
+      fetch: async (url) => ({ ok: false, status: 429, url, headers: { get: () => "" }, text: async () => "no" }),
+      sleep: async () => {}, now: () => 0, minDelayMs: 0, maxRetries: 2,
+    });
+    const res = await f.get("https://x/p");
+    assert.equal(res.ok, false);
+    assert.equal(res.reason, "http-429");
+  });
+
   console.log("\npolite fetcher — rate limit + page cap:");
   await check("spaces requests by minDelayMs (sleeps before the 2nd request)", async () => {
     const sleeps = [];
