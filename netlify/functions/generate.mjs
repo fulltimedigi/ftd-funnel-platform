@@ -78,6 +78,7 @@ export const handler = async (event = {}) => {
     trust: res.trust,
     bland: res.bland,
     richness: res.richness,    // the "too thin" gate report
+    ai: { keyPresent: !!process.env.ANTHROPIC_API_KEY, ...(res.ai || {}) }, // live diagnostic (never the key itself)
     catalog: { origin: res.catalog && res.catalog.origin, count: (res.catalog && res.catalog.products && res.catalog.products.length) || 0 },
   });
 };

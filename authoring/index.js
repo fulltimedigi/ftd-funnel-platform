@@ -45,17 +45,21 @@ export async function generateFunnelFromUrl(url, opts = {}) {
   // 2) Escalate to AI enrichment when the deterministic draft is missing or too
   //    thin for a catalog this rich, and an enricher is available. The enricher
   //    returns an already gate-passing config; accept it only if it's better.
+  let ai = { attempted: false }; // live diagnostic (no secrets) — why AI ran or didn't
   if ((!config || !richness.ok) && typeof opts.enrich === "function") {
+    ai = { attempted: true };
     try {
       const en = await opts.enrich(catalog, { goal: opts.goal, brand });
+      ai.enrichOk = !!(en && en.ok);
+      if (en && !en.ok) { ai.reason = en.reason; if (en.error) ai.error = en.error; }
       if (en && en.ok && en.config) {
         const enRich = richnessCheck(en.config, catalog);
         const betterDepth = (enRich.metrics.questions || 0) > (richness.metrics.questions || 0);
         if (!config || enRich.ok || betterDepth) {
-          config = en.config; source = "ai"; meta = en.meta || meta; richness = enRich;
-        }
+          config = en.config; source = "ai"; meta = en.meta || meta; richness = enRich; ai.accepted = true;
+        } else { ai.accepted = false; ai.reason = "not-deeper-than-deterministic"; }
       }
-    } catch { /* enrichment failed — honest fallback to the deterministic draft */ }
+    } catch (e) { ai.reason = "threw"; ai.error = String((e && e.message) || e); /* honest fallback */ }
   }
 
   if (!config) {
@@ -80,6 +84,7 @@ export async function generateFunnelFromUrl(url, opts = {}) {
     trust,                 // { ok, findings }
     bland,                 // { ok, findings } — anti-bland gate (ADR-0016)
     richness,              // { ok, findings, metrics } — the "too thin" gate (ADR-0028)
+    ai,                    // { attempted, enrichOk, accepted, reason?, error? } — live AI diagnostic
     meta,
     notes: ing.notes,
   };

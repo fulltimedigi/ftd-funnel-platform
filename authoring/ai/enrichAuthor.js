@@ -49,8 +49,13 @@ export const DESIGN_SCHEMA = {
             type: "array",
             items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: { value: { type: "string" }, label: { type: "string" } } },
           },
-          // { "<product-url>": "<value>" } — every product's value on this axis
-          productValues: { type: "object", additionalProperties: { type: "string" } },
+          // one {url, value} per product — its value on this axis. An ARRAY (not a
+          // URL-keyed map) because structured outputs require additionalProperties:false
+          // on every object, so a dynamic-key map is rejected by the API (ADR-0028 fix).
+          productValues: {
+            type: "array",
+            items: { type: "object", additionalProperties: false, required: ["url", "value"], properties: { url: { type: "string" }, value: { type: "string" } } },
+          },
         },
       },
     },
@@ -64,7 +69,7 @@ export const SYSTEM_PROMPT = [
   "HARD RULES:",
   "1. Ask FACTS about the shopper (occasion, intensity preferred, budget, experience). NEVER ask 'which product do you want' — derive the product from the facts.",
   "2. Design 3–6 dimensions ('axes'). Each axis has 2–4 answer values.",
-  "3. For EVERY product in the catalog, assign its value on EACH axis in `productValues` (keyed by the product's exact URL). This mapping is how answers select products — make it discriminating (products must differ across axes) so no single axis decides everything.",
+  "3. For EVERY product in the catalog, assign its value on EACH axis in `productValues` — an ARRAY of {url, value} objects, one per product (use the product's exact URL). This mapping is how answers select products — make it discriminating (products must differ across axes) so no single axis decides everything.",
   "4. Use ONLY the product URLs provided. Do not invent products or URLs. Do not name products in the axes.",
   "5. Cover the whole catalog: across all answer combinations, most products should be reachable.",
   "Return ONLY the JSON matching the provided schema.",
@@ -101,7 +106,11 @@ export function designToAxes(design, catalog) {
     if (!a || !Array.isArray(a.values) || a.values.length < 2) continue;
     const valueSet = new Set(a.values.map((v) => v.value));
     const profile = new Map();
-    for (const [url, value] of Object.entries(a.productValues || {})) {
+    // productValues is an array of {url,value} (schema form); tolerate a legacy
+    // url-keyed map too, so the consumer is robust to model output shape.
+    const pv = a.productValues;
+    const entries = Array.isArray(pv) ? pv.map((e) => [e && e.url, e && e.value]) : Object.entries(pv || {});
+    for (const [url, value] of entries) {
       if (realUrls.has(url) && valueSet.has(value)) profile.set(url, value); // drop hallucinated urls / unknown values
     }
     if (profile.size < 2) continue; // an axis that maps <2 real products is useless

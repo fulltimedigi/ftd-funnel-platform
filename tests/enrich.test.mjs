@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { enrichAuthor, designToAxes } from "../authoring/ai/enrichAuthor.js";
+import { enrichAuthor, designToAxes, DESIGN_SCHEMA } from "../authoring/ai/enrichAuthor.js";
 import { generateFunnelFromUrl } from "../authoring/index.js";
 import { trustValidate } from "../engine/trustValidate.js";
 import { antiBlandCheck } from "../authoring/author/qualityGate.js";
@@ -43,7 +43,7 @@ function richDesign() {
     axes: axisDefs.map((a) => ({
       id: a.id, label: a.label, question: a.question,
       values: a.vals.map((v) => ({ value: v, label: v })),
-      productValues: Object.fromEntries(PRODUCTS.map((p, i) => [p.url, a.vals[bit(i, a.n)]])),
+      productValues: PRODUCTS.map((p, i) => ({ url: p.url, value: a.vals[bit(i, a.n)] })), // array of {url,value} — matches DESIGN_SCHEMA
     })),
   };
 }
@@ -55,6 +55,23 @@ function thinDesign() {
 }
 
 await (async () => {
+  console.log("\nenrich — the design schema is valid for structured outputs (regression guard):");
+  await check("every object sets additionalProperties:false — no dynamic-key maps (the API rejects those with 400)", () => {
+    // The bug this guards: `additionalProperties: {type:'string'}` (a url-keyed map)
+    // is rejected by structured outputs, so the AI call silently 400s and falls back.
+    (function walk(node, path) {
+      if (!node || typeof node !== "object") return;
+      if (node.type === "object") {
+        assert.equal(node.additionalProperties, false, `object at ${path} must set additionalProperties:false`);
+      }
+      if ("additionalProperties" in node) {
+        assert.equal(node.additionalProperties, false, `additionalProperties at ${path} must be false, not a schema`);
+      }
+      for (const k of Object.keys(node.properties || {})) walk(node.properties[k], `${path}.${k}`);
+      if (node.items) walk(node.items, `${path}[]`);
+    })(DESIGN_SCHEMA, "$");
+  });
+
   console.log("\nenrich — compile a rich design into a gate-passing deep funnel:");
   await check("rich design → ≥4 questions, broad coverage, trust+anti-bland+richness all pass", async () => {
     const complete = async () => richDesign();
@@ -79,7 +96,7 @@ await (async () => {
   console.log("\nenrich — grounding + repair + honest failure:");
   await check("hallucinated product URLs in the mapping are DROPPED (grounded to the real catalog)", () => {
     const design = richDesign();
-    design.axes[0].productValues["https://evil.example/fake"] = "daily"; // not in catalog
+    design.axes[0].productValues.push({ url: "https://evil.example/fake", value: "daily" }); // not in catalog
     const axes = designToAxes(design, CATALOG);
     const occ = axes.find((a) => a.id === "occasion");
     assert.ok(!occ.profile.has("https://evil.example/fake"), "fake url dropped");
