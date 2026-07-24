@@ -44,12 +44,25 @@ check("no signals → safe defaults, never throws", () => {
   assert.equal(b.logo, "");
 });
 
-check("brandToThemeVars maps palette to :root custom properties", () => {
+check("brandToThemeVars maps palette to the CSS token vocabulary styles/base.css reads", () => {
   const vars = brandToThemeVars({ colors: { primary: "#e2c97e", accent: "#3a2f1e", bg: "#f5f0e8", text: "#1f2430" } });
-  assert.equal(vars["--brand"], "#e2c97e");
-  assert.equal(vars["--cta-bg"], "#e2c97e");
+  // The real vocabulary (ADR-0033) — NOT --brand/--cta-bg/--ink, which base.css never read.
+  assert.equal(vars["--primary"], "#e2c97e");
+  assert.equal(vars["--accent"], "#3a2f1e");
   assert.equal(vars["--bg"], "#f5f0e8");
-  assert.equal(vars["--ink"], "#1f2430");
+  assert.equal(vars["--text"], "#1f2430");
+  assert.ok(vars["--on-primary"], "a contrasting on-primary is derived");
+  assert.match(vars["--accent-soft"], /^rgba?\(/, "accent-soft is a translucent accent");
+  assert.ok(vars["--primary-2"] && vars["--surface"], "coherent shades derived");
+});
+
+check("a drab/monochrome site still yields a warm, contrasting accent (never a near-black wash)", () => {
+  // near-black everywhere (the exact bug the operator hit: --brand/--accent/--cta all #1c1d1d)
+  const b = extractBrand('<html><head><style>:root{--x:#1c1d1d}.a{color:#1c1d1d}.b{background:#1c1d1d}</style></head><body>x</body></html>', "https://x.example");
+  const vars = brandToThemeVars(b);
+  // accent must be visibly different from a near-black primary
+  const hexToLum = (h) => { const n = h.replace("#", ""); const r = parseInt(n.slice(0,2),16), g = parseInt(n.slice(2,4),16), bl = parseInt(n.slice(4,6),16); return (0.299*r+0.587*g+0.114*bl)/255; };
+  assert.ok(hexToLum(vars["--accent"]) > 0.3, "accent pops (not near-black): " + vars["--accent"]);
 });
 
 /* engine applies themeVars as a :root <style> (DOM shim) */

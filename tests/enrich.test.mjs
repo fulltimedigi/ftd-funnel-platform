@@ -149,7 +149,7 @@ await (async () => {
     assert.equal(res.ok, true, res.reason);
     assert.equal(res.source, "ai", "escalated to AI because deterministic was too thin");
     assert.ok(res.config.questions.length >= 4);
-    assert.equal(res.config.themeVars["--brand"], "#e2c97e", "brand palette applied");
+    assert.equal(res.config.themeVars["--primary"], "#e2c97e", "brand palette applied (real token vocabulary)");
     assert.equal(res.trust.ok && res.bland.ok, true);
   });
 

@@ -170,6 +170,9 @@ export function createFunnel(config, mountEl, deps = {}) {
     mount(
       mountEl,
       el("section", { class: "ftd-screen ftd-hero" }, [
+        // The store's real logo, prominently — a bespoke identity, not a generic template
+        // (ADR-0033). Only a real asset from the site; nothing rendered if there's none.
+        config.brand?.logo ? el("div", { class: "ftd-brandbar" }, [el("img", { class: "ftd-logo", src: config.brand.logo, alt: config.brand?.name || "", loading: "lazy" })]) : null,
         h.eyebrow ? el("p", { class: "ftd-hero-eyebrow", text: h.eyebrow }) : null,
         el("h1", { class: "ftd-hero-title" }, [
           document.createTextNode(h.headline || config.brand?.name || "التشخيص"),

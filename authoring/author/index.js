@@ -165,13 +165,15 @@ function buildConfig(catalog, axisSet, opts) {
     const carries = axisSet.map((a) => ({ D: `D_${a.id}`, label: a.label, value: a.profile.get(p.url) })).filter((x) => x.value != null);
     const why = [{ needs: {}, claim: `«${clamp(p.name, 70)}» يطابق ما اخترته من ${axisSet.map((a) => a.label).join(" و")}.` }];
     for (const c of carries) why.push({ needs: { [c.D]: c.value }, claim: `اخترت ${c.label}، و«${clamp(p.name, 60)}» يوفّرها.` });
-    const contextual = (altByUrl.get(p.url) || []).slice(0, ALT_CAP).map((q) => ({ name: clamp(q.name, 120), url: q.url, price: fmtPrice(q) }));
+    // Carry the REAL product image through (ADR-0033) — image + price + reason make the
+    // premium card. Only a real catalog image; a missing one renders a tasteful placeholder.
+    const contextual = (altByUrl.get(p.url) || []).slice(0, ALT_CAP).map((q) => ({ name: clamp(q.name, 120), url: q.url, price: fmtPrice(q), image: q.image || "" }));
     archetypes.push({
-      id, name: clamp(p.name, 80), icon: "✨",
+      id, name: clamp(p.name, 80), icon: "✨", image: p.image || "",
       description: `اختيارنا الأنسب من ${brandName} بناءً على إجاباتك.`,
       recommendations: {
         primary: {
-          name: clamp(p.name, 120), url: p.url, price: fmtPrice(p),
+          name: clamp(p.name, 120), url: p.url, price: fmtPrice(p), image: p.image || "",
           becauseTemplate: `«${clamp(p.name, 80)}» هو الأنسب لأنه يجمع ما تبحث عنه من ${axisSet.map((a) => a.label).join(" و")} في ${brandName}.`,
         },
         ...(contextual.length ? { contextual } : {}),
@@ -199,7 +201,7 @@ function buildConfig(catalog, axisSet, opts) {
     for (const a of archetypes) { const ap = winners.get(a.recommendations.primary.url); const s = simTo(p, ap); if (s > bs) { bs = s; bestA = a; } }
     if (bestA) {
       const rc = bestA.recommendations;
-      (rc.contextual || (rc.contextual = [])).push({ name: clamp(p.name, 120), url: p.url, price: fmtPrice(p) });
+      (rc.contextual || (rc.contextual = [])).push({ name: clamp(p.name, 120), url: p.url, price: fmtPrice(p), image: p.image || "" });
       present.add(p.url);
     }
   }
@@ -226,7 +228,7 @@ function buildConfig(catalog, axisSet, opts) {
     _generatedBy: "ftd-authoring/stage2",
     id: slug(brandName) + "-advisor",
     brand: { name: brandName, logo: "", tagline: `مرشدك لاختيار المنتج الأنسب من ${brandName}` },
-    theme: opts.theme || "platform-clean", lang: opts.lang || "ar",
+    theme: opts.theme || "platform-premium", lang: opts.lang || "ar",
     hero: {
       eyebrow: `${questions.length} أسئلة · نتيجة فورية`,
       headline: `محتار تختار من ${brandName}؟`,

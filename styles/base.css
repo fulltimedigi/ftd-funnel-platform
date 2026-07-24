@@ -141,6 +141,39 @@ body {
 }
 .ftd-privacy { text-align: center; color: var(--text-muted); font-size: 12px; margin: 12px 0 0; }
 
+/* ─── Premium brand identity + product media (ADR-0033) ─── */
+.ftd-brandbar { display: flex; justify-content: center; align-items: center; margin: 0 0 20px; }
+.ftd-logo { max-height: 60px; max-width: 62%; object-fit: contain; }
+.ftd-brandbar.is-result { margin-bottom: 14px; }
+.ftd-brandbar.is-result .ftd-logo { max-height: 40px; }
+
+/* Real product image (or a tasteful placeholder — never a fabricated image). */
+.ftd-card-media { width: 100%; aspect-ratio: 4 / 3; margin-bottom: 14px; overflow: hidden;
+  border-radius: calc(var(--radius) - 6px); background: var(--surface-2); }
+.ftd-card-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
+.ftd-card:hover .ftd-card-img { transform: scale(1.03); }
+.ftd-card-media.is-placeholder { display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--surface-2), var(--accent-soft)); }
+.ftd-card-ph { font-size: 40px; color: var(--accent); opacity: 0.55; }
+
+/* Signature (the one pick) — the premium hero product card. */
+.ftd-signature { margin: 10px 0 6px; }
+.ftd-signature .ftd-card { padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border-accent); }
+.ftd-signature .ftd-card-media { aspect-ratio: 16 / 10; margin-bottom: 16px; }
+.ftd-signature .ftd-card-name { font-family: var(--font-display); font-size: 22px; line-height: 1.3; }
+
+/* "You might also like" — real nearest alternates as thumbnails. */
+.ftd-alts { margin: 20px 0 6px; }
+.ftd-alts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ftd-alt { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius) - 6px);
+  padding: 8px; transition: transform 0.2s ease, border-color 0.2s ease; }
+.ftd-alt:hover { transform: translateY(-2px); border-color: var(--border-accent); }
+.ftd-alt-img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
+.ftd-alt-img.is-placeholder { display: flex; align-items: center; justify-content: center; }
+.ftd-alt-name { font-size: 12px; font-weight: 600; line-height: 1.35; max-height: 2.7em; overflow: hidden; }
+.ftd-alt-price { font-size: 12px; color: var(--price); font-weight: 700; }
+
 /* ─── Personas result layout (strengths / gaps / next-steps) ─── */
 .ftd-persona-section { margin: 16px 0; padding: 14px 16px; background: var(--surface, #fff); border-radius: var(--radius, 12px); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.06)); }
 .ftd-persona-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

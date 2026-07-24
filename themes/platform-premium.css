@@ -1,0 +1,33 @@
+/*
+ * themes/platform-premium.css — "Platform Premium (light)" theme (ADR-0033).
+ * A warm, editorial, self-contained default for AUTHORED funnels: cream background,
+ * deep ink, warm-gold accents, generous spacing. Fills the full token vocabulary
+ * styles/base.css reads, so the brand-extracted palette (applyThemeVars) refines a
+ * palette that already looks premium. NO external fonts — CSP-safe (ADR-0032); a
+ * refined system stack (serif display + Arabic-friendly body).
+ */
+
+:root {
+  --bg: #faf7f1;
+  --surface: #ffffff;
+  --surface-2: #f3eee4;
+  --border: rgba(34, 38, 46, 0.12);
+  --border-accent: rgba(200, 162, 74, 0.42);
+  --text: #22262e;
+  --text-muted: #71757e;
+  --text-soft: #474c56;
+  --primary: #243244;
+  --primary-2: #1a2634;
+  --on-primary: #ffffff;
+  --accent: #c8a24a;
+  --accent-soft: rgba(200, 162, 74, 0.14);
+  --price: #9a6b2f;
+  --error: #c0392b;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Tahoma, "Noto Sans Arabic", "Noto Naskh Arabic", sans-serif;
+  --font-display: Georgia, "Times New Roman", "Noto Naskh Arabic", serif;
+
+  --radius: 16px;
+  --maxwidth: 680px;
+  --shadow: 0 10px 30px rgba(34, 38, 46, 0.10);
+}

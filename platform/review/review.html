@@ -174,7 +174,7 @@
       const adv = el("details", { class: "advanced" });
       const body = el("div", { class: "adv-body" });
       const sel = el("select", {});
-      ["platform-clean", "luxury-gold-light"].forEach((t) => {
+      ["platform-premium", "luxury-gold-light", "platform-clean"].forEach((t) => {
         const o = el("option", { value: t, text: t });
         if ((ctx.config.theme || "") === t) o.setAttribute("selected", "selected");
         sel.appendChild(o);

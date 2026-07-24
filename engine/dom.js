@@ -30,6 +30,15 @@ export function safeHref(v) {
   return raw;
 }
 
+/** Sanitize an image src: http/https/data (+ relative) only; blocks javascript: etc. */
+export function safeSrc(v) {
+  const raw = String(v).trim();
+  const probe = raw.replace(/[\x00-\x20]+/g, "").toLowerCase();
+  const m = probe.match(/^([a-z][a-z0-9+.-]*):/);
+  if (m && !["http", "https", "data"].includes(m[1])) return null;
+  return raw;
+}
+
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -38,6 +47,7 @@ export function el(tag, attrs = {}, children = []) {
     else if (k === "text") node.textContent = v;
     else if (k === "onClick") node.addEventListener("click", v);
     else if (k === "href") { const safe = safeHref(v); if (safe != null) node.setAttribute("href", safe); }
+    else if (k === "src") { const safe = safeSrc(v); if (safe != null) node.setAttribute("src", safe); }
     else node.setAttribute(k, v);
   }
   const kids = Array.isArray(children) ? children : [children];

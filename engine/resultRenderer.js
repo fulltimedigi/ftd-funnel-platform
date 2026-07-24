@@ -43,12 +43,23 @@ function resultCopy(config) {
   return (config.copy && config.copy.result) || {};
 }
 
+/** Real product image, or a tasteful placeholder — never a fabricated image (ADR-0033). */
+function productMedia(rec) {
+  if (rec && rec.image) {
+    return el("div", { class: "ftd-card-media" }, [
+      el("img", { class: "ftd-card-img", src: rec.image, alt: rec.name || "", loading: "lazy" }),
+    ]);
+  }
+  return el("div", { class: "ftd-card-media is-placeholder" }, [el("span", { class: "ftd-card-ph", text: "✦" })]);
+}
+
 /** Generic recommendation card. Same component for every vertical. */
 function recommendationCard(rec, answers, config, opts = {}) {
   if (!rec) return null;
   const because = fillBecause(rec.becauseTemplate, answers, config);
   const shopLabel = resultCopy(config).shopLabel || "تسوّق الآن ←";
   const kids = [];
+  if (opts.media !== false) kids.push(productMedia(rec));
   if (opts.badge) kids.push(el("span", { class: "ftd-card-badge", text: opts.badge }));
   if (rec.tag) kids.push(el("p", { class: "ftd-card-tag", text: rec.tag }));
   kids.push(el("p", { class: "ftd-card-name", text: rec.name }));
@@ -196,6 +207,24 @@ function reasonList(title, bullets, cls) {
   ]);
 }
 
+/** Compact "you might also like" strip — real thumbnails, one tap to the product. Keeps
+ *  the result decisive (one clear #1 above) while surfacing genuine nearest alternates. */
+function altStrip(alts, config) {
+  const title = resultCopy(config).contextualTitle || "قد يناسبك أيضاً";
+  return el("div", { class: "ftd-alts" }, [
+    el("h3", { class: "ftd-section-title", text: title }),
+    el("div", { class: "ftd-alts-row" }, alts.map((a) =>
+      el("a", { class: "ftd-alt", href: a.url, target: "_blank", rel: "noopener" }, [
+        a.image
+          ? el("img", { class: "ftd-alt-img", src: a.image, alt: a.name || "", loading: "lazy" })
+          : el("div", { class: "ftd-alt-img is-placeholder" }, [el("span", { class: "ftd-card-ph", text: "✦" })]),
+        el("span", { class: "ftd-alt-name", text: a.name }),
+        a.price ? el("span", { class: "ftd-alt-price", text: a.price }) : null,
+      ])
+    )),
+  ]);
+}
+
 function renderCommerce(ctx) {
   const { resolved, config, answers, onRestart } = ctx;
   const { primary, secondary, proportion } = resolved;
@@ -211,6 +240,7 @@ function renderCommerce(ctx) {
   const built = config.scoring?.mode === "decision-table" ? buildRecommendations(resolved, resolved.scoring, config) : null;
 
   const children = [
+    config.brand?.logo ? el("div", { class: "ftd-brandbar is-result" }, [el("img", { class: "ftd-logo", src: config.brand.logo, alt: config.brand?.name || "", loading: "lazy" })]) : null,
     heroCard(primary, copy.eyebrow || "بروفايلك"),
     primary?.description ? el("p", { class: "ftd-result-desc", text: primary.description }) : null,
     traitsBlock(primary),
@@ -224,7 +254,7 @@ function renderCommerce(ctx) {
     children.push(
       el("div", { class: "ftd-signature" }, [
         el("h3", { class: "ftd-section-title", text: copy.recommendationTitle || "توصيتنا" }),
-        recommendationCard(sig, answers, config, { showCta: true, highlight: true }),
+        recommendationCard(sig, answers, config, { showCta: true, highlight: true, badge: config.decisiveResult ? (copy.bestBadge || "✦ الأنسب لك") : null }),
       ])
     );
   }
@@ -273,6 +303,13 @@ function renderCommerce(ctx) {
     }
 
     children.push(ctaLink(config)); // decisive keeps only the product card CTA above
+  }
+
+  // Decisive mode: a compact strip of real nearest alternates (image + name + price) —
+  // the reference's "also suitable" feel, without a second competing CTA (ADR-0033).
+  if (decisive) {
+    const alts = (recs.contextual || []).slice(0, 3);
+    if (alts.length) children.push(altStrip(alts, config));
   }
 
   children.push(restartButton(config, onRestart));
