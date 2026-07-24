@@ -100,15 +100,17 @@ export function extractBrand(html, origin = "") {
   let primary = _norm(themeColor && /^#[0-9a-f]{3,6}$/i.test(themeColor.trim()) ? themeColor.trim() : (vivid[0] || "#243244"));
   if (lum(primary) > 0.82) primary = shade(primary, -0.45); // too pale to anchor → deepen
 
-  // ACCENT: a warm, saturated colour that POPS. Prefer a real saturated brand hex with
-  // a hue distinct from primary; else fall back to premium gold — never a near-black.
-  const bySat = vivid.slice().sort((a, b) => sat(b) - sat(a));
-  let accent = bySat.find((h) => sat(h) >= 0.4 && Math.abs(_hue(h) - _hue(primary)) > 20)
-    || bySat.find((h) => sat(h) >= 0.45)
+  // ACCENT: a warm colour that POPS and is actually the brand's — not a stray icon.
+  // `vivid` is FREQUENCY-ranked, so a rare payment/social glyph (e.g. MasterCard #eb001b)
+  // never wins; the brand repeats its real accent. Prefer the warm gold/amber band first
+  // (premium), then a strong FREQUENT brand colour, else a tasteful premium-gold fallback.
+  const isWarm = (h) => { const hu = _hue(h); return hu >= 20 && hu <= 60; }; // amber/gold/bronze
+  const distinct = (h) => h !== primary && Math.abs(lum(h) - lum(primary)) > 0.12;
+  let accent = vivid.find((h) => isWarm(h) && sat(h) >= 0.3 && distinct(h))
+    || vivid.slice(0, 4).find((h) => sat(h) >= 0.5 && distinct(h)) // a genuine bold brand colour (top-frequent only)
     || WARM_ACCENT;
-  if (lum(accent) < 0.28) accent = shade(accent, 0.4);  // too dark → lift so it reads on cream
+  if (lum(accent) < 0.28) accent = shade(accent, 0.4);  // too dark → lift so it reads on light
   if (lum(accent) > 0.86) accent = shade(accent, -0.3); // too light → deepen
-  // Monochrome site (accent ~= primary and dull) → use the warm default so it isn't a wash.
   if (sat(accent) < 0.22 || Math.abs(lum(accent) - lum(primary)) < 0.12) accent = WARM_ACCENT;
 
   // BACKGROUND: the store's own light background if it has one, else a warm cream.

@@ -38,6 +38,19 @@ check("picks a light background hex present in the page, skips pure white/black"
   assert.notEqual(b.colors.primary, "#000000");
 });
 
+check("a rare payment-icon colour never beats the brand's frequent warm accent", () => {
+  // Dark brand primary (theme-color); the brand's gold repeats; MasterCard red appears
+  // ONCE (a payment icon) — it must NOT be chosen as the accent.
+  const html = `<html><head><meta name="theme-color" content="#1c1d1d"><style>
+    .p{color:#c8a24a}.q{background:#c8a24a}.r{border-color:#c8a24a}.s{fill:#c8a24a}
+    .mc{fill:#eb001b}
+    .bg{background:#ffffff}
+  </style></head><body>x</body></html>`;
+  const b = extractBrand(html, "https://s.example");
+  assert.equal(b.colors.primary, "#1c1d1d", "dark brand primary from theme-color");
+  assert.equal(b.colors.accent, "#c8a24a", "frequent gold wins, not the rare payment red");
+});
+
 check("no signals → safe defaults, never throws", () => {
   const b = extractBrand("<html><head></head><body>plain</body></html>", "https://x.example");
   assert.ok(/^#/.test(b.colors.primary));
