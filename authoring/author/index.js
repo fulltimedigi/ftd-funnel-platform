@@ -21,6 +21,7 @@ import { trustValidate } from "../../engine/trustValidate.js";
 import { antiBlandCheck } from "./qualityGate.js";
 import { richnessCheck } from "../quality/richnessCheck.js";
 import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
+import { deriveBudgetAxis, looksLikeBudgetAxis } from "./budgetAxis.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -42,22 +43,31 @@ function _bestProduct(list) {
  * match (routing to an already-reachable product).
  * @returns {{winnerByCombo:Map<string,Object>, altByUrl:Map<string,Object[]>}}
  */
-const SOFT_MISS = -0.5; // a soft-axis mismatch is a real cost (ADR-0034), not near-free (-0.001)
+const SOFT_MISS = -0.5;  // a soft-axis mismatch is a real cost (ADR-0034), not near-free
+const ORD_EXACT = 2;     // an ORDINAL-hard exact tier (e.g. budget) is strongly rewarded…
+const ORD_MISS = 100;    // …and off-tier is heavily penalised per step, so an exact-tier
+                         // product ALWAYS beats any off-tier + any soft advantage; a
+                         // wrong tier only wins when the (hard-cell) is genuinely EMPTY,
+                         // and then the NEAREST tier is picked (never crosses a strict
+                         // hard axis like format). ADR-0035.
 
 function _assignCovering(products, axisSet, combos, overall) {
   const key = (c) => c.join("¦");
   const val = (p, a) => a.profile.get(p.url);
   const isFull = (p) => axisSet.every((a) => val(p, a) != null);
-  // HARD axes (e.g. format) are absolute filters: a product whose known value differs
-  // from the combo is EXCLUDED (-Infinity). A null value = wildcard (eligible). Soft axes
-  // add +1 on match, SOFT_MISS on mismatch — so coverage is achieved WITHIN each format,
-  // never by crossing it (ADR-0034).
+  // Precompute value ranks for ordinal axes (index in the ordered values = the tier).
+  const ranks = axisSet.map((a) => (a.ordinal ? new Map(a.values.map((v, idx) => [v.value, idx])) : null));
+  // HARD (strict) axes exclude a mismatch absolutely (-Infinity). HARD ORDINAL axes reward
+  // the exact tier and penalise by step-distance (nearest wins when the cell is empty),
+  // never crossing a strict hard axis. Soft axes add +1 / SOFT_MISS.
   const score = (p, combo) => {
     let s = 0;
     for (let i = 0; i < axisSet.length; i++) {
       const a = axisSet[i], pv = val(p, a);
-      if (a.hard) { if (pv != null && pv !== combo[i]) return -Infinity; continue; }
-      if (pv != null) s += pv === combo[i] ? 1 : SOFT_MISS;
+      if (pv == null) continue; // wildcard (unknown value) — eligible, no push
+      if (a.hard && a.ordinal) { const d = Math.abs((ranks[i].get(pv) ?? 0) - (ranks[i].get(combo[i]) ?? 0)); s += d === 0 ? ORD_EXACT : -ORD_MISS * d; }
+      else if (a.hard) { if (pv !== combo[i]) return -Infinity; }
+      else s += pv === combo[i] ? 1 : SOFT_MISS;
     }
     return s;
   };
@@ -206,14 +216,17 @@ function buildConfig(catalog, axisSet, opts) {
   //     over-subscribed profiles carry the extras — the ranked-list leaf the spec allows.
   const present = new Set();
   for (const a of archetypes) { present.add(a.recommendations.primary.url); for (const c of a.recommendations.contextual || []) present.add(c.url); }
-  // HARD-aware similarity (ADR-0034): an orphan may only attach to a SAME-FORMAT archetype
-  // (a differing hard value disqualifies it → -Infinity); soft matches rank among those.
+  // HARD-aware similarity (ADR-0034/0035): an orphan attaches only to a SAME strict-hard
+  // (e.g. same FORMAT) archetype (mismatch → -Infinity); for an ordinal hard axis (budget)
+  // it prefers the same tier, nearest otherwise; soft matches rank among those.
+  const _rank = (ax, v) => ax.values.findIndex((x) => x.value === v);
   const simTo = (p, ap) => {
     let s = 0;
     for (const ax of axisSet) {
       const pv = ax.profile.get(p.url), apv = ax.profile.get(ap.url);
-      if (ax.hard) { if (pv != null && apv != null && pv !== apv) return -Infinity; continue; }
-      if (pv != null && pv === apv) s += 1;
+      if (ax.hard && ax.ordinal) { if (pv != null && apv != null) { const d = Math.abs(_rank(ax, pv) - _rank(ax, apv)); s += d === 0 ? ORD_EXACT : -ORD_MISS * d; } }
+      else if (ax.hard) { if (pv != null && apv != null && pv !== apv) return -Infinity; }
+      else if (pv != null && pv === apv) s += 1;
     }
     return s;
   };
@@ -323,24 +336,25 @@ export function authorFromAxes(catalog, axes, opts = {}) {
   const cleanCat = { ...catalog, products };
 
   const usable = (axes || []).filter((a) => a && a.values && a.values.length >= 2 && a.profile && a.profile.size);
-  // The HARD format axis is derived from the real catalog and, when present, is ALWAYS in
-  // the set — a shopper who picks "spray" only ever sees sprays (ADR-0034). Any AI axis
-  // that duplicates form is dropped so we don't ask form twice.
-  const fmt = deriveFormatAxis(products);
-  const soft = fmt ? usable.filter((a) => !looksLikeFormatAxis(a)) : usable;
-  const minSoft = fmt ? 1 : 2;
-  if (soft.length < minSoft) return { ok: false, reason: "not-enough-axes", meta: { axes: soft.length, hadFormat: !!fmt } };
+  // HARD axes are derived from the real catalog and, when present, are ALWAYS in the set:
+  // FORMAT (strict — spray→sprays only, ADR-0034) and BUDGET (ordinal — the chosen price
+  // band only, nearest tier when a form×band cell is empty, ADR-0035). Any AI axis that
+  // duplicates form or price is dropped so we never ask it twice.
+  const hard = [deriveFormatAxis(products), deriveBudgetAxis(products)].filter(Boolean);
+  const soft = usable.filter((a) => !looksLikeFormatAxis(a) && !looksLikeBudgetAxis(a));
+  const minSoft = Math.max(0, 2 - hard.length);
+  if (soft.length < minSoft) return { ok: false, reason: "not-enough-axes", meta: { axes: soft.length, hard: hard.map((h) => h.id) } };
 
-  const maxCombos = opts.maxCombos || 400; // room for the format partition (coverage WITHIN each form)
+  const maxCombos = opts.maxCombos || 400; // room for the hard partition (coverage WITHIN each cell)
   const cap = opts.maxQuestions || 6;
-  const maxSoft = Math.min(soft.length, fmt ? cap - 1 : cap);
+  const maxSoft = Math.max(minSoft, Math.min(soft.length, cap - hard.length));
   const attempts = [];
   // Among trust+bland-passing sets, choose the HIGHEST-COVERAGE one (ADR-0031), largest
-  // (deepest) first — but always partitioned by the hard format axis (ADR-0034).
+  // (deepest) first — but always partitioned by the hard axes (ADR-0034/0035).
   let best = null;
   for (let ssize = maxSoft; ssize >= minSoft; ssize--) {
     for (const sub of _combos(soft, ssize, 24)) {
-      const set = fmt ? [fmt, ...sub] : sub;
+      const set = [...hard, ...sub];
       if (set.length < 2) continue;
       const combos = set.reduce((n, a) => n * a.values.length, 1);
       if (combos > maxCombos) continue;
@@ -351,7 +365,7 @@ export function authorFromAxes(catalog, axes, opts = {}) {
       if (trust.ok && bland.ok) {
         const rich = richnessCheck(config, cleanCat);
         const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size: set.length,
-          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, formatHard: !!fmt } };
+          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, hard: hard.map((h) => h.id) } };
         if (!best || cand.coverage > best.coverage + 1e-9 || (Math.abs(cand.coverage - best.coverage) <= 1e-9 && cand.size > best.size)) best = cand;
         if (rich.ok && rich.metrics.coverage >= 0.999) break;
       }
@@ -368,28 +382,27 @@ export function authorFunnel(catalog, opts = {}) {
   const cleanCat = { ...catalog, products };
 
   const axes = buildFactAxes(products);
-  // The hard format axis (ADR-0034) is always included when the catalog has ≥2 forms;
-  // any mined axis that duplicates form is dropped.
-  const fmt = deriveFormatAxis(products);
-  const soft = fmt ? axes.filter((a) => !looksLikeFormatAxis(a)) : axes;
-  if (!fmt && axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
-  if (fmt && soft.length < 1) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: soft.length, hadFormat: true } };
+  // Hard axes (format ADR-0034, budget ADR-0035) always included when derivable; any
+  // mined axis that duplicates form or price is dropped.
+  const hard = [deriveFormatAxis(products), deriveBudgetAxis(products)].filter(Boolean);
+  const soft = axes.filter((a) => !looksLikeFormatAxis(a) && !looksLikeBudgetAxis(a));
+  if (hard.length < 2 && axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
 
-  // Candidate sets: [format, …soft-subset] (2–3 questions), or the legacy pairs/triples.
-  const sets = fmt
-    ? [...soft.map((s) => [fmt, s]), ..._combos(soft, 2, 24).map((sub) => [fmt, ...sub])]
+  // Candidate sets: [..hard, …soft-subset] (0–2 soft), or the legacy pairs/triples.
+  const sets = hard.length
+    ? [hard.slice(), ...soft.map((s) => [...hard, s]), ..._combos(soft, 2, 24).map((sub) => [...hard, ...sub])].filter((s) => s.length >= 2)
     : _axisSets(axes);
 
   const attempts = [];
   for (const set of sets) {
     const combos = set.reduce((n, a) => n * a.values.length, 1);
-    if (combos > 200) continue;
+    if (combos > 400) continue;
     const config = buildConfig(cleanCat, set, opts);
     const trust = trustValidate(config);
     const bland = antiBlandCheck(config);
     attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
     if (trust.ok && bland.ok) {
-      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, formatHard: !!fmt } };
+      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, hard: hard.map((h) => h.id) } };
     }
   }
   return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };

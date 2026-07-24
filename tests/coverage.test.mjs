@@ -30,7 +30,7 @@ function reachableUrls(config) {
 /** Build N products + 4 axes; product i gets the i-th combo as its profile (distinct),
  *  unless `collideLast` makes the last product a twin of product 0. */
 function fixture(N, sizes = [3, 2, 2, 2], collideLast = false) {
-  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD" }));
+  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
   const combos = cartesian(sizes.map((s) => range(s).map(String))); // sizes multiply to N
   const comboOf = (i) => (collideLast && i === N - 1 ? combos[0] : combos[i]);
   const axes = sizes.map((sz, ax) => {
@@ -85,7 +85,7 @@ await (async () => {
     // combos. The fill pass should give each orphaned twin its own matching empty combo,
     // so all 8 become PRIMARIES (not just alternates) — coverage ~100% by construction.
     const N = 8;
-    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD" }));
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
     const base = cartesian([0, 1, 2, 3].map(() => ["0", "1"])); // 16 combos
     const axes = [0, 1, 2, 3].map((ax) => {
       const profile = new Map();
@@ -104,7 +104,7 @@ await (async () => {
     // a distinct #1, but the coverage backfill attaches every leftover to its best leaf,
     // so 100% remain reachable (as ranked alternates) — no product is ever orphaned.
     const N = 20;
-    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD" }));
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
     const base = cartesian([0, 1].map(() => ["0", "1"])); // 4 combos
     const axes = [0, 1].map((ax) => {
       const profile = new Map();

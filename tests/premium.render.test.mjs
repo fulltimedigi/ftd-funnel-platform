@@ -23,7 +23,7 @@ console.log("\npremium — the recommendation carries a REAL product image:");
 check("every archetype's primary.image is the matching product's real catalog image", () => {
   const N = 8;
   // half the catalog has an image, half doesn't (to prove both paths honestly)
-  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, currency: "USD", image: i % 2 === 0 ? `${O}/img/${i}.jpg` : null }));
+  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, image: i % 2 === 0 ? `${O}/img/${i}.jpg` : null }));
   const imageByUrl = new Map(products.map((p) => [p.url, p.image || ""]));
   const combos = cartesian([0, 1, 2].map(() => ["0", "1"])); // 8 distinct profiles
   const axes = [0, 1, 2].map((ax) => {
@@ -45,7 +45,7 @@ check("every archetype's primary.image is the matching product's real catalog im
 
 check("nearest ALTERNATES also carry their real image (or '' → placeholder)", () => {
   // collide two products so one becomes an alternate, and check the alternate carries image
-  const products = range(6).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i, image: `${O}/img/${i}.jpg` }));
+  const products = range(6).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, image: `${O}/img/${i}.jpg` }));
   const combos = cartesian([0, 1, 2].map(() => ["0", "1"]));
   const axes = [0, 1, 2].map((ax) => {
     const profile = new Map();
