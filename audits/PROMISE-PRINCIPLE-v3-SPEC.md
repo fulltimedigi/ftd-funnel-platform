@@ -174,3 +174,49 @@ pass acceptance. (Property/fuzz catalogs may be synthetic.)
 **C13 — new-gate status.** Each added gate is labelled BLOCKING or REPORTING-ONLY with a
 threshold. At minimum specify thresholds for exact-path-rate, unknown-attribute-rate, and
 predicate-evidence-coverage.
+
+---
+
+# Closing disposition v3.2 — the complete 6-binding contract (GOVERNING)
+
+After two external adjudication rounds. The promise is a chain of bindings; our client-side,
+single-record, single-SKU runtime satisfies most BY CONSTRUCTION (locked by tests), leaving a
+small set of genuinely-new close-now work.
+
+**CLOSE NOW**
+1. PROMISE binding — rule-based label⟺predicate⟺grouping. Predicate is authoritative; grouping =
+   apply(predicate); hard labels generated from ontology/template; LLM label is lint only. On
+   conflict the predicate/canonical-value/derived-grouping win — the label may not broaden or
+   narrow meaning. Publish-time witness checks per option.
+2. INVOCATION / VERSION coherence — catalog_version + policy_version + answer_contract_hash +
+   locale_bundle_version must all match what the shopper saw, across artifact + proof + rendered
+   fields; any mismatch → STALE. (Client-side scoring makes this coherent by construction; stamp
+   + assert to lock it.)
+3. EVIDENCE grounding — done.
+4. SELECTION — independent verifier — done; add structural independence tests (architecture test
+   forbidding the verifier importing the matcher; one mutation per semantic rule incl. CTA-mismatch
+   and stale-version-mixing; predicate truth-tables; metamorphic properties).
+5. PRESENTATION — each displayed field matches directly the proved SKU record in the snapshot;
+   SelectionResult must not be a composite. (By construction now; lock with a test.)
+6. HANDOFF (outbound) — CTA links the proved product/variant; NO parent/general fallback when the
+   chosen variant can't be deep-linked → explicit HANDOFF_UNBOUND terminal state.
+7. SAFETY fail-closed guard — a safety/allergen/compatibility/legal axis may be hard only from one
+   authoritative source with no competing evidence; else UNKNOWN/CONTRADICTED.
+
+**DEFER (honestly, live-catalog / storefront phase)**
+Live inventory + current-price sync; merchant cart/checkout substitution AFTER a correctly-bound
+handoff; physical-product truth; a general contradiction-resolution engine; deep storefront
+integration.
+
+**Terminal states:** EXACT · COMPROMISE · UNVERIFIED · NO_MATCH · STALE · HANDOFF_UNBOUND.
+
+**Tightened guarantee (authoritative):** For a named, exhaustively-verified
+(catalog_version + policy_version + answer_contract + locale) snapshot, every runtime outcome is
+either (a) a proof-carrying recommendation whose title, price, image, attributes AND outbound
+handoff all derive from the same real eligible SKU in that snapshot — every NEVER_RELAX answer
+SAT, every other answer SAT or an explicit disclosed VIOLATED/UNKNOWN, exact dominates compromise,
+and no fallback/coverage/boost/render/handoff step may worsen or replace the certified result — or
+(b) a first-class NO_MATCH / UNVERIFIED / STALE / HANDOFF_UNBOUND outcome. The guarantee is
+relative to the named snapshot; it does not cover merchant live inventory/price, cart substitution,
+or physical-product truth after handoff. A safety-sensitive claim counts as verified only when its
+authoritative evidence is non-contradictory.
