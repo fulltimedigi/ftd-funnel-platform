@@ -20,6 +20,7 @@ import { deriveAxes, cleanCatalog } from "./axes.js";
 import { trustValidate } from "../../engine/trustValidate.js";
 import { antiBlandCheck } from "./qualityGate.js";
 import { richnessCheck } from "../quality/richnessCheck.js";
+import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -41,13 +42,23 @@ function _bestProduct(list) {
  * match (routing to an already-reachable product).
  * @returns {{winnerByCombo:Map<string,Object>, altByUrl:Map<string,Object[]>}}
  */
+const SOFT_MISS = -0.5; // a soft-axis mismatch is a real cost (ADR-0034), not near-free (-0.001)
+
 function _assignCovering(products, axisSet, combos, overall) {
   const key = (c) => c.join("¦");
   const val = (p, a) => a.profile.get(p.url);
   const isFull = (p) => axisSet.every((a) => val(p, a) != null);
+  // HARD axes (e.g. format) are absolute filters: a product whose known value differs
+  // from the combo is EXCLUDED (-Infinity). A null value = wildcard (eligible). Soft axes
+  // add +1 on match, SOFT_MISS on mismatch — so coverage is achieved WITHIN each format,
+  // never by crossing it (ADR-0034).
   const score = (p, combo) => {
     let s = 0;
-    axisSet.forEach((a, i) => { const pv = val(p, a); if (pv != null) s += pv === combo[i] ? 1 : -0.001; });
+    for (let i = 0; i < axisSet.length; i++) {
+      const a = axisSet[i], pv = val(p, a);
+      if (a.hard) { if (pv != null && pv !== combo[i]) return -Infinity; continue; }
+      if (pv != null) s += pv === combo[i] ? 1 : SOFT_MISS;
+    }
     return s;
   };
 
@@ -92,7 +103,8 @@ function _assignCovering(products, axisSet, combos, overall) {
     if (winnerByCombo.has(k)) continue;
     let bs = -Infinity;
     for (const p of products) { const s = score(p, combo); if (s > bs) bs = s; }
-    const top = products.filter((p) => score(p, combo) === bs);
+    // Only hard-COMPATIBLE products (finite score) may win — never a wrong-format leak.
+    const top = bs > -Infinity ? products.filter((p) => score(p, combo) === bs) : [];
     const fresh = top.filter((p) => !reached.has(p.url));
     const primary = (fresh.length ? _bestProduct(fresh) : _bestProduct(top)) || overall;
     winnerByCombo.set(k, primary);
@@ -194,12 +206,22 @@ function buildConfig(catalog, axisSet, opts) {
   //     over-subscribed profiles carry the extras — the ranked-list leaf the spec allows.
   const present = new Set();
   for (const a of archetypes) { present.add(a.recommendations.primary.url); for (const c of a.recommendations.contextual || []) present.add(c.url); }
-  const simTo = (p, ap) => axisSet.reduce((s, ax) => s + (ax.profile.get(p.url) != null && ax.profile.get(p.url) === ax.profile.get(ap.url) ? 1 : 0), 0);
+  // HARD-aware similarity (ADR-0034): an orphan may only attach to a SAME-FORMAT archetype
+  // (a differing hard value disqualifies it → -Infinity); soft matches rank among those.
+  const simTo = (p, ap) => {
+    let s = 0;
+    for (const ax of axisSet) {
+      const pv = ax.profile.get(p.url), apv = ax.profile.get(ap.url);
+      if (ax.hard) { if (pv != null && apv != null && pv !== apv) return -Infinity; continue; }
+      if (pv != null && pv === apv) s += 1;
+    }
+    return s;
+  };
   for (const p of products) {
     if (present.has(p.url)) continue;
     let bestA = null, bs = -Infinity;
     for (const a of archetypes) { const ap = winners.get(a.recommendations.primary.url); const s = simTo(p, ap); if (s > bs) { bs = s; bestA = a; } }
-    if (bestA) {
+    if (bestA && bs > -Infinity) {
       const rc = bestA.recommendations;
       (rc.contextual || (rc.contextual = [])).push({ name: clamp(p.name, 120), url: p.url, price: fmtPrice(p), image: p.image || "" });
       present.add(p.url);
@@ -301,30 +323,36 @@ export function authorFromAxes(catalog, axes, opts = {}) {
   const cleanCat = { ...catalog, products };
 
   const usable = (axes || []).filter((a) => a && a.values && a.values.length >= 2 && a.profile && a.profile.size);
-  if (usable.length < 2) return { ok: false, reason: "not-enough-axes", meta: { axes: usable.length } };
+  // The HARD format axis is derived from the real catalog and, when present, is ALWAYS in
+  // the set — a shopper who picks "spray" only ever sees sprays (ADR-0034). Any AI axis
+  // that duplicates form is dropped so we don't ask form twice.
+  const fmt = deriveFormatAxis(products);
+  const soft = fmt ? usable.filter((a) => !looksLikeFormatAxis(a)) : usable;
+  const minSoft = fmt ? 1 : 2;
+  if (soft.length < minSoft) return { ok: false, reason: "not-enough-axes", meta: { axes: soft.length, hadFormat: !!fmt } };
 
-  const maxCombos = opts.maxCombos || 200;
-  const maxSize = Math.min(usable.length, opts.maxQuestions || 5);
+  const maxCombos = opts.maxCombos || 400; // room for the format partition (coverage WITHIN each form)
+  const cap = opts.maxQuestions || 6;
+  const maxSoft = Math.min(soft.length, fmt ? cap - 1 : cap);
   const attempts = [];
-  // Among trust+bland-passing axis-sets, choose the one with the HIGHEST catalog
-  // COVERAGE (ADR-0031) — "Results First": we want the arrangement that makes the most
-  // of the store reachable, not merely the first that passes. Larger sets first (depth),
-  // ties broken by coverage then depth.
+  // Among trust+bland-passing sets, choose the HIGHEST-COVERAGE one (ADR-0031), largest
+  // (deepest) first — but always partitioned by the hard format axis (ADR-0034).
   let best = null;
-  for (let size = maxSize; size >= 2; size--) {
-    for (const set of _combos(usable, size, 24)) {
+  for (let ssize = maxSoft; ssize >= minSoft; ssize--) {
+    for (const sub of _combos(soft, ssize, 24)) {
+      const set = fmt ? [fmt, ...sub] : sub;
+      if (set.length < 2) continue;
       const combos = set.reduce((n, a) => n * a.values.length, 1);
       if (combos > maxCombos) continue;
       const config = buildConfig(cleanCat, set, opts);
       const trust = trustValidate(config);
       const bland = antiBlandCheck(config);
-      attempts.push({ axes: set.map((a) => a.id), size, trust: trust.ok, bland: bland.ok });
+      attempts.push({ axes: set.map((a) => a.id), size: set.length, trust: trust.ok, bland: bland.ok });
       if (trust.ok && bland.ok) {
         const rich = richnessCheck(config, cleanCat);
-        const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size,
-          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage } };
+        const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size: set.length,
+          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, formatHard: !!fmt } };
         if (!best || cand.coverage > best.coverage + 1e-9 || (Math.abs(cand.coverage - best.coverage) <= 1e-9 && cand.size > best.size)) best = cand;
-        // A set that both passes richness AND covers ~everything is optimal — stop early.
         if (rich.ok && rich.metrics.coverage >= 0.999) break;
       }
     }
@@ -340,19 +368,28 @@ export function authorFunnel(catalog, opts = {}) {
   const cleanCat = { ...catalog, products };
 
   const axes = buildFactAxes(products);
-  if (axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
+  // The hard format axis (ADR-0034) is always included when the catalog has ≥2 forms;
+  // any mined axis that duplicates form is dropped.
+  const fmt = deriveFormatAxis(products);
+  const soft = fmt ? axes.filter((a) => !looksLikeFormatAxis(a)) : axes;
+  if (!fmt && axes.length < 2) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: axes.length } };
+  if (fmt && soft.length < 1) return { ok: false, reason: "not-enough-fact-axes", meta: { factAxes: soft.length, hadFormat: true } };
+
+  // Candidate sets: [format, …soft-subset] (2–3 questions), or the legacy pairs/triples.
+  const sets = fmt
+    ? [...soft.map((s) => [fmt, s]), ..._combos(soft, 2, 24).map((sub) => [fmt, ...sub])]
+    : _axisSets(axes);
 
   const attempts = [];
-  for (const set of _axisSets(axes)) {
-    // keep the swept signal-space bounded
+  for (const set of sets) {
     const combos = set.reduce((n, a) => n * a.values.length, 1);
-    if (combos > 64) continue;
+    if (combos > 200) continue;
     const config = buildConfig(cleanCat, set, opts);
     const trust = trustValidate(config);
     const bland = antiBlandCheck(config);
     attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
     if (trust.ok && bland.ok) {
-      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos } };
+      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, formatHard: !!fmt } };
     }
   }
   return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };
