@@ -77,10 +77,13 @@ export const SYSTEM_PROMPT = [
   "Return ONLY the JSON matching the provided schema.",
 ].join("\n");
 
+/** Max products shown to the model in one design pass (prompt/output size bound). */
+export const CATALOG_CAP = 120;
+
 /** Compact NUMBERED catalog view for the prompt (i, name, price, attributes).
  *  The URL is omitted from the prompt — the model references products by index,
  *  and designToAxes resolves index → real URL deterministically (ADR-0029). */
-function catalogForPrompt(products, cap = 120) {
+function catalogForPrompt(products, cap = CATALOG_CAP) {
   return products.slice(0, cap).map((p, i) => ({
     i,
     name: p.name,
@@ -153,10 +156,19 @@ export function designToAxes(design, catalog) {
 export async function enrichAuthor(catalog, opts = {}) {
   const complete = opts.complete;
   if (typeof complete !== "function") return { ok: false, reason: "no-model" };
-  const maxAttempts = Math.max(1, opts.attempts || 3);
+  const maxAttempts = Math.max(1, opts.attempts || 2); // bound cost (ADR-0032); backfill guarantees reachability
   const system = SYSTEM_PROMPT;
   let user = buildUserPrompt(catalog, opts);
   let lastReason = "unknown";
+
+  // >CATALOG_CAP products: the model only sees the first CATALOG_CAP, so score the AI
+  // design's coverage against the SHOWN set — don't burn attempts chasing coverage of a
+  // tail the model never saw. The cap is disclosed honestly in the returned meta; the
+  // covering backfill still makes the unseen tail reachable as nearest alternates.
+  const allProducts = catalog.products || [];
+  const overCap = allProducts.length > CATALOG_CAP;
+  const evalCatalog = overCap ? { ...catalog, products: allProducts.slice(0, CATALOG_CAP) } : catalog;
+  const capDisclosure = overCap ? { catalogCap: CATALOG_CAP, cappedFrom: allProducts.length } : {};
 
   // The design maps every product across every axis, so output grows with the catalog
   // (O(products × axes)) and Arabic is token-dense. Scale the cap to the catalog, with a
@@ -189,16 +201,16 @@ export async function enrichAuthor(catalog, opts = {}) {
     if (axes.length >= 2) {
       const authored = authorFromAxes(catalog, axes, { brandName: design && design.brandName, goal: opts.goal, maxQuestions });
       if (authored.ok) {
-        const rich = richnessCheck(authored.config, catalog);
+        const rich = richnessCheck(authored.config, evalCatalog); // score against the SHOWN set
         cov = rich.metrics.coverage || 0;
-        unreached = Math.max(0, nProd - (rich.metrics.reachable || 0));
+        unreached = Math.max(0, (evalCatalog.products || []).length - (rich.metrics.reachable || 0));
         if (rich.ok) {
-          if (!bestPass || cov > bestPass.coverage) bestPass = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
+          if (!bestPass || cov > bestPass.coverage) bestPass = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov, ...capDisclosure }, coverage: cov };
           if (cov >= NEAR_PERFECT) break; // near-perfect — stop spending attempts
         } else {
           const codes = rich.findings.map((f) => f.code);
           const onlyCoverage = codes.length > 0 && codes.every((c) => c === "RICHNESS_LOW_COVERAGE");
-          if (onlyCoverage && (!bestEffort || cov > bestEffort.coverage)) bestEffort = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov }, coverage: cov };
+          if (onlyCoverage && (!bestEffort || cov > bestEffort.coverage)) bestEffort = { config: authored.config, meta: { ...authored.meta, attempt, coverage: cov, ...capDisclosure }, coverage: cov };
           lastReason = "thin:" + codes.join(",");
         }
       } else lastReason = authored.reason || "compile-failed";

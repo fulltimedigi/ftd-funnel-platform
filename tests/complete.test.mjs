@@ -38,6 +38,11 @@ await (async () => {
     await assert.rejects(() => complete({ model: "m", system: "s", user: "u", schema: {} }), /truncated-max-tokens/);
   });
 
+  await check("an aborted request → honest 'timeout' (ADR-0032)", async () => {
+    const complete = createAnthropicComplete({ apiKey: "k", fetch: async () => { const e = new Error("aborted"); e.name = "AbortError"; throw e; } });
+    await assert.rejects(() => complete({ model: "m", system: "s", user: "u", schema: {} }), /timeout/);
+  });
+
   await check("refusal → throws", async () => {
     const complete = createAnthropicComplete({ apiKey: "k", fetch: fakeFetch({ json: { stop_reason: "refusal", content: [] } }) });
     await assert.rejects(() => complete({ model: "m", system: "s", user: "u", schema: {} }), /refusal/);

@@ -43,6 +43,9 @@ export function recordFrom(res, url) {
  * `trigger(key, url)` that kicks off the background run (fire-and-forget).
  * @returns {Promise<{ok:true, id, status:'ready'|'pending', cached?:boolean} | {ok:false, reason}>}
  */
+/** A pending job younger than this is treated as in-flight (don't re-trigger). */
+export const IN_FLIGHT_MS = 4 * 60 * 1000;
+
 export async function submitJob({ url, regenerate = false, store, trigger, guard, now = Date.now }) {
   const norm = normalizeUrl(url);
   if (!norm) return { ok: false, reason: "invalid-url" };
@@ -52,12 +55,25 @@ export async function submitJob({ url, regenerate = false, store, trigger, guard
   if (existing && existing.status === "ready" && !regenerate) {
     return { ok: true, id, status: "ready", cached: true };
   }
-  // Abuse/cost cap BEFORE any expensive generation (ADR-0032). Cache hits above never
-  // reach here. `guard()` returns false when the daily budget is spent.
+  // De-dupe concurrent submits (ADR-0032): a fresh pending record means a job is already
+  // running — just let the caller poll it instead of spending another Opus run.
+  if (existing && existing.status === "pending" && !regenerate && existing.startedAt && (now() - existing.startedAt) < IN_FLIGHT_MS) {
+    return { ok: true, id, status: "pending", inFlight: true };
+  }
+  // Abuse/cost cap BEFORE any expensive generation (ADR-0032). Cache hits / in-flight
+  // above never reach here. `guard()` returns false when the daily budget is spent.
   if (typeof guard === "function" && !(await guard())) return { ok: false, reason: "rate-limited" };
 
   await store.set(id, { status: "pending", url: norm, startedAt: now() });
-  try { if (typeof trigger === "function") await trigger(id, norm); } catch { /* the poller still surfaces a stuck pending honestly */ }
+  if (typeof trigger === "function") {
+    try {
+      await trigger(id, norm);
+    } catch (e) {
+      // Honest failure — never a silent pending that polls forever (ADR-0032).
+      await store.set(id, { status: "error", url: norm, reason: "trigger-failed", detail: String((e && e.message) || e) });
+      return { ok: true, id, status: "error", reason: "trigger-failed" };
+    }
+  }
   return { ok: true, id, status: "pending" };
 }
 

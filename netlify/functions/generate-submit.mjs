@@ -66,11 +66,16 @@ export const handler = async (event = {}) => {
   const base = process.env.DEPLOY_PRIME_URL || process.env.URL || (event.headers && ("https://" + event.headers.host)) || "";
   const internal = process.env.FTD_INTERNAL_SECRET || "";
   const trigger = async (id, url) => {
-    await fetch(base + "/.netlify/functions/generate-background", {
+    const res = await fetch(base + "/.netlify/functions/generate-background", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-ftd-internal": internal },
       body: JSON.stringify({ id, url, goal: intake.request.goal || null }),
     });
+    // Background functions answer 202; treat any non-2xx as a real trigger failure so the
+    // job is recorded as errored instead of polling forever (ADR-0032).
+    if (res && typeof res.status === "number" && (res.status < 200 || res.status >= 300)) {
+      throw new Error("trigger-http-" + res.status);
+    }
   };
 
   const r = await submitJob({

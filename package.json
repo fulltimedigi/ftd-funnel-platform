@@ -54,6 +54,9 @@
     "test:href": "node tests/href.test.mjs",
     "test:functions-security": "node tests/functions.security.test.mjs"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@netlify/blobs": "^8.0.0"
   }

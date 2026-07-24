@@ -80,6 +80,29 @@ await (async () => {
     assert.equal(store.m.get(r.id).startedAt, 12345);
   });
 
+  await check("a FRESH pending is treated as in-flight → not re-triggered (de-dupe)", async () => {
+    const store = fakeStore(); const id = keyFor("brand.com");
+    store.m.set(id, { status: "pending", url: "https://brand.com/", startedAt: 1000 });
+    let triggered = false;
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, now: () => 1000 + 60000 });
+    assert.equal(r.status, "pending"); assert.equal(r.inFlight, true);
+    assert.equal(triggered, false, "in-flight job is not re-triggered");
+  });
+  await check("a STALE pending re-triggers (the previous run died)", async () => {
+    const store = fakeStore(); const id = keyFor("brand.com");
+    store.m.set(id, { status: "pending", url: "https://brand.com/", startedAt: 1000 });
+    let triggered = false;
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, now: () => 1000 + 10 * 60 * 1000 });
+    assert.equal(triggered, true, "a stale pending is retried");
+  });
+  await check("a FAILED trigger records an honest error (never a silent pending)", async () => {
+    const store = fakeStore();
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => { throw new Error("trigger-http-500"); } });
+    assert.equal(r.status, "error"); assert.equal(r.reason, "trigger-failed");
+    const rec = await statusJob({ id: r.id, store });
+    assert.equal(rec.status, "error"); assert.equal(rec.reason, "trigger-failed");
+  });
+
   await check("regenerate:true bypasses the cache and re-runs", async () => {
     const store = fakeStore(); const id = keyFor("brand.com");
     store.m.set(id, { status: "ready", config: { id: "old" } });
