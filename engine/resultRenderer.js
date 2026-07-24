@@ -23,7 +23,11 @@
 import { el } from "./dom.js";
 import { buildRecommendations } from "./recommend.js";
 import { localizeNum, formatPercent } from "./i18n-rtl.js";
-import { verifyServedResult } from "./kernel/verifyRuntime.js";
+// COMPLETE MEDIATION (ADR-0037 P0): commercial rendering goes through the render-time reference
+// monitor ONLY. verifyServedResult is no longer called here directly (the advisory/warn path is
+// closed) — certifyForRender is the single fail-closed gate that mints a branded certificate or a
+// terminal outcome; a product card/CTA is drawn only for a branded certificate.
+import { certifyForRender, isCertified, clientVersionsOf } from "./kernel/certifyForRender.js";
 
 /* ----------------------------------------------------------- helpers */
 
@@ -231,25 +235,13 @@ function altStrip(alts, config) {
  *  as STRUCTURED fields (conflicts vs unknowns get DISTINCT wording), not pre-authored prose, so
  *  mobile/i18n/a11y can never hide a compromise. A cheap runtime verifier (G2) first refuses to
  *  render if a never-relax constraint ever appears relaxed (a corrupted/stale table). */
-function relaxNote(config, resolved) {
-  const rid = resolved && resolved.scoring && resolved.scoring.ruleId;
-  if (!rid) return null;
-  const rule = (config.decisionTable || []).find((r) => r.id === rid);
-  if (!rule) return null;
-
-  const check = verifyServedResult(config, resolved);
-  if (!check.ok) {
-    // Never-relax break / stale table: do NOT print a confident "closest available" line that
-    // could imply the top promise held. Surface the honest state instead.
-    return el("div", { class: "ftd-relax ftd-relax-warn" }, [
-      el("span", { class: "ftd-relax-ic", text: "⚠︎" }),
-      el("span", { class: "ftd-relax-txt", text: " تعذّر تأكيد المطابقة لهذا الخيار — تحقّق من التفاصيل قبل الشراء." }),
-    ]);
-  }
-
-  // Prefer the structured kernel proof; fall back to the legacy `relaxed` list (hand-built configs).
-  const conflicts = check.conflicts.length || check.unknowns.length ? check.conflicts : ((rule.relaxed || []).filter((r) => !r.unknown));
-  const unknowns = check.unknowns;
+function relaxNote(cert) {
+  // Disclosure is read from the CERTIFICATE's structured fields (a card only ever renders for a
+  // branded certificate, so there is no "verification failed" branch here — that path already
+  // returned a terminal outcome and no card was drawn).
+  if (!isCertified(cert)) return null;
+  const conflicts = cert.conflicts || [];
+  const unknowns = cert.unknowns || [];
   if (!conflicts.length && !unknowns.length) return null;
 
   const parts = [];
@@ -268,19 +260,51 @@ function relaxNote(config, resolved) {
   ]);
 }
 
+/** A first-class TERMINAL screen — NO product card, NO CTA (ADR-0037 P0 complete mediation). */
+function renderTerminal(cert, config, onRestart, copy) {
+  const kind = (cert && cert.terminal) || "NO_MATCH";
+  const MSG = {
+    NO_MATCH: "لا يوجد منتج يطابق اختياراتك تمامًا الآن. جرّب إجابات مختلفة.",
+    STALE: "تحدّثت بيانات المتجر منذ أن بدأت. من فضلك ابدأ من جديد لضمان نتيجة دقيقة.",
+    RESTART_REQUIRED: "لم نتمكّن من قراءة إجاباتك كاملة. من فضلك ابدأ من جديد.",
+    HANDOFF_UNBOUND: "المنتج المطابق غير متاح للشراء المباشر الآن.",
+    INVALID_ARTIFACT: "حدث خطأ في التحقق من النتيجة. من فضلك ابدأ من جديد.",
+  };
+  return el("section", { class: "ftd-screen ftd-result ftd-result-terminal", "data-terminal": kind }, [
+    config.brand?.logo ? el("div", { class: "ftd-brandbar is-result" }, [el("img", { class: "ftd-logo", src: config.brand.logo, alt: config.brand?.name || "", loading: "lazy" })]) : null,
+    el("div", { class: "ftd-terminal-card" }, [
+      el("div", { class: "ftd-terminal-ic", text: "🔎" }),
+      el("p", { class: "ftd-terminal-msg", text: MSG[kind] || MSG.NO_MATCH }),
+    ]),
+    restartButton(config, onRestart),
+  ]);
+}
+
 function renderCommerce(ctx) {
   const { resolved, config, answers, onRestart } = ctx;
   const { primary, secondary, proportion } = resolved;
   const extras = primary?.resultExtras || {};
   const copy = resultCopy(config);
   const rcopy = copy; // result-scoped copy aliases below
-  const recs = primary?.recommendations || {};
   const lang = config.lang;
 
-  // Decision-table funnels carry the Step-8 explanation engine (signal-gated
-  // why/why-not, variant-correct recommendation). Generic funnels keep the
-  // legacy answer-label path.
-  const built = config.scoring?.mode === "decision-table" ? buildRecommendations(resolved, resolved.scoring, config) : null;
+  // COMPLETE MEDIATION (ADR-0037 P0): mint a certificate or a terminal outcome for THIS path. A
+  // product card / CTA is drawn ONLY for a branded certificate; anything else draws a terminal
+  // screen (no card, no CTA). For decision funnels the client echoes the served version stamps; a
+  // real deployment substitutes what the browser actually loaded (any drift → STALE terminal).
+  const isDecision = config.scoring?.mode === "decision-table";
+  // The reference monitor gates KERNEL-AUTHORED funnels (those carrying ProvenSelections). Curated
+  // hand-built reference configs (no proofs) predate the kernel and render on the legacy path — they
+  // are trusted through trust + anti-bland, not the render certificate. Every AUTHORED commercial
+  // funnel (the AI / deterministic pipeline) is kernel-authored and IS completely mediated here.
+  const isKernelAuthored = isDecision && ((config.decisionTable || []).some((r) => r.proof) || !!config.constraintPolicy);
+  const cert = isKernelAuthored ? certifyForRender(config, resolved, answers, ctx.clientVersions || clientVersionsOf(config)) : null;
+  if (isKernelAuthored && !isCertified(cert)) {
+    return renderTerminal(cert, config, onRestart, copy);
+  }
+
+  // Decision-table funnels carry the Step-8 explanation engine (signal-gated why/why-not).
+  const built = isDecision ? buildRecommendations(resolved, resolved.scoring, config) : null;
 
   const children = [
     config.brand?.logo ? el("div", { class: "ftd-brandbar is-result" }, [el("img", { class: "ftd-logo", src: config.brand.logo, alt: config.brand?.name || "", loading: "lazy" })]) : null,
@@ -290,15 +314,19 @@ function renderCommerce(ctx) {
     blendBlock(primary, secondary, proportion, lang),
   ];
 
-  // Signature recommendation: variant-resolved for decision funnels.
-  const sig = built ? built.primary : recs.primary;
-  const sigOk = built ? !!built.primary : sig && fillBecause(sig.becauseTemplate, answers, config);
-  if (sigOk) {
+  // Signature recommendation. For decision funnels EVERY commercial field (title/image/price/url and
+  // the CTA) comes from the CERTIFICATE's CanonicalOfferRecord — the proven SKU — never composited.
+  const recs = primary?.recommendations || {};
+  const sig = cert
+    ? { ...(built ? built.primary : {}), name: cert.offer.title || (built && built.primary && built.primary.name), url: cert.cta_url, price: cert.offer.price, image: cert.offer.image }
+    : (built ? built.primary : recs.primary);
+  const sigOk = cert ? true : (sig && fillBecause(sig.becauseTemplate, answers, config));
+  if (sigOk && sig) {
     children.push(
       el("div", { class: "ftd-signature" }, [
         el("h3", { class: "ftd-section-title", text: copy.recommendationTitle || "توصيتنا" }),
         recommendationCard(sig, answers, config, { showCta: true, highlight: true, badge: config.decisiveResult ? (copy.bestBadge || "✦ الأنسب لك") : null }),
-        relaxNote(config, resolved),
+        cert ? relaxNote(cert) : null,
       ])
     );
   }
@@ -349,10 +377,13 @@ function renderCommerce(ctx) {
     children.push(ctaLink(config)); // decisive keeps only the product card CTA above
   }
 
-  // Decisive mode: a compact strip of real nearest alternates (image + name + price) —
-  // the reference's "also suitable" feel, without a second competing CTA (ADR-0033).
+  // Decisive mode: a compact strip of real nearest alternates. For decision funnels these come ONLY
+  // from the certificate's INDEPENDENTLY-CERTIFIED alternates (audit #8) — an uncertified alternate
+  // is never drawn; each renders from its own CanonicalOfferRecord (never composited).
   if (decisive) {
-    const alts = (recs.contextual || []).slice(0, 3);
+    const alts = cert
+      ? cert.alternates.slice(0, 3).map((c) => ({ name: c.offer.title, url: c.cta_url, price: c.offer.price, image: c.offer.image }))
+      : (recs.contextual || []).slice(0, 3);
     if (alts.length) children.push(altStrip(alts, config));
   }
 

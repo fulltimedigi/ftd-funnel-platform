@@ -56,9 +56,13 @@ export function groundClaim(product, axisId, value, meta = {}) {
       : out(false, SOURCE.NONE, "no price");
   }
 
-  // 1. STRUCTURED field
+  // WORD-BOUNDARY match — a token counts only as a whole word, never a substring (audit #13:
+  // "soil"⊅"oil", "women"⊅"men"). Exact equality or a whole-word occurrence.
+  const wholeWord = (hay, needle) => needle !== "" && new RegExp("(^|[^\\p{L}\\p{N}])" + needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^\\p{L}\\p{N}]|$)", "iu").test(hay);
+
+  // 1. STRUCTURED field — exact type equality or whole-word containment (no substring).
   const type = lc(product.attributes && product.attributes.type);
-  if (type && (type === val || type.includes(val) || val.includes(type))) return out(true, SOURCE.STRUCTURED, `attributes.type=${type}`);
+  if (type && (type === val || wholeWord(type, val) || wholeWord(val, type))) return out(true, SOURCE.STRUCTURED, `attributes.type=${type}`);
 
   // 2. MERCHANT-declared tag / differentiator
   const diffs = (product.differentiators || []).map(lc);
@@ -72,20 +76,20 @@ export function groundClaim(product, axisId, value, meta = {}) {
     return out(false, SOURCE.NONE, "format not deterministically resolvable");
   }
 
-  // 4. EXTRACTION from the NAME — validated, negation/qualifier-aware.
-  const name = lc(product.name);
-  if (val && name.includes(val)) {
+  // 4. EXTRACTION from the NAME — validated, whole-word + negation/qualifier-aware.
+  if (val && wholeWord(lc(product.name), val)) {
     if (negatedNear(product.name, value)) return out(false, SOURCE.INFERENCE, "token present but negated/qualified");
     return out(true, SOURCE.EXTRACTION, "name token (validated)");
   }
 
-  // 4b. VALIDATED EXTERNAL MAPPING (SOFT axes only): a domain-expert model's per-product value,
-  //     already validated against the real catalog (real url + in-domain), is a grounding tier
-  //     ABOVE uncorroborated inference. It grounds a SOFT axis (always disclosed on mismatch) but
-  //     NEVER a hard one — so an inferred value can never become a hard filter.
-  if (kind === "soft" && meta.provenance === "ai-validated") return out(true, SOURCE.MERCHANT, "expert mapping validated to the catalog");
+  // 4b. AI INFERENCE (audit #5): a domain-expert model's per-product value, validated against the
+  //     catalog only for FORM (real url + in-domain) — that verifies form, NOT truth. It is the
+  //     lowest tier: grounded enough to RANK an ADVISORY (preference) axis AFTER the verified
+  //     promises, but it must NEVER make a promise SAT (no EXACT from inference) and NEVER a hard
+  //     filter. So it grounds ONLY an ADVISORY axis; a non-advisory soft axis stays UNKNOWN.
+  if (kind === "soft" && meta.provenance === "ai-inference" && meta.advisory) return out(true, SOURCE.INFERENCE, "expert inference (form-validated, advisory only)");
 
-  // 5. otherwise uncorroborated → UNKNOWN.
+  // 5. otherwise uncorroborated → UNKNOWN (uncertain inference is UNKNOWN, never SAT).
   return out(false, SOURCE.INFERENCE, "uncorroborated");
 }
 

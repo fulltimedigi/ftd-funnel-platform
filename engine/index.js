@@ -245,7 +245,15 @@ export function createFunnel(config, mountEl, deps = {}) {
   function showResult() {
     view = "result";
     if (!lastResolved) lastResolved = resolve(score(config, state.answers), config);
-    mount(mountEl, renderResult({ resolved: lastResolved, config, answers: state.answers, onRestart: restart }));
+    // COMPLETE MEDIATION (ADR-0037 P0): pass the version stamps the client loaded so the render gate
+    // runs the STALE/coherence check. In this single-artifact app the loaded config IS the served
+    // config, so these match by construction; a split-artifact deploy would echo the browser's set.
+    const clientVersions = {
+      catalog_version: config.catalog_version, policy_version: config.policy_version,
+      answer_contract_version: config.answer_contract_version, config_hash: config.config_hash,
+      locale_bundle_version: config.locale_bundle_version,
+    };
+    mount(mountEl, renderResult({ resolved: lastResolved, config, answers: state.answers, onRestart: restart, clientVersions }));
 
     const sc = lastResolved.scoring || {};
     analytics.emitResultShown(lastResolved.primary?.id || null, lastResolved.secondary?.id || null, sc.flags || []);
