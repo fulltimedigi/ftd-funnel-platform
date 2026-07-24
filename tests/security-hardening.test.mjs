@@ -65,12 +65,14 @@ await (async () => {
       assert.notEqual(r.statusCode, 503, "dev + no secret → lenient (not refused)");
     });
   });
-  await check("FTD_PUBLIC_TOKEN default-DENY in prod when unset; lenient in dev", async () => {
-    await withEnv({ ...PROD, FTD_PUBLIC_TOKEN: undefined }, () => assert.equal(tokenOk({ headers: {} }), false, "prod + no token → DENY (was: return true → open)"));
-    await withEnv({ ...DEV, FTD_PUBLIC_TOKEN: undefined }, () => assert.equal(tokenOk({ headers: {} }), true, "dev + no token → allow"));
+  await check("FTD_PUBLIC_TOKEN is enforce-ONLY-when-configured (NOT fail-closed — it is optional friction, not real auth)", async () => {
+    // The public submit/status endpoints are self-service; a browser can't carry a real secret, so a
+    // default-deny would 401 every real visitor. Unset → OPEN even in prod. Set → enforced (const-time).
+    await withEnv({ ...PROD, FTD_PUBLIC_TOKEN: undefined }, () => assert.equal(tokenOk({ headers: {} }), true, "prod + no token → ALLOWED (public UI must not break)"));
+    await withEnv({ ...DEV, FTD_PUBLIC_TOKEN: undefined }, () => assert.equal(tokenOk({ headers: {} }), true, "dev + no token → allowed"));
     await withEnv({ FTD_PUBLIC_TOKEN: "s3cret" }, () => {
-      assert.equal(tokenOk({ headers: { "x-ftd-token": "s3cret" } }), true);
-      assert.equal(tokenOk({ headers: { "x-ftd-token": "wrong" } }), false);
+      assert.equal(tokenOk({ headers: { "x-ftd-token": "s3cret" } }), true, "configured → correct token passes");
+      assert.equal(tokenOk({ headers: { "x-ftd-token": "wrong" } }), false, "configured → wrong token blocked (const-time)");
     });
   });
 

@@ -13,16 +13,29 @@
 ## The rule: fail CLOSED
 
 The prior gates were `if (secret) { enforce }` — an unset secret silently DISABLED the check, so an
-unconfigured internet-facing deploy was wide open. Every gate below is inverted: **a missing secret is
-a hard refusal in production; only genuine dev/local (`CONTEXT==="dev"` or no Netlify context with
-`NODE_ENV!=="production"`) runs lenient, and only with a loud one-time warning.** A public Deploy
-Preview is treated as production — it can burn the Opus budget just like prod. (`platform/security/secrets.js`.)
+unconfigured internet-facing deploy was wide open. For **REAL secrets** (server↔server / id keying)
+the gate is inverted: **a missing secret is a hard refusal in production; only genuine dev/local
+(`CONTEXT==="dev"` or no Netlify context with `NODE_ENV!=="production"`) runs lenient, and only with a
+loud one-time warning.** A public Deploy Preview is treated as production — it can burn the Opus budget
+just like prod. (`platform/security/secrets.js`.)
+
+**Fail-closed applies to REAL secrets ONLY — not to the public token (corrected 2026-07-24).**
+`FTD_PUBLIC_TOKEN` gates the PUBLIC self-service endpoints (submit/status). A browser on a public tool
+cannot carry a real secret, so it is **optional friction, not authentication** — making it fail-closed
+would 401 every real visitor and break the public UI (the intake page only sends the header when a
+`window.__FTD_TOKEN__` is present, which it is not on the public site, and `isProd()` counts the Deploy
+Preview as prod). So the public token stays **enforce-only-when-configured**: enforced (constant-time)
+when set, open when unset. Public-endpoint abuse is bounded instead by the daily cost cap (CAS), the
+SSRF guard, unguessable HMAC job ids, and the fail-closed INTERNAL secret on the background function.
+(Real public rate-limiting / captcha is a documented future item.)
 
 ## Fixes
 
-1. **Secrets triad → fail-closed.** `FTD_INTERNAL_SECRET` (background Opus job): unset in prod → **503**
-   before any work; set → header matched in **constant time**. `FTD_PUBLIC_TOKEN` (submit/status):
-   unset in prod → **default-DENY**. Dev stays lenient with a warning.
+1. **Real secrets → fail-closed; public token → NOT.** `FTD_INTERNAL_SECRET` (background Opus job):
+   unset in prod → **503** before any work; set → header matched in **constant time**. `FTD_ID_SALT`:
+   mandatory in prod (item 2). The public `FTD_PUBLIC_TOKEN` is **enforce-only-when-configured**
+   (constant-time when set, open when unset) — deliberately NOT fail-closed, because it is optional
+   friction on a public browser endpoint, not real auth (see the corrective note above).
 2. **Job id → HMAC + mandatory salt.** `keyFor` was `sha256((FTD_ID_SALT||"") + "|" + url)` — it
    failed OPEN (empty salt → guessable id) and was weaker than a keyed MAC. Now
    **HMAC-SHA256(FTD_ID_SALT, normalized-url)**; the salt is **mandatory in production** (missing →
@@ -72,15 +85,18 @@ skip DNS); same-origin-only `?config`; CAS cap never over-spends; spoofed-Host t
 
 ## Operator action required (I cannot set these)
 
-The fail-closed posture means a **production/preview deploy MUST have these env vars set in Netlify**,
-or the endpoints refuse (by design). Set, under *Site settings → Environment variables*:
-`FTD_INTERNAL_SECRET`, `FTD_PUBLIC_TOKEN`, `FTD_ID_SALT` (any long random strings). Without them the
-preview will return 503/401 — that is the fix working, not a bug.
+The fail-closed posture means a **production/preview deploy MUST have these two REAL secrets set in
+Netlify**, or the server↔server / id-keying paths refuse (by design). Set, under *Site settings →
+Environment variables*: `FTD_INTERNAL_SECRET` and `FTD_ID_SALT` (any long random strings).
+`FTD_PUBLIC_TOKEN` is **optional** — leave it unset and the public UI works; set it only if you want
+an extra shared-token gate on the public endpoints. Without the two real secrets the background job /
+id keying refuse — that is the fix working, not a bug; the public submit/status pages still load.
 
 ## Consequences
 
 - An unconfigured internet-facing deploy is now inert (refuses) instead of wide open — the correct
   direction to fail.
-- The preview requires the three env vars; documented above with click-path steps.
+- The preview requires the two REAL secrets (`FTD_INTERNAL_SECRET`, `FTD_ID_SALT`); the public token
+  is optional and its gate is enforce-only-when-configured so the public UI never breaks.
 - Full socket-pinning for DNS rebinding remains a later hardening (the resolve-time check closes the
   practical vector); noted honestly in code, not overclaimed.
