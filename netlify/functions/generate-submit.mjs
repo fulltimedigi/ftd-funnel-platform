@@ -6,22 +6,25 @@
  */
 
 import { buildIntake } from "../../platform/intake/intakeModel.js";
-import { submitJob } from "../../platform/jobs/generateJob.js";
+import { submitJob, reserveDailySlot } from "../../platform/jobs/generateJob.js";
 import { createBlobStore } from "../../platform/jobs/blobStore.js";
 import { assertUrlAllowed } from "../../authoring/ingest/ssrfGuard.js";
 import { makeHttp, tokenOk } from "./lib/http.mjs";
+import { requireSecret } from "../../platform/security/secrets.js";
 
 const { cors, json, preflight } = makeHttp("POST, OPTIONS");
 const DAILY_CAP = Number(process.env.FTD_DAILY_CAP || 200);
 
-/** Global daily generation cap (a counter in Blobs) — before any Opus call. */
+/** The trusted base for the secret-bearing internal trigger (ADR-0040): a server-side env var ONLY.
+ *  NEVER derived from event.headers.host — that is attacker-controlled and would leak the secret. */
+export function triggerBase(env = (typeof process !== "undefined" && process.env) || {}) {
+  return env.DEPLOY_PRIME_URL || env.URL || "";
+}
+
+/** Global daily generation cap — ATOMIC compare-and-swap (ADR-0040), so concurrent submits can't
+ *  race past the only cost guard before an Opus call. */
 async function underDailyCap(store) {
-  const day = new Date().toISOString().slice(0, 10);
-  const key = "spend:" + day;
-  const rec = (await store.get(key)) || { count: 0, day };
-  if (rec.count >= DAILY_CAP) return false;
-  await store.set(key, { count: rec.count + 1, day });
-  return true;
+  return reserveDailySlot({ store, key: "spend:" + new Date().toISOString().slice(0, 10), cap: DAILY_CAP });
 }
 
 export const handler = async (event = {}) => {
@@ -39,6 +42,16 @@ export const handler = async (event = {}) => {
   // Server-side SSRF gate (localhost never allowed here, even if NODE_ENV isn't prod).
   if (!assertUrlAllowed(intake.request.url, { allowLocalhost: false }).ok) return json(event, 400, { ok: false, reason: "blocked-url" });
 
+  // MISCONFIG FAIL-FAST (ADR-0040), before touching storage. The background trigger carries
+  // FTD_INTERNAL_SECRET, so its target base MUST come from a trusted server-side env var — NEVER from
+  // event.headers.host (attacker-controlled; a spoofed Host would exfiltrate the secret). No base, or
+  // a missing internal secret in production, is a hard refusal here — never a Host fallback.
+  const base = triggerBase();
+  if (!base) return json(event, 503, { ok: false, reason: "trigger-unconfigured" });
+  const internalSecret = requireSecret("FTD_INTERNAL_SECRET");
+  if (!internalSecret.ok && internalSecret.prod) return json(event, 503, { ok: false, reason: "internal-secret-unconfigured" });
+  const internal = internalSecret.ok ? internalSecret.value : "";
+
   let store;
   try {
     store = await createBlobStore();
@@ -47,10 +60,8 @@ export const handler = async (event = {}) => {
     return json(event, 503, { ok: false, reason: "storage-unconfigured", detail: String((e && e.name) || e) });
   }
 
-  // Trigger the background function (returns 202 fast; runs up to 15 min) with the
-  // internal shared secret so it can't be invoked from outside (ADR-0032).
-  const base = process.env.DEPLOY_PRIME_URL || process.env.URL || (event.headers && ("https://" + event.headers.host)) || "";
-  const internal = process.env.FTD_INTERNAL_SECRET || "";
+  // Trigger the background function (returns 202 fast; runs up to 15 min) with the internal shared
+  // secret so it can't be invoked from outside (ADR-0032).
   const trigger = async (id, url) => {
     const res = await fetch(base + "/.netlify/functions/generate-background", {
       method: "POST",

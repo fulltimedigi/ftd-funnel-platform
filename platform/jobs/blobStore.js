@@ -32,6 +32,22 @@ export async function createBlobStore(name = "ftd-funnels", deps = {}) {
     async set(key, value) {
       await store.setJSON(key, value);
     },
+    /** Read value + ETag for compare-and-swap (ADR-0040). Returns {value, etag}. */
+    async getWithMeta(key) {
+      try {
+        const r = await store.getWithMetadata(key, { type: "json" });
+        return r ? { value: r.data, etag: r.etag } : { value: null, etag: undefined };
+      } catch { return { value: null, etag: undefined }; }
+    },
+    /** Conditional write (CAS): succeeds only if the stored ETag still matches (or, when no
+     *  prior etag, only if the key does not yet exist). Returns {ok} — ok:false on a lost race. */
+    async setIfMatch(key, value, etag) {
+      try {
+        const opts = etag ? { onlyIfMatch: etag } : { onlyIfNoneMatch: "*" };
+        const r = await store.setJSON(key, value, opts);
+        return { ok: r ? r.modified !== false : true };
+      } catch { return { ok: false }; }
+    },
     /** True only if a tiny write+read round-trips — proves storage is configured. */
     async healthy() {
       try {

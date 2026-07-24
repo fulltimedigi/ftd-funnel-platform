@@ -6,6 +6,8 @@
  * in ONE place. `makeHttp(methods)` returns handlers bound to that endpoint's methods.
  */
 
+import { requireSecret, safeEqual } from "../../../platform/security/secrets.js";
+
 const ALLOWED_ORIGINS = (process.env.FTD_ALLOWED_ORIGINS || "https://ftd-studio-preview.netlify.app,https://fulltimedigi.com,https://www.fulltimedigi.com").split(",").map((s) => s.trim()).filter(Boolean);
 
 export function makeHttp(methods) {
@@ -24,10 +26,12 @@ export function makeHttp(methods) {
   return { cors, json, preflight };
 }
 
-/** Interim endpoint gate (ADR-0032): enforced only when FTD_PUBLIC_TOKEN is configured. */
+/** Endpoint gate (ADR-0032/0040): DEFAULT-DENY in production. A missing FTD_PUBLIC_TOKEN denies every
+ *  request in an internet-facing deploy (never silently opens the endpoint); dev/local runs lenient
+ *  with a loud warning. When configured, the header is compared in constant time. */
 export function tokenOk(event) {
-  const need = process.env.FTD_PUBLIC_TOKEN;
-  if (!need) return true;
+  const secret = requireSecret("FTD_PUBLIC_TOKEN");
+  if (!secret.ok) return !secret.prod; // prod + no token → DENY; non-prod → allow (warned)
   const got = event && event.headers && (event.headers["x-ftd-token"] || event.headers["X-Ftd-Token"]);
-  return got === need;
+  return safeEqual(String(got || ""), secret.value);
 }

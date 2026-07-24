@@ -21,14 +21,18 @@
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
 
-# The embed loader is fetched cross-origin (ADR-0021) → it must allow any embedding site,
-# and it is framed by third-party pages, so it overrides the global frame rules.
+# The embed loader is fetched cross-origin (ADR-0021) and is DELIBERATELY framed by arbitrary
+# third-party customer sites — an embeddable funnel is the product (docs/PRODUCT_DECISIONS.md), so
+# `frame-ancestors *` here is intentional and commercially required, NOT an oversight. The fix
+# (ADR-0040): keep the FULL hardened policy (default-src/script-src/object-src/base-uri/form-action —
+# which the old one-line override silently dropped) and only widen `frame-ancestors` + drop
+# X-Frame-Options so cross-origin framing works. Everything else stays locked down.
 [[headers]]
   for = "/embed/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
     X-Frame-Options = ""
-    Content-Security-Policy = "frame-ancestors *"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; frame-ancestors *; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
 
 # Async generation (ADR-0029): submit → poll. Background fn is triggered internally.
 # (The retired sync /api/generate redirect was removed — ADR-0032.)

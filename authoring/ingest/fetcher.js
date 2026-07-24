@@ -10,11 +10,29 @@
  * deterministically against fixtures (no real network, no real waiting).
  */
 
-import { assertUrlAllowed } from "./ssrfGuard.js";
+import { assertUrlAllowed, isPrivateV4, isPrivateV6 } from "./ssrfGuard.js";
 
 export const DEFAULT_USER_AGENT = "FullTimeDigiBot/1.0 (+https://fulltimedigi.com/bot)";
 
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+
+/** Default DNS resolver (Node) → [{address, family}]. Returns [] on failure. Browser/edge without
+ *  node:dns simply yields [] and the caller decides. Injected in tests (no real DNS). */
+async function defaultLookup(hostname) {
+  try {
+    const dns = await import("node:dns");
+    return await new Promise((resolve) => {
+      try { dns.lookup(hostname, { all: true }, (err, addrs) => resolve(err || !addrs ? [] : addrs)); }
+      catch { resolve([]); }
+    });
+  } catch { return []; }
+}
+
+/** Is a resolved address private/loopback/link-local (either family)? */
+function addrIsPrivate(a) {
+  const ip = String((a && a.address) || a || "");
+  return ip.includes(":") ? isPrivateV6(ip) : isPrivateV4(ip);
+}
 
 /**
  * @param {Object} [opts]
@@ -41,6 +59,14 @@ export function createFetcher(opts = {}) {
   // blocked server-side by default; a dev caller can opt in for a local sample.
   const allowLocalhost = opts.allowLocalhost === true;
   const maxRedirects = typeof opts.maxRedirects === "number" ? opts.maxRedirects : 5;
+  // DNS-rebinding defense (ADR-0040): resolve the host and validate EVERY A/AAAA record just before
+  // we fetch, so a PUBLIC name that resolves to a PRIVATE IP (169.254.169.254, 127.0.0.1, …) is
+  // refused — the literal-range check alone can't catch that. This is a resolve-time check (not full
+  // socket-pinning); it closes the practical rebinding vector (a hostile domain pointing DNS at an
+  // internal address). `lookup` is injectable; when a fake `fetch` is injected without a `lookup`
+  // (offline unit tests) DNS validation is skipped, so real production (global fetch) validates while
+  // fixture tests stay hermetic.
+  const lookup = opts.lookup || (opts.fetch ? null : defaultLookup);
 
   let count = 0;
   let lastAt = -Infinity;
@@ -103,13 +129,32 @@ export function createFetcher(opts = {}) {
     }
   }
 
+  /** Resolve a URL's host and assert EVERY resolved IP is public (DNS-rebinding defense, ADR-0040).
+   *  Skipped when no `lookup` is configured (offline fixture tests) or the host is a literal IP
+   *  (already range-checked by assertUrlAllowed). Returns { ok } / { ok:false, reason }. */
+  async function assertResolvesPublic(urlStr) {
+    if (!lookup) return { ok: true };
+    let host;
+    try { host = new URL(urlStr).hostname.replace(/^\[|\]$/g, ""); } catch { return { ok: false, reason: "bad-url" }; }
+    if (host === "localhost" && allowLocalhost) return { ok: true };
+    if (host.includes(":") || /^[0-9.]+$/.test(host) || /^0x/i.test(host)) return { ok: true }; // IP literal — already checked
+    let addrs;
+    try { addrs = await lookup(host); } catch { addrs = []; }
+    if (!addrs || !addrs.length) return { ok: false, reason: "dns-unresolved" }; // can't verify → fail closed
+    for (const a of addrs) if (addrIsPrivate(a)) return { ok: false, reason: "blocked-dns-private" };
+    return { ok: true };
+  }
+
   async function get(url) {
     if (count >= maxPages) return { ok: false, url, reason: "page-cap-reached" };
     if (!_fetch) return { ok: false, url, reason: "no-fetch" };
     // SSRF: refuse loopback / private / link-local / *.internal / metadata BEFORE the
-    // first byte leaves (ADR-0032).
+    // first byte leaves (ADR-0032), by literal-IP range + hostname pattern.
     const guard = assertUrlAllowed(url, { allowLocalhost });
     if (!guard.ok) return { ok: false, url, reason: "blocked-url:" + guard.reason };
+    // …then resolve DNS and refuse a public name that maps to a private IP (rebinding, ADR-0040).
+    const dnsGuard = await assertResolvesPublic(url);
+    if (!dnsGuard.ok) return { ok: false, url, reason: "blocked-url:" + dnsGuard.reason };
 
     const wait = minDelayMs - (now() - lastAt);
     if (wait > 0) await sleep(wait);
@@ -122,9 +167,12 @@ export function createFetcher(opts = {}) {
       if (hop >= maxRedirects) return { ok: false, url, finalUrl: currentUrl, reason: "too-many-redirects" };
       let next;
       try { next = new URL(out.redirectTo, currentUrl).href; } catch { return { ok: false, url, reason: "bad-redirect-location" }; }
-      // Re-validate EVERY hop — a public URL can redirect to an internal one (ADR-0032).
+      // Re-validate EVERY hop — a public URL can redirect to an internal one (ADR-0032) — by literal
+      // range AND by DNS resolution (a redirect target's name can also rebind to a private IP).
       const g = assertUrlAllowed(next, { allowLocalhost });
       if (!g.ok) return { ok: false, url, finalUrl: currentUrl, reason: "blocked-redirect:" + g.reason };
+      const gd = await assertResolvesPublic(next);
+      if (!gd.ok) return { ok: false, url, finalUrl: currentUrl, reason: "blocked-redirect:" + gd.reason };
       currentUrl = next;
     }
   }

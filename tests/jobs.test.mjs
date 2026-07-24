@@ -88,12 +88,22 @@ await (async () => {
     assert.equal(r.status, "pending"); assert.equal(r.inFlight, true);
     assert.equal(triggered, false, "in-flight job is not re-triggered");
   });
-  await check("a STALE pending re-triggers (the previous run died)", async () => {
+  await check("a STILL-RUNNING pending (14 min < 15 min bg runtime) is in-flight, NOT re-triggered (ADR-0040)", async () => {
+    // Revert-catcher: with the old 4-min window this pending would be re-triggered at 14 min,
+    // double-generating while the first run is still going. The window MUST be ≥ the bg runtime.
     const store = fakeStore(); const id = keyFor("brand.com");
     store.m.set(id, { status: "pending", url: "https://brand.com/", startedAt: 1000 });
     let triggered = false;
-    const r = await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, now: () => 1000 + 10 * 60 * 1000 });
-    assert.equal(triggered, true, "a stale pending is retried");
+    const r = await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, now: () => 1000 + 14 * 60 * 1000 });
+    assert.equal(triggered, false, "a still-running job (14 min) must NOT be re-triggered");
+    assert.equal(r.inFlight, true);
+  });
+  await check("a genuinely STALE pending (past the bg runtime) re-triggers (the previous run died)", async () => {
+    const store = fakeStore(); const id = keyFor("brand.com");
+    store.m.set(id, { status: "pending", url: "https://brand.com/", startedAt: 1000 });
+    let triggered = false;
+    await submitJob({ url: "brand.com", store, trigger: async () => { triggered = true; }, now: () => 1000 + 17 * 60 * 1000 });
+    assert.equal(triggered, true, "a stale pending (17 min) is retried");
   });
   await check("a FAILED trigger records an honest error (never a silent pending)", async () => {
     const store = fakeStore();

@@ -12,14 +12,20 @@ import { generateFunnelFromUrl } from "../../authoring/index.js";
 import { runJob, keyFor } from "../../platform/jobs/generateJob.js";
 import { createBlobStore } from "../../platform/jobs/blobStore.js";
 import { buildEnricher } from "./lib/enricher.mjs";
+import { requireSecret, safeEqual } from "../../platform/security/secrets.js";
 
 export const handler = async (event = {}) => {
-  // Only the internal caller (generate-submit) may invoke this — external POSTs are
-  // rejected when the secret is configured (ADR-0032).
-  const internal = process.env.FTD_INTERNAL_SECRET || "";
-  if (internal) {
+  // FAIL-CLOSED (ADR-0040): only the internal caller (generate-submit) may invoke this heavy,
+  // uncapped Opus job. In production a MISSING FTD_INTERNAL_SECRET is a hard refusal (503) — never
+  // a silently-skipped check that leaves the endpoint open to any external POST. Dev/local may run
+  // lenient (with a loud warning). When the secret IS set, the header must match in constant time.
+  const secret = requireSecret("FTD_INTERNAL_SECRET");
+  if (!secret.ok) {
+    if (secret.prod) return { statusCode: 503, body: "unconfigured" }; // prod + no secret → refuse before any work
+    // non-prod: fall through (warning already emitted) so local dev still works
+  } else {
     const got = event.headers && (event.headers["x-ftd-internal"] || event.headers["X-Ftd-Internal"]);
-    if (got !== internal) return { statusCode: 401, body: "unauthorized" };
+    if (!safeEqual(String(got || ""), secret.value)) return { statusCode: 401, body: "unauthorized" };
   }
 
   let input;

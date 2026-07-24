@@ -7,17 +7,58 @@
  * honest fallback) is unit-tested with a Map-backed fake — no Netlify, no network.
  */
 
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { normalizeUrl } from "../intake/intakeModel.js";
+import { isProd, warnMissingSecret } from "../security/secrets.js";
 
-/** Stable job id / cache key: sha256(SALT | normalized url), first 32 hex chars.
- *  The salt is a server secret (FTD_ID_SALT), so a job id — and thus its cached
- *  result — cannot be derived by guessing the URL (ADR-0032). Same salt + same URL →
- *  same key, so the per-store design cache still works. */
+// A non-secret DEV fallback salt (ADR-0040). NEVER used in production — there a missing
+// FTD_ID_SALT is a hard error. It only keeps local/test hashing deterministic AND keyed
+// (never keyed by the empty string, which would be guessable).
+const DEV_FALLBACK_SALT = "ftd-dev-insecure-salt";
+
+/** Stable job id / cache key: HMAC-SHA256(SALT, normalized url), first 32 hex chars (ADR-0040).
+ *  An HMAC keyed by the server secret FTD_ID_SALT — not a plain hash of salt+url — so the id (and
+ *  thus its cached result) cannot be derived by guessing the URL, and cannot be forged without the
+ *  key. The salt is MANDATORY in production: a missing salt THROWS rather than falling back to the
+ *  empty string (which was guessable). Dev/local uses a loud, fixed non-secret fallback so tests stay
+ *  deterministic. Same salt + same URL → same key, so the per-store design cache still works. */
 export function keyFor(url, salt) {
-  const s = salt != null ? salt : ((typeof process !== "undefined" && process.env && process.env.FTD_ID_SALT) || "");
+  let s = salt != null ? salt : ((typeof process !== "undefined" && process.env && process.env.FTD_ID_SALT) || "");
+  if (!s) {
+    if (isProd()) throw new Error("FTD_ID_SALT is required in production (fail-closed job-id keying)");
+    warnMissingSecret("FTD_ID_SALT");
+    s = DEV_FALLBACK_SALT; // never HMAC with an empty key
+  }
   const norm = normalizeUrl(url) || String(url || "").trim().toLowerCase();
-  return createHash("sha256").update(s + "|" + norm).digest("hex").slice(0, 32);
+  return createHmac("sha256", s).update(norm).digest("hex").slice(0, 32);
+}
+
+/**
+ * Reserve one slot of a daily counter ATOMICALLY (ADR-0040). The old get→compare→set was a
+ * TOCTOU race: concurrent submits each read the same count and each wrote count+1, so the daily
+ * cost cap (the ONLY guard before an Opus call) was trivially overrun. This uses the store's
+ * compare-and-swap (getWithMeta + setIfMatch) with bounded retries; on a lost race it retries with
+ * the fresh ETag, and if it still can't win under heavy contention it FAILS CLOSED (denies).
+ * @returns {Promise<boolean>} true = a slot was reserved (proceed); false = cap reached or contention.
+ */
+export async function reserveDailySlot({ store, key, cap, now = Date.now, maxRetries = 5 }) {
+  const day = new Date(now()).toISOString().slice(0, 10);
+  // If the store lacks CAS (a minimal fake), fall back to non-atomic — but only in non-prod.
+  if (typeof store.getWithMeta !== "function" || typeof store.setIfMatch !== "function") {
+    const rec = (await store.get(key)) || { count: 0, day };
+    if (rec.count >= cap) return false;
+    await store.set(key, { count: rec.count + 1, day });
+    return true;
+  }
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const cur = await store.getWithMeta(key);
+    const rec = (cur && cur.value) || { count: 0, day };
+    if (rec.count >= cap) return false;                       // cap reached → deny
+    const res = await store.setIfMatch(key, { count: rec.count + 1, day }, cur && cur.etag);
+    if (res && res.ok) return true;                           // won the CAS → reserved
+    // else: lost the race (someone else incremented) → loop with the fresh ETag
+  }
+  return false; // couldn't reserve under contention → fail closed (deny rather than risk over-spend)
 }
 
 /** Shape the record we persist from a generateFunnelFromUrl result. */
@@ -43,8 +84,10 @@ export function recordFrom(res, url) {
  * `trigger(key, url)` that kicks off the background run (fire-and-forget).
  * @returns {Promise<{ok:true, id, status:'ready'|'pending', cached?:boolean} | {ok:false, reason}>}
  */
-/** A pending job younger than this is treated as in-flight (don't re-trigger). */
-export const IN_FLIGHT_MS = 4 * 60 * 1000;
+/** A pending job younger than this is treated as in-flight (don't re-trigger). MUST be ≥ the
+ *  background function's max runtime (Netlify background fns run up to 15 min) so a still-running
+ *  job is never re-triggered into a concurrent double-generation (ADR-0040). 16 min > 15 min. */
+export const IN_FLIGHT_MS = 16 * 60 * 1000;
 
 export async function submitJob({ url, regenerate = false, store, trigger, guard, now = Date.now }) {
   const norm = normalizeUrl(url);

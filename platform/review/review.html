@@ -78,18 +78,15 @@
     import { antiBlandCheck } from "../../authoring/author/qualityGate.js";
     import { buildReviewModel } from "./reviewModel.js";
     import { buildArtifact } from "../publish.js";
+    import { resolveConfigSource } from "../configSource.js";
 
     const app = document.getElementById("app");
     const brandline = document.getElementById("brandline");
 
+    // ADR-0040: ?config is honoured ONLY when same-origin (no arbitrary cross-origin URL under our
+    // trusted origin); ?funnel is an allow-listed id. Shared, unit-tested resolver.
     function resolve() {
-      const q = new URLSearchParams(location.search);
-      if (q.get("draft")) return { draft: true, preview: "draft=1", funnelId: null };
-      const config = (q.get("config") || "").trim();
-      if (config && /^(https?:)?\/\/|^\.?\.?\//.test(config)) return { configUrl: config, preview: "config=" + encodeURIComponent(config), funnelId: null };
-      const id = (q.get("funnel") || "").trim().toLowerCase();
-      if (id && /^[a-z0-9-]+$/.test(id)) return { configUrl: "../../configs/" + id + ".json", preview: "funnel=" + id, funnelId: id };
-      return null;
+      return resolveConfigSource(location.search, { href: location.href, origin: location.origin, funnelBase: "../../configs/" });
     }
 
     function el(tag, props = {}, kids = []) {

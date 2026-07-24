@@ -34,14 +34,16 @@
   <script type="module">
     import { boot, createFunnel } from "../engine/index.js";
     import "./frame.js"; // frame-side auto-resize reporter (self-starts)
+    import { safeConfigPath, safeFunnelId } from "../platform/configSource.js";
 
-    /* Resolve which funnel to render — sanitized, honest failure if none. */
+    /* Resolve which funnel to render — SAME-ORIGIN ?config only (ADR-0040), or an allow-listed
+     * ?funnel id. An arbitrary cross-origin ?config URL is refused (no content spoofing under us). */
     function resolveConfigUrl() {
       const q = new URLSearchParams(location.search);
-      const explicit = (q.get("config") || "").trim();
-      if (explicit && /^(https?:)?\/\/|^\.?\.?\//.test(explicit)) return explicit;
-      const id = (q.get("funnel") || "").trim().toLowerCase();
-      if (id && /^[a-z0-9-]+$/.test(id)) return "../configs/" + id + ".json";
+      const explicit = safeConfigPath(q.get("config"), location.href, location.origin);
+      if (explicit) return explicit;
+      const id = safeFunnelId(q.get("funnel"));
+      if (id) return "../configs/" + id + ".json";
       return null;
     }
 
