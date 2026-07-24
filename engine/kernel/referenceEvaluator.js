@@ -76,13 +76,14 @@ function strictlyBetter(a, b) {
   return false; // equal → not strictly better (ties are allowed; coverage may pick either)
 }
 
-/** Independent match-state. */
+/** Independent match-state — ADVISORY axes are preferences, not promises (ignored here too). */
 function stateOf(constraints, perC) {
   let violated = false, unknown = false;
   for (const c of constraints) {
+    if (c.mode === ADVISORY) continue;
     const s = perC[c.id];
     if (s.state === VIOLATED) violated = true;
-    else if (s.state === UNKNOWN && c.mode !== ADVISORY) unknown = true;
+    else if (s.state === UNKNOWN) unknown = true;
   }
   return violated ? "COMPROMISE" : unknown ? "UNVERIFIED" : "EXACT";
 }

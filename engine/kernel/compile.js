@@ -12,7 +12,7 @@
  *                                        violations sum at a single level (like the old soft score)
  */
 
-import { NEVER_RELAX, RELAXABLE } from "./constraintKernel.js";
+import { NEVER_RELAX, RELAXABLE, ADVISORY } from "./constraintKernel.js";
 import { groundClaim, axisKind } from "./grounding.js";
 import { catalogVersion } from "./version.js";
 
@@ -30,6 +30,9 @@ export function compileConstraints(axisSet) {
     if (a.hard) {
       return { id: a.id, label: a.label, type: "nominal", mode: NEVER_RELAX, strict: true, priority: hardIds.indexOf(a.id), order, values: a.values };
     }
+    // ADVISORY axes are PREFERENCES (depth calibration, move d): kept as a question but never a
+    // promise — their difference is disclosed, never a COMPROMISE. Priority sits after the promises.
+    if (a.advisory) return { id: a.id, label: a.label, type: "nominal", mode: ADVISORY, strict: false, priority: hardIds.length + 1, order, values: a.values };
     // soft axes share the first priority after the hard ranks, so their violations aggregate
     // at one level (the kernel sums them) — reproducing the old uniform soft cost, but now with
     // three-valued honesty (a null profile entry is UNKNOWN, disclosed, never a silent match).

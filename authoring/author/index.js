@@ -26,6 +26,7 @@ import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/con
 import { compileConstraints, compileUnits, comboAnswers } from "../../engine/kernel/compile.js";
 import { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash } from "../../engine/kernel/version.js";
 import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
+import { pickCalibrated, exactPathStats, surfacedCoverage, EXACT_PATH_TARGET } from "../quality/depthCalibration.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -264,8 +265,11 @@ function buildConfig(catalog, axisSet, opts) {
   const signals = [], derivedSignals = [], questions = [];
   axisSet.forEach((a, ai) => {
     const sid = `s_${a.id}`, qid = `q_${a.id}`;
-    const sig = { id: sid, role: "decision", required: true, source: qid, domain: a.values.map((v) => v.value), map: {} };
-    const q = { id: qid, label: `السؤال ${ai + 1}`, text: a.question, options: a.values.map((v, i) => { const oid = `opt_${a.id}_${i}`; sig.map[oid] = v.value; return { id: oid, label: clamp(v.label, 60) }; }) };
+    const sig = { id: sid, role: "decision", required: true, source: qid, domain: a.values.map((v) => v.value), map: {}, advisory: !!a.advisory };
+    // ADVISORY axes are asked as an explicit PREFERENCE, never phrased as a firm requirement
+    // (depth calibration, move d) — so the shopper is never promised something we won't hard-match.
+    const text = a.advisory ? `${a.question} (تفضيل اختياري — نراعيه إن أمكن)` : a.question;
+    const q = { id: qid, label: `السؤال ${ai + 1}`, text, advisory: !!a.advisory, options: a.values.map((v, i) => { const oid = `opt_${a.id}_${i}`; sig.map[oid] = v.value; return { id: oid, label: clamp(v.label, 60) }; }) };
     signals.push(sig); questions.push(q);
     derivedSignals.push({ id: `D_${a.id}`, from: [sid], rule: "identity", domain: a.values.map((v) => v.value) });
   });
@@ -384,6 +388,19 @@ function _dedupeAxes(axes) {
   return kept;
 }
 
+/**
+ * ADVISORY variants of a taste subset (depth calibration, move d). Returns the original set plus,
+ * for each taste axis, a variant that keeps THAT axis a promise and demotes the rest to ADVISORY
+ * (a preference — asked, disclosed on difference, but never a broken promise). The meaning guard
+ * always keeps ≥1 promised taste axis. A ≤1-axis subset has no advisory variant (nothing to demote).
+ */
+function _advisoryVariants(tasteSub) {
+  if (!tasteSub || tasteSub.length < 2) return [tasteSub || []];
+  const out = [tasteSub];
+  for (let j = 0; j < tasteSub.length; j++) out.push(tasteSub.map((a, i) => (i === j ? a : { ...a, advisory: true })));
+  return out;
+}
+
 /* Combinations of `arr` of size `k` (bounded by `cap` results). */
 function _combos(arr, k, cap) {
   const out = [];
@@ -426,32 +443,47 @@ export function authorFromAxes(catalog, axes, opts = {}) {
   const cap = opts.maxQuestions || 6;
   const maxSoft = Math.max(minSoft, Math.min(soft.length, cap - hard.length));
   const attempts = [];
-  // Among trust+bland-passing sets, choose the HIGHEST-COVERAGE one (ADR-0031), largest
-  // (deepest) first — but always partitioned by the hard axes (ADR-0034/0035).
-  let best = null;
+  // DEPTH CALIBRATION (ADR-0037 depth phase): collect EVERY gate+verify-passing candidate, then
+  // pick the deepest MEANINGFUL funnel whose exact-path-rate ≥ target — else the best HONEST one.
+  // We no longer just maximise depth/coverage (that over-asked taste axes the catalog can't match).
+  const candidates = [];
+  const variantsOf = (sub) => (opts.legacyDepth ? [sub] : _advisoryVariants(sub)); // legacyDepth = pre-calibration behaviour (report/regression baseline)
   for (let ssize = maxSoft; ssize >= minSoft; ssize--) {
     for (const sub of _combos(soft, ssize, 24)) {
-      const set = [...hard, ...sub];
-      if (set.length < 2) continue;
-      const combos = set.reduce((n, a) => n * a.values.length, 1);
-      if (combos > maxCombos) continue;
-      const config = buildConfig(cleanCat, set, opts);
-      const trust = trustValidate(config);
-      const bland = antiBlandCheck(config);
-      attempts.push({ axes: set.map((a) => a.id), size: set.length, trust: trust.ok, bland: bland.ok });
-      if (trust.ok && bland.ok) {
+      for (const vsub of variantsOf(sub)) {
+        const set = [...hard, ...vsub];
+        if (set.length < 2) continue;
+        const combos = set.reduce((n, a) => n * a.values.length, 1);
+        if (combos > maxCombos) continue;
+        const config = buildConfig(cleanCat, set, opts);
+        const trust = trustValidate(config);
+        const bland = antiBlandCheck(config);
+        attempts.push({ axes: set.map((a) => (a.advisory ? a.id + "*" : a.id)), size: set.length, trust: trust.ok, bland: bland.ok });
+        if (!(trust.ok && bland.ok)) continue;
         const verify = verifyFunnel(config, cleanCat, set); // publish-time proof (ADR-0037)
         if (!verify.ok) { attempts.push({ axes: set.map((a) => a.id), verifyFindings: verify.findings.slice(0, 6) }); continue; }
         const rich = richnessCheck(config, cleanCat);
-        const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size: set.length,
-          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, hard: hard.map((h) => h.id), verify } };
-        if (!best || cand.coverage > best.coverage + 1e-9 || (Math.abs(cand.coverage - best.coverage) <= 1e-9 && cand.size > best.size)) best = cand;
-        if (rich.ok && rich.metrics.coverage >= 0.999) break;
+        candidates.push({ config, set, verify, richOk: rich.ok, coverage: rich.metrics.coverage, combos });
       }
     }
-    if (best && best.richOk && best.coverage >= 0.999) break;
   }
-  if (best) return { ok: true, config: best.config, meta: best.meta };
+  const rich = candidates.filter((c) => c.richOk);
+  const pool = rich.length ? rich : candidates; // richness is a gate; only fall back if none pass it
+  if (pool.length) {
+    const T = opts.exactPathTarget != null ? opts.exactPathTarget : EXACT_PATH_TARGET;
+    let chosen, targetMet = null, limiting = null, scored = pool;
+    if (opts.legacyDepth) { // baseline: old max-coverage-then-deepest pick
+      const s = pool.slice().sort((a, b) => b.coverage - a.coverage || b.set.length - a.set.length);
+      chosen = { config: s[0].config };
+    } else ({ chosen, targetMet, limiting, scored } = pickCalibrated(pool, cleanCat, T));
+    const cand = pool.find((c) => c.config === chosen.config);
+    const st = exactPathStats(chosen.config);
+    return { ok: true, config: chosen.config, meta: {
+      axes: cand.set.map((a) => a.id), questions: cand.set.length, archetypes: chosen.config.archetypes.length, combos: cand.combos,
+      coverage: cand.coverage, hard: hard.map((h) => h.id), verify: cand.verify,
+      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), candidatesEvaluated: scored.length, limiting },
+    } };
+  }
   return { ok: false, reason: "no-gatepassing-axis-set", meta: { attempts } };
 }
 
@@ -476,21 +508,42 @@ export function authorFunnel(catalog, opts = {}) {
     : _axisSets(axes);
 
   const attempts = [];
-  for (const set of sets) {
-    const combos = set.reduce((n, a) => n * a.values.length, 1);
-    if (combos > 400) continue;
-    const config = buildConfig(cleanCat, set, opts);
-    const trust = trustValidate(config);
-    const bland = antiBlandCheck(config);
-    attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
-    if (trust.ok && bland.ok) {
-      // PUBLISH-TIME exhaustive verification (ADR-0037): prove the v3 exit criteria for THIS
-      // funnel's finite table before it can ship. A finding is a hard authoring failure — we
-      // never publish a funnel whose promise we can't prove.
+  // DEPTH CALIBRATION (ADR-0037 depth phase): gather every gate+verify-passing candidate, then pick
+  // the deepest MEANINGFUL funnel whose exact-path-rate ≥ target — else the best HONEST one. This
+  // stops the layer from over-asking taste axes the catalog can't match exactly.
+  const hardIds = new Set(hard.map((h) => h.id));
+  const candidates = [];
+  const variantsOf = (sub) => (opts.legacyDepth ? [sub] : _advisoryVariants(sub));
+  for (const baseSet of sets) {
+    const tasteSub = baseSet.filter((a) => !hardIds.has(a.id));
+    const hardPart = baseSet.filter((a) => hardIds.has(a.id));
+    for (const vsub of variantsOf(tasteSub)) {
+      const set = [...hardPart, ...vsub];
+      const combos = set.reduce((n, a) => n * a.values.length, 1);
+      if (combos > 400) continue;
+      const config = buildConfig(cleanCat, set, opts);
+      const trust = trustValidate(config);
+      const bland = antiBlandCheck(config);
+      attempts.push({ set: set.map((a) => (a.advisory ? a.id + "*" : a.id)), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
+      if (!(trust.ok && bland.ok)) continue;
+      // PUBLISH-TIME exhaustive verification (ADR-0037): prove the v3 exit criteria before shipping.
       const verify = verifyFunnel(config, cleanCat, set);
       if (!verify.ok) { attempts.push({ set: set.map((a) => a.id), verifyFindings: verify.findings.slice(0, 6) }); continue; }
-      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, hard: hard.map((h) => h.id), verify } };
+      candidates.push({ config, set, verify, combos });
     }
+  }
+  if (candidates.length) {
+    const T = opts.exactPathTarget != null ? opts.exactPathTarget : EXACT_PATH_TARGET;
+    let chosen, targetMet = null, limiting = null, scored = candidates;
+    if (opts.legacyDepth) { // baseline: old first-passing (order already deepest-hard-first) → first
+      chosen = { config: candidates[0].config };
+    } else ({ chosen, targetMet, limiting, scored } = pickCalibrated(candidates, cleanCat, T));
+    const cand = candidates.find((c) => c.config === chosen.config);
+    const st = exactPathStats(chosen.config);
+    return { ok: true, config: chosen.config, meta: {
+      axes: cand.set.map((a) => a.id), archetypes: chosen.config.archetypes.length, combos: cand.combos, hard: hard.map((h) => h.id), verify: cand.verify,
+      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), candidatesEvaluated: scored.length, limiting },
+    } };
   }
   return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };
 }

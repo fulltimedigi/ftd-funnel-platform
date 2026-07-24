@@ -212,13 +212,19 @@ function eligibility(constraints, perC, bounds) {
   return { eligible: true, reason: null };
 }
 
-/** EXACT (all asked SAT) / COMPROMISE (≥1 VIOLATED) / UNVERIFIED (no VIOLATED, ≥1 relevant UNKNOWN). */
+/**
+ * EXACT (all PROMISED answers SAT) / COMPROMISE (≥1 promised VIOLATED) / UNVERIFIED (no VIOLATED,
+ * ≥1 relevant UNKNOWN). ADVISORY axes are PREFERENCES, not promises: their difference or unknown is
+ * still disclosed (see `disclose`) but never downgrades the match state — a path exact on every
+ * promise, differing only on an advisory preference, is EXACT.
+ */
 function matchState(constraints, perC) {
   let violated = false, unknown = false;
   for (const c of constraints) {
+    if (c.mode === ADVISORY) continue; // a preference, not a promise
     const s = perC[c.id];
     if (s.state === VIOLATED) violated = true;
-    else if (s.state === UNKNOWN && c.mode !== ADVISORY) unknown = true;
+    else if (s.state === UNKNOWN) unknown = true;
   }
   if (violated) return COMPROMISE;
   if (unknown) return UNVERIFIED;
@@ -236,6 +242,7 @@ export function disclose(unit, constraints, answers, perC) {
     if (answers[c.id] == null) continue; // not asked on this path
     const s = perC[c.id] || status(c, answers[c.id], unitValue(unit, c));
     const base = { axis: c.id, label: c.label || c.id, mode: c.mode, priority: c.priority || 0 };
+    if (c.mode === ADVISORY) base.advisory = true; // a preference, disclosed differently from a promise
     if (s.state === SAT) matches.push(base);
     else if (s.state === VIOLATED) {
       const o = { ...base, magnitude: s.magnitude };

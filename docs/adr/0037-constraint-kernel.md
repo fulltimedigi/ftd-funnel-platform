@@ -195,3 +195,37 @@ Closing metrics (oud-shaped proxy): mutation matrix **9/9 + injection** caught (
 and stale-hash); architecture import-ban **green**; promise-binding witness **all options pass, 0
 dead / 0 inverted** after pruning; version coherence **5/5 stamps present and enforced**. All **62**
 suites green; trust / anti-bland / richness untouched. Preview only; no PR.
+
+## Depth calibration (calibrate depth to catalog density)
+
+Measured live on oudfactory: 72 answer paths over 43 products, exact-path-rate ≈ 22 % — most paths
+ended in a forced COMPROMISE. Root cause was **authoring depth**, not the kernel: after
+format×budget there were ~5 distinct taste profiles per cell, but the layer asked 8 taste
+combinations (4 character × 2 intensity), so most cells couldn't match exactly. The layer had been
+*maximising* depth/coverage; it needed to *calibrate* depth to what the catalog can honestly support.
+
+- **exact-path-rate** is now a per-funnel metric — **numerator and denominator both kept**
+  (`EXACT reachable paths ÷ total reachable paths`) — an authoring TARGET (T = 0.60), never a
+  correctness gate, and never gamed by dropping paths, hiding COMPROMISE, or making SKUs unreachable.
+- **Calibrated selection** (`depthCalibration.js`, both authoring paths): among every gate + verify
+  passing candidate, pick the **deepest MEANINGFUL** funnel with exact-path-rate ≥ T; if none
+  reaches T, pick the **best HONEST** funnel (highest rate, then coverage, then depth) and record
+  the conflict + the limiting gate. Levers explored: dropping a weak taste axis, and **ADVISORY
+  demotion** — keep a question but ask it as a *preference* ("… تفضيل اختياري …") so its difference
+  is disclosed yet never a broken promise; the kernel's `match_state` ignores ADVISORY axes, so an
+  otherwise-exact path stays EXACT. This lets a funnel keep the depth the **richness gate** requires
+  while lifting exact-path-rate — without touching any gate.
+- **Meaning guard:** never shorten below the catalog's real hard axes + ≥1 taste axis that has ≥2
+  supported values AND changes ≥1 reachable result (never a mirror). **Cell support** is counted by
+  distinct exact grounded profiles, not raw product count; dead options are pruned so
+  **prefix-support stays 100 %**.
+- **No regression:** the regression suite asserts the RATIO (not the absolute EXACT count, which may
+  legitimately move with the path space) never decreases and surfaced coverage never drops, plus all
+  ADR-0037 locks (0 never-relax leak, 100 % proof coverage, version coherence).
+
+Results (deterministic path, before → after): **laptops 6/9 = 67 % → 20/24 = 83 %** (target met);
+**coffee 6/9 = 67 % → 18/27 = 67 %** (target met, +personalisation); **oud 10/27 = 37 % → 30/81 =
+37 %** — 37 % is this catalog's honest ceiling (richness floor forces depth; taste density caps
+exactness), so `targetMet:false` is recorded with the limiting reason. The AI path on the oud-shaped
+proxy rose **12 % → 37 %** (3×) via ADVISORY demotion. Every result still carries a proof; surfaced
+coverage held; **all 63** suites green; trust / anti-bland / richness untouched. Preview only; no PR.

@@ -254,12 +254,13 @@ function relaxNote(config, resolved) {
 
   const parts = [];
   for (const r of conflicts) {
-    if (r.dir === "above") parts.push("أعلى قليلاً من الميزانية المختارة");
+    if (r.advisory) parts.push("حسب تفضيلك تميل لـ«" + (r.label || r.axis) + "» — راعيناه قدر المتاح");
+    else if (r.dir === "above") parts.push("أعلى قليلاً من الميزانية المختارة");
     else if (r.dir === "below") parts.push("أقل من الميزانية المختارة");
     else parts.push("يختلف في: " + (r.label || r.axis));
   }
   // UNKNOWN reads differently from a conflict: we couldn't CONFIRM it (not "it's wrong").
-  for (const u of unknowns) parts.push("لم نتمكّن من تأكيد: " + (u.label || u.axis));
+  for (const u of unknowns) parts.push((u.advisory ? "تفضيل غير مؤكّد: " : "لم نتمكّن من تأكيد: ") + (u.label || u.axis));
 
   return el("div", { class: "ftd-relax" }, [
     el("span", { class: "ftd-relax-ic", text: "ℹ︎" }),
