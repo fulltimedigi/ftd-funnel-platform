@@ -30,9 +30,12 @@ function reachableUrls(config) {
 /** Build N products + 4 axes; product i gets the i-th combo as its profile (distinct),
  *  unless `collideLast` makes the last product a twin of product 0. */
 function fixture(N, sizes = [3, 2, 2, 2], collideLast = false) {
-  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
   const combos = cartesian(sizes.map((s) => range(s).map(String))); // sizes multiply to N
   const comboOf = (i) => (collideLast && i === N - 1 ? combos[0] : combos[i]);
+  // Each product carries its axis values as merchant-declared differentiators, so the grounding
+  // layer (ADR-0037 BLOCKER-2) grounds every claim — this test isolates the COVERING mechanism,
+  // not grounding, so its synthetic values must carry real evidence like a real catalog would.
+  const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, differentiators: [...new Set(comboOf(i))] }));
   const axes = sizes.map((sz, ax) => {
     const profile = new Map();
     products.forEach((p, i) => profile.set(p.url, comboOf(i)[ax]));
@@ -85,8 +88,8 @@ await (async () => {
     // combos. The fill pass should give each orphaned twin its own matching empty combo,
     // so all 8 become PRIMARIES (not just alternates) — coverage ~100% by construction.
     const N = 8;
-    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
     const base = cartesian([0, 1, 2, 3].map(() => ["0", "1"])); // 16 combos
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, differentiators: [...new Set(base[i % 4])] }));
     const axes = [0, 1, 2, 3].map((ax) => {
       const profile = new Map();
       products.forEach((p, i) => profile.set(p.url, base[i % 4][ax])); // only 4 distinct profiles
@@ -104,8 +107,8 @@ await (async () => {
     // a distinct #1, but the coverage backfill attaches every leftover to its best leaf,
     // so 100% remain reachable (as ranked alternates) — no product is ever orphaned.
     const N = 20;
-    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}` }));
     const base = cartesian([0, 1].map(() => ["0", "1"])); // 4 combos
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, differentiators: [...new Set(base[i % 4])] }));
     const axes = [0, 1].map((ax) => {
       const profile = new Map();
       products.forEach((p, i) => profile.set(p.url, base[i % 4][ax]));

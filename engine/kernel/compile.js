@@ -13,6 +13,8 @@
  */
 
 import { NEVER_RELAX, RELAXABLE } from "./constraintKernel.js";
+import { groundClaim, axisKind } from "./grounding.js";
+import { catalogVersion } from "./version.js";
 
 /**
  * @param {Array} axisSet authored axes: { id, label, question, hard?, ordinal?, values:[{value,label}], profile:Map<url,value> }
@@ -42,15 +44,39 @@ export function compileConstraints(axisSet) {
  * fact-axis authoring path yet, but the shape is honoured).
  */
 export function compileUnits(products, axisSet) {
+  const catVer = catalogVersion(products);
   return products.map((p) => {
     const values = new Map();
     for (const a of axisSet) {
       const v = a.profile.get(p.url);
-      if (v != null) values.set(a.id, { value: v, grounded: true });
-      // absent → UNKNOWN in the kernel (never a silent wildcard match)
+      if (v == null) continue; // absent → UNKNOWN in the kernel (never a silent wildcard match)
+      // GROUND the claim (BLOCKER-2): a present profile value is trusted only if real evidence
+      // backs it; an ungrounded value stays in the kernel as UNKNOWN, never a silent match.
+      const g = groundClaim(p, a.id, v, { kind: axisKind(a), catalogVersion: catVer });
+      values.set(a.id, { value: v, grounded: g.grounded, source_type: g.source_type, evidence: g.evidence, extractor_version: g.extractor_version, catalog_version: g.catalog_version });
     }
     return { id: p.url, product: p, variantId: null, variants: p.variants || null, values };
   });
+}
+
+/** Per-soft-axis grounding report (BLOCKER-2 diagnostics): grounded-true / grounded-false / absent. */
+export function groundingReport(products, axisSet) {
+  const catVer = catalogVersion(products);
+  const report = {};
+  for (const a of axisSet) {
+    if (axisKind(a) !== "soft") continue;
+    let groundedTrue = 0, groundedFalse = 0, absent = 0;
+    const bySource = {};
+    for (const p of products) {
+      const v = a.profile.get(p.url);
+      if (v == null) { absent++; continue; }
+      const g = groundClaim(p, a.id, v, { kind: "soft", catalogVersion: catVer });
+      bySource[g.source_type] = (bySource[g.source_type] || 0) + 1;
+      if (g.grounded) groundedTrue++; else groundedFalse++;
+    }
+    report[a.id] = { label: a.label, groundedTrue, groundedFalse, unknownAbsent: absent, total: products.length, bySource };
+  }
+  return report;
 }
 
 /** Answers for a materialization combo: constraintId → the combo's value on that axis. */

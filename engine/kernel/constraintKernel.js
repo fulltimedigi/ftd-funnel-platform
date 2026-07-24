@@ -147,43 +147,69 @@ function variantStatus(unit, constraint, answer) {
 }
 
 /**
- * Loss vector for lexicographic comparison. Groups violations by relaxation_priority (0 = most
- * important), then unknown penalty, then advisory loss, then the caller's stable tie-break.
- * NEVER_RELAX violations/unknowns are handled by exclusion BEFORE this — they never reach here.
+ * Loss vector for lexicographic comparison (POLICY-1 / C6). Grouped by relaxation_priority
+ * (0 = most important). CRUCIALLY, UNKNOWN is scored WITHIN the constraint's own priority — not
+ * as a global tail penalty — and a *known, bounded* violation is preferred over an UNKNOWN:
+ * per priority the tuple is `[unknownCount, boundedMagnitude]`, compared lexicographically, so a
+ * candidate carrying an UNKNOWN at a priority always loses to one whose only fault there is a
+ * bounded violation. Over-cap violations and never-relax/require-proof unknowns never reach here —
+ * they make a unit INELIGIBLE (see `eligibility`). Advisory loss and the caller's stable tie-break
+ * come last.
  */
 function lossVector(unit, constraints, perC, tieBreakValue) {
-  const prios = [...new Set(constraints.map((c) => c.priority || 0))].sort((a, b) => a - b);
+  const prios = [...new Set(constraints.filter((c) => c.mode !== ADVISORY).map((c) => c.priority || 0))].sort((a, b) => a - b);
   const byPrio = prios.map((p) => {
-    let viol = 0, mag = 0;
+    let unknown = 0, mag = 0;
     for (const c of constraints) {
-      if ((c.priority || 0) !== p) continue;
-      if (c.mode === ADVISORY) continue; // advisory handled separately
+      if ((c.priority || 0) !== p || c.mode === ADVISORY) continue;
       const s = perC[c.id];
-      if (s.state === VIOLATED) { viol++; mag += s.magnitude; }
+      if (s.state === VIOLATED) mag += s.magnitude;       // bounded (over-cap excluded upstream)
+      else if (s.state === UNKNOWN) unknown++;             // worse than any bounded violation here
     }
-    return [viol, mag];
+    return [unknown, mag];
   });
-  let unknownPenalty = 0, advisoryLoss = 0;
+  let advisoryLoss = 0;
   for (const c of constraints) {
+    if (c.mode !== ADVISORY) continue;
     const s = perC[c.id];
-    if (c.mode === ADVISORY) { if (s.state === VIOLATED) advisoryLoss += 1 + s.magnitude; continue; }
-    if (s.state === UNKNOWN) unknownPenalty++;
+    if (s.state === VIOLATED) advisoryLoss += 1 + s.magnitude;
+    else if (s.state === UNKNOWN) advisoryLoss += 1;
   }
-  return { byPrio, unknownPenalty, advisoryLoss, tie: tieBreakValue };
+  return { byPrio, advisoryLoss, tie: tieBreakValue };
 }
 
 /** Lexicographic compare of two loss vectors: <0 if a is better (smaller loss). */
 function compareLoss(a, b) {
   const n = Math.max(a.byPrio.length, b.byPrio.length);
   for (let i = 0; i < n; i++) {
-    const [av, am] = a.byPrio[i] || [0, 0];
-    const [bv, bm] = b.byPrio[i] || [0, 0];
-    if (av !== bv) return av - bv;
-    if (am !== bm) return am - bm;
+    const [au, am] = a.byPrio[i] || [0, 0];
+    const [bu, bm] = b.byPrio[i] || [0, 0];
+    if (au !== bu) return au - bu; // fewer UNKNOWNs first — bounded-known beats unverified
+    if (am !== bm) return am - bm; // then less relaxation magnitude
   }
-  if (a.unknownPenalty !== b.unknownPenalty) return a.unknownPenalty - b.unknownPenalty;
   if (a.advisoryLoss !== b.advisoryLoss) return a.advisoryLoss - b.advisoryLoss;
   return (a.tie ?? 0) - (b.tie ?? 0);
+}
+
+/**
+ * Eligibility (POLICY-1). A unit may NOT win if:
+ *   • a NEVER_RELAX constraint is VIOLATED or UNKNOWN;
+ *   • a require-proof constraint is UNKNOWN (an asserted match we cannot verify);
+ *   • a RELAXABLE ordinal/price violation exceeds its relaxation bound (over-cap → NoExactMatch,
+ *     which must never beat an UNKNOWN — so we exclude rather than rank it).
+ * Returns { eligible, reason }.
+ */
+function eligibility(constraints, perC, bounds) {
+  for (const c of constraints) {
+    const s = perC[c.id];
+    if (c.mode === NEVER_RELAX && s.state !== SAT) return { eligible: false, reason: `never-relax ${c.id} ${s.state}` };
+    if (c.requireProof && s.state === UNKNOWN) return { eligible: false, reason: `require-proof ${c.id} UNKNOWN` };
+    if (c.mode === RELAXABLE && s.state === VIOLATED) {
+      if (c.type === "ordinal" && bounds.maxBudgetOvershootTiers != null && s.magnitude > bounds.maxBudgetOvershootTiers) return { eligible: false, reason: `ordinal ${c.id} over-cap ${s.magnitude}` };
+      if (c.type === "price" && bounds.maxPriceOvershoot != null && s.magnitude > bounds.maxPriceOvershoot) return { eligible: false, reason: `price ${c.id} over-cap ${s.magnitude}` };
+    }
+  }
+  return { eligible: true, reason: null };
 }
 
 /** EXACT (all asked SAT) / COMPROMISE (≥1 VIOLATED) / UNVERIFIED (no VIOLATED, ≥1 relevant UNKNOWN). */
@@ -287,16 +313,12 @@ export function select(units, constraints, answers, opts = {}) {
   const bounds = { ...DEFAULT_BOUNDS, ...(opts.bounds || {}) };
   const tieBreak = opts.tieBreak || (() => 0);
 
-  // 1. exclude NEVER_RELAX VIOLATED or UNKNOWN
+  // 1. eligibility (POLICY-1): exclude never-relax breaks, require-proof unknowns, and over-cap
+  //    relaxations (an over-cap violation must NOT be chosen and must not beat an UNKNOWN).
   const survivors = [];
   for (const u of units) {
     const perC = evaluateUnit(u, constraints, answers);
-    let ok = true;
-    for (const c of constraints) {
-      if (c.mode !== NEVER_RELAX) continue;
-      if (perC[c.id].state !== SAT) { ok = false; break; }
-    }
-    if (ok) survivors.push({ u, perC });
+    if (eligibility(constraints, perC, bounds).eligible) survivors.push({ u, perC });
   }
 
   if (!survivors.length) {
@@ -304,57 +326,42 @@ export function select(units, constraints, answers, opts = {}) {
     return makeSelectionResult(cert, {
       product_id: null, match_state: NO_MATCH,
       catalog_version: opts.catalogVersion || null, policy_version: opts.policyVersion || null,
-      tie_break_reason: "no unit satisfies the never-relax constraints",
+      tie_break_reason: "no eligible unit (never-relax / require-proof / over-cap)",
     });
   }
 
-  // 2–3. lexicographic-min loss
+  // 2–3. lexicographic-min loss (UNKNOWN scored within its own priority — POLICY-1)
   let best = null, bestLoss = null;
   for (const s of survivors) {
     const loss = lossVector(s.u, constraints, s.perC, tieBreak(s.u, s.perC));
     if (!best || compareLoss(loss, bestLoss) < 0) { best = s; bestLoss = loss; }
   }
 
-  // 4. exact dominance — an EXACT candidate must beat any COMPROMISE (the vector already
-  //    guarantees it; assert to make the invariant a hard failure, not a silent regression).
+  // 4. exact dominance — an EXACT candidate must beat any COMPROMISE (the vector guarantees it;
+  //    assert to make the invariant a hard failure, not a silent regression).
   const anyExact = survivors.some((s) => matchState(constraints, s.perC) === EXACT);
   const bestState = matchState(constraints, best.perC);
   if (anyExact && bestState !== EXACT) {
     throw new Error("kernel invariant broken: an EXACT candidate exists but a COMPROMISE was selected");
   }
 
-  // 5. relaxation bounds → first-class NO_MATCH beyond a bound
-  const boundBreak = beyondBounds(best.u, constraints, best.perC, bounds);
-  const chosen = boundBreak ? null : best.u;
-  const state = boundBreak ? NO_MATCH : bestState;
-
+  const chosen = best.u;
   const cert = verify(chosen, constraints, answers, opts);
-  const disc = chosen ? disclose(chosen, constraints, answers, best.perC) : { matches: [], conflicts: [], unknowns: [] };
+  const disc = disclose(chosen, constraints, answers, best.perC);
   return makeSelectionResult(cert, {
-    product_id: chosen ? chosen.id : null,
-    variant_id: chosen ? chosenVariant(chosen, constraints, best.perC) : null,
+    product_id: chosen.id,
+    variant_id: chosenVariant(chosen, constraints, best.perC),
     catalog_version: opts.catalogVersion || null,
     policy_version: opts.policyVersion || null,
-    match_state: state,
+    match_state: bestState,
     matches: disc.matches, conflicts: disc.conflicts, unknowns: disc.unknowns,
-    tie_break_reason: boundBreak || tieReason(bestLoss, disc),
+    tie_break_reason: tieReason(bestLoss, disc),
   });
 }
 
 function chosenVariant(unit, constraints, perC) {
   for (const c of constraints) if (c.type === "variant" && perC[c.id] && perC[c.id].variantId) return perC[c.id].variantId;
   return unit.variantId || null;
-}
-
-function beyondBounds(unit, constraints, perC, bounds) {
-  for (const c of constraints) {
-    const s = perC[c.id];
-    if (s.state !== VIOLATED) continue;
-    if (c.type === "ordinal" && c.mode === RELAXABLE && bounds.maxBudgetOvershootTiers != null) {
-      if (s.magnitude > bounds.maxBudgetOvershootTiers) return `budget overshoot ${s.magnitude} tiers > bound ${bounds.maxBudgetOvershootTiers}`;
-    }
-  }
-  return null;
 }
 
 function tieReason(loss, disc) {

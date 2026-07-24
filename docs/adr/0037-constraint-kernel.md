@@ -111,3 +111,42 @@ exact-primary coverage, which duplicate profiles / nulls make impossible.
 - **Deferred (unchanged meaning):** full runtime live-matching rebuild and live stock/price
   dereferencing. G1/G2 make that a change of *implementation*, not of *meaning* — the kernel and
   the versioned certificate are already in place. Preview only; live untouched. No PR.
+
+## Closing corrections (after independent live verification on oudfactory)
+
+Independent review confirmed the kernel killed the original bug (zero silent never-relax breaks,
+zero budget jumps) but flagged five gaps between *the guarantee claimed* and *the guarantee
+proven*. These are completeness fixes, not a redesign:
+
+- **BLOCKER-1 — the verifier is now genuinely independent (C11).** `verifyFunnel` no longer re-runs
+  the kernel's own chooser; it calls a separate **reference oracle** (`referenceEvaluator.js`) that
+  shares ONLY the base predicates (`status`/`evaluateUnit`) and re-implements eligibility, the loss
+  representation, the comparator, exact-dominance, and the tie-break from scratch. It brute-forces
+  every eligible SKU to prove exact-dominance, lexicographic optimality, disclosure soundness +
+  completeness, and variant validity. `tests/kernel.reference.test.mjs` proves it catches all seven
+  corruptions (worse-SKU swap · compromise-over-exact · UNKNOWN-as-SAT · deleted disclosure ·
+  never-relax bypass · coverage-picks-worse · bad-variant) **and** an injection test feeds a
+  deliberately reversed chooser and asserts the oracle rejects it — so independence is *tested*.
+- **BLOCKER-2 — real grounding per unit × claim.** `grounding.js` decides, for every product value,
+  whether it is grounded and by what provenance (structured > merchant > ontology > validated
+  extraction > uncorroborated); a bare token next to a negation/"free-of" qualifier is NOT proof.
+  `compileUnits` no longer stamps `grounded:true` blindly — an ungrounded value stays UNKNOWN. On
+  the oud-shaped catalog: format **12/12 grounded (ontology)**, budget **13/13 (structured)**, soft
+  axes grounded by structured/merchant/extraction with the rest honestly UNKNOWN-at-runtime.
+- **BLOCKER-3 — no renderable result without a proof.** Every surfaced alternate now carries its own
+  kernel proof (and is DROPPED if it can't be proven for its archetype's path); the default rule is
+  proven **unreachable by construction** (the combo rules cover the full answer space) and
+  `verifyFunnel` asserts `proofCoverage === 1`. Measured proof coverage: **100 %** on every store.
+- **POLICY-1 — UNKNOWN vs known violation (C6).** UNKNOWN is scored WITHIN its constraint's own
+  priority, not as a global tail: a *known, bounded* violation is preferred over an UNKNOWN; an
+  over-cap violation makes a unit ineligible (→ NoExactMatch) and never beats an UNKNOWN; UNKNOWN on
+  a never-relax / require-proof claim excludes the candidate.
+- **FIX-4 — canonical budget cut.** `tierOf` and the tier LABEL derive from the same cut with the
+  same inclusivity; the top tier is now "X فأكثر" (inclusive) so a price exactly at the cut reads
+  truthfully. `tests/budget-boundary.test.mjs` locks boundary-ε / boundary / boundary+ε.
+
+Re-run on oudfactory (oud-shaped proxy; the real catalog isn't cached in-repo — the live preview
+applies the identical kernel): **EXACT 10 / COMPROMISE 17 / UNVERIFIED 0 / NoExactMatch 0** across
+27 paths; proof coverage **100 %**; max relaxation severity **1 tier**; top conflict axes budget
+then a character facet; independent-oracle findings **0**. All 57 suites green; trust / anti-bland /
+richness untouched. Preview only; no PR.

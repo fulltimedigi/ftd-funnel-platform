@@ -122,7 +122,7 @@ function _priceLabel(v) {
 
 const _FACET_Q = ["أي طابع تفضّل؟", "ما التفضيل الأقرب لك؟", "أي فئة تناسبك أكثر؟"];
 
-function buildFactAxes(products) {
+export function buildFactAxes(products) {
   const d = deriveAxes({ products });
   const axes = [];
 
@@ -231,6 +231,28 @@ function buildConfig(catalog, axisSet, opts) {
     }
   }
 
+  // 2c. ALTERNATE PROOFS (ADR-0037 BLOCKER-3): every surfaced alternate is ALSO a kernel decision.
+  //     Each alternate is proven a valid recommendation for its archetype's own answer-path (the
+  //     primary's home combo): it must pass NEVER_RELAX. An alternate we cannot prove is DROPPED —
+  //     no renderable result, primary OR alternate, ever ships without a certificate.
+  const kUnits = compileUnits(products, axisSet);
+  const kUnitByUrl = new Map(kUnits.map((u) => [u.id, u]));
+  const homeAnswersOf = (url) => { const u = kUnitByUrl.get(url); const ans = {}; if (u) for (const a of axisSet) { const g = u.values.get(a.id); if (g) ans[a.id] = g.value; } return ans; };
+  const nTiersB = Math.max(1, ...axisSet.filter((a) => a.hard && a.ordinal).map((a) => a.values.length));
+  for (const a of archetypes) {
+    const ans = homeAnswersOf(a.recommendations.primary.url);
+    const kept = [];
+    for (const c of a.recommendations.contextual || []) {
+      const u = kUnitByUrl.get(c.url);
+      if (!u) continue;
+      const res = kernelSelect([u], kConstraints, ans, { catalogUrls: new Set([c.url]), bounds: { maxBudgetOvershootTiers: nTiersB } });
+      if (!res.product_id) continue; // fails NEVER_RELAX for this path → not renderable → drop
+      c.proof = { match_state: res.match_state, conflicts: res.conflicts, unknowns: res.unknowns, variant_id: res.variant_id };
+      kept.push(c);
+    }
+    if (a.recommendations.contextual) a.recommendations.contextual = kept;
+  }
+
   // 3. signals + derived signals + questions
   const signals = [], derivedSignals = [], questions = [];
   axisSet.forEach((a, ai) => {
@@ -265,7 +287,14 @@ function buildConfig(catalog, axisSet, opts) {
     }
     return rule;
   });
-  decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id });
+  // The table maps EVERY combo of the full answer space, so the default safety-net rule is
+  // UNREACHABLE by construction (ADR-0037 BLOCKER-3): any real signal combination hits a combo
+  // rule first. We keep it as an engine terminal guard but mark it unreachable + prove it below
+  // (verifyFunnel asserts combo-rule count == the full cartesian size), so no renderable path
+  // lacks a proof. `complete` records the construction proof for the verifier.
+  const fullSpace = axisSet.reduce((n, a) => n * a.values.length, 1);
+  const complete = combos.length === fullSpace;
+  decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id, unreachable: complete, _reason: complete ? "table covers the full answer space" : "table incomplete — reachable fallback" });
 
   return {
     _generatedBy: "ftd-authoring/stage2",

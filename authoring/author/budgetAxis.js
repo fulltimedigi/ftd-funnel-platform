@@ -31,11 +31,17 @@ export function priceCutpoints(products) {
   return med > prices[0] ? [med] : null;
 }
 
-/** Tier index of a price given cutpoints: 0..cuts.length. */
+/**
+ * Tier index of a price given cutpoints: 0..cuts.length. CANONICAL boundary rule (FIX-4): each
+ * cut is the INCLUSIVE LOWER bound of its tier — `price >= c` moves up a tier. The labels
+ * (`labelFor`) are derived from the SAME cuts with the SAME inclusivity, so the number a shopper
+ * reads is exactly the number the predicate applies: a product priced at a boundary sits in the
+ * tier whose label includes that boundary, never one that excludes it.
+ */
 export function tierOf(price, cuts) {
   if (price == null || !cuts) return null;
   let t = 0;
-  for (const c of cuts) if (price >= c) t++;
+  for (const c of cuts) if (price >= c) t++; // boundary belongs to the UPPER tier (inclusive-low)
   return t;
 }
 
@@ -60,9 +66,13 @@ export function deriveBudgetAxis(products) {
     if (b != null) { profile.set(p.url, b); present.add(b); }
   }
   const nT = cuts.length + 1;
+  // Labels derive from the SAME canonical cuts as tierOf, with matching inclusivity (FIX-4):
+  //   tier 0    → "أقل من c1"        (price < c1)
+  //   tier mid  → "c(t-1) – c(t)"    ([c(t-1), c(t)) — lower inclusive, upper exclusive)
+  //   tier top  → "c(last) فأكثر"    ([c(last), ∞) — inclusive, so a price AT the cut reads truthfully)
   const labelFor = (t) => {
     if (t === 0) return `أقل من ${_fmt(cuts[0])}${suffix}`;
-    if (t === nT - 1) return `أكثر من ${_fmt(cuts[t - 1])}${suffix}`;
+    if (t === nT - 1) return `${_fmt(cuts[t - 1])}${suffix} فأكثر`;
     return `${_fmt(cuts[t - 1])} – ${_fmt(cuts[t])}${suffix}`;
   };
   const values = [];

@@ -19,8 +19,9 @@
  * funnel; a finding is a criterion violation with the offending rule id.
  */
 
-import { NEVER_RELAX, select as kernelSelect } from "./constraintKernel.js";
+import { NEVER_RELAX } from "./constraintKernel.js";
 import { compileConstraints, compileUnits, comboAnswers } from "./compile.js";
+import { proveSelection } from "./referenceEvaluator.js";
 
 /**
  * @param {Object} config   authored funnel config (decisionTable with proofs, constraintPolicy, versions, archetypes)
@@ -63,41 +64,50 @@ export function verifyFunnel(config, catalog, axisSet) {
     for (const c of conflicts) if (modeById.get(c.axis) === NEVER_RELAX) findings.push({ rule: rule.id, criterion: 2, msg: `never-relax ${c.axis} relaxed` });
     for (const u of unknowns) if (modeById.get(u.axis) === NEVER_RELAX) findings.push({ rule: rule.id, criterion: 2, msg: `never-relax ${u.axis} unknown` });
 
-    if (!axisSet) continue; // criteria 3–6 need the independent re-run
+    if (!axisSet) continue; // criteria 3–7 need the independent oracle
 
-    // Independent kernel re-run for this exact answer-path (criteria 3–6): NO coverage tie-break,
-    // NO fallback — the pure kernel decision. Its disclosure and pick are the ground truth.
+    // INDEPENDENT reference oracle (BLOCKER-1 / C11) for this exact answer-path. It shares only the
+    // base predicates with the kernel — its selection/comparator/tie-break are a separate
+    // implementation — so this is a genuine second opinion on criteria 3, 4, 5, 6, 7.
     const combo = orderedCombo(axisSet, rule.when);
     const answers = comboAnswers(axisSet, combo);
-    const truth = kernelSelect(units, constraints, answers, { catalogUrls, bounds: { maxBudgetOvershootTiers: nTiers } });
+    const claimed = { product_id: prod.url, variant_id: proof.variant_id || null, match_state: proof.match_state, conflicts, unknowns };
+    const proof2 = proveSelection(units, constraints, answers, claimed, { maxBudgetOvershootTiers: nTiers });
+    for (const f of proof2.findings) findings.push({ rule: rule.id, criterion: f.criterion, msg: f.msg });
+  }
 
-    // (3) every VIOLATED/UNKNOWN on the CHOSEN product appears in the disclosure the card shows.
-    const chosen = unitByUrl.get(prod.url);
-    if (chosen) {
-      const fresh = kernelSelect([chosen], constraints, answers, { catalogUrls, bounds: { maxBudgetOvershootTiers: nTiers } });
-      const disc = new Set([...(rule.relaxed || []).map((r) => r.axis), ...conflicts.map((c) => c.axis), ...unknowns.map((u) => u.axis)]);
-      for (const c of fresh.conflicts) if (!disc.has(c.axis)) findings.push({ rule: rule.id, criterion: 3, msg: `undisclosed conflict on ${c.axis}` });
-      for (const u of fresh.unknowns) if (!disc.has(u.axis)) findings.push({ rule: rule.id, criterion: 3, msg: `undisclosed unknown on ${u.axis}` });
-    }
-
-    // (5)/(6) the chosen unit must be no worse than the kernel's own pick per the violation vector.
-    // (Coverage tie-break may pick a DIFFERENT equal-quality unit — allowed; a WORSE one is not.)
-    if (truth.product_id && chosen) {
-      const truthState = truth.match_state, chosenState = proof.match_state;
-      if (rank(chosenState) > rank(truthState)) {
-        findings.push({ rule: rule.id, criterion: 6, msg: `chosen ${chosenState} worse than kernel-best ${truthState}` });
-      }
-      // (4) if an EXACT exists (truth is EXACT) the served rule must not be a COMPROMISE.
-      if (truthState === "EXACT" && chosenState === "COMPROMISE") {
-        findings.push({ rule: rule.id, criterion: 4, msg: "exact candidate exists but a compromise was served" });
+  // BLOCKER-3: NO renderable result without a proof. Count renderable slots (combo-rule primaries
+  // + every surfaced alternate) and assert each carries a proof; the default rule must be proven
+  // UNREACHABLE by construction (the combo rules cover the full answer space) or itself carry a
+  // proof. Target: proofCoverage === 1.
+  let renderable = 0, proven = 0;
+  for (const rule of rules) { renderable++; if (rule.proof && rule.proof.match_state) proven++; }
+  for (const a of config.archetypes || []) {
+    for (const c of (a.recommendations && a.recommendations.contextual) || []) {
+      renderable++;
+      if (c.proof && c.proof.match_state) {
+        proven++;
+        for (const x of [...(c.proof.conflicts || []), ...(c.proof.unknowns || [])]) if (modeById.get(x.axis) === NEVER_RELAX) findings.push({ rule: `${a.id}/alt ${c.url}`, criterion: 2, msg: `alternate relaxes never-relax ${x.axis}` });
+      } else {
+        findings.push({ rule: `${a.id}/alt ${c.url}`, criterion: 3, msg: "surfaced alternate has no proof" });
       }
     }
   }
+  // default rule: reachable only if the table is INCOMPLETE. Prove unreachability by construction.
+  const dflt = (config.decisionTable || []).find((r) => r.when && !Object.keys(r.when).length);
+  if (dflt) {
+    renderable++;
+    const fullSpace = axisSet ? axisSet.reduce((n, ax) => n * ax.values.length, 1) : null;
+    const complete = fullSpace != null ? rules.length === fullSpace : dflt.unreachable === true;
+    if (complete && dflt.unreachable) proven++; // unreachable-by-construction counts as covered
+    else if (dflt.proof && dflt.proof.match_state) proven++;
+    else findings.push({ rule: dflt.id, criterion: 3, msg: "default rule is reachable but has no proof" });
+  }
+  const proofCoverage = renderable ? proven / renderable : 1;
+  if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `proof coverage ${proven}/${renderable} < 100%` });
 
-  return { ok: findings.length === 0, checked, findings };
+  return { ok: findings.length === 0, checked, proofCoverage, renderable, findings };
 }
-
-function rank(state) { return state === "EXACT" ? 0 : state === "UNVERIFIED" ? 1 : state === "COMPROMISE" ? 2 : 3; }
 
 function orderedCombo(axisSet, when) {
   return axisSet.map((a) => when[`D_${a.id}`]);

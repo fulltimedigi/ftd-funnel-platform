@@ -32,6 +32,7 @@ for (const store of battery) {
     const v = gen.meta.verify;
     assert.ok(v && v.ok, `verify not clean: ${JSON.stringify((v && v.findings || []).slice(0, 4))}`);
     assert.ok(v.checked >= 1, "at least one path was proven");
+    assert.equal(v.proofCoverage, 1, `100% of renderable results must carry a proof (got ${v.proofCoverage})`); // BLOCKER-3
 
     // versions present (G2)
     assert.ok(gen.config.catalog_version && gen.config.policy_version, "config carries catalog + policy versions");
