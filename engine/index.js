@@ -32,10 +32,16 @@ import { registerSink as registerGa4Sink } from "../analytics/ga4-sink.js";
 import { createResilientSink } from "./leadQueue.js";
 import * as analytics from "./analytics.js";
 import { validateConfig, formatValidationErrors } from "./validateConfig.js";
+import * as monitor from "./error-monitor.js";
 
 export async function boot({ configUrl, mountEl, schemaUrl }) {
   const res = await fetch(configUrl);
   const config = await res.json();
+
+  // Wire the structured error monitor (ADR-0005) at boot so runtime errors land in the
+  // operator's sheet (best-effort) and a ring buffer — the ad-hoc console.warns below
+  // now route through it. Never throws.
+  monitor.initMonitor(config && config.id, (config && config.analytics && config.analytics.sheetsEndpoint) || null);
 
   // Executable schema: load the sibling _schema.json (or an override) and run it.
   // If the schema can't be fetched, validation is skipped honestly — the funnel
@@ -46,9 +52,9 @@ export async function boot({ configUrl, mountEl, schemaUrl }) {
     try {
       const sres = await fetch(sUrl);
       if (sres && sres.ok) schema = await sres.json();
-      else console.warn("[ftd] schema not loaded — config validation skipped.");
+      else monitor.warn("schema not loaded — config validation skipped");
     } catch {
-      console.warn("[ftd] schema fetch failed — config validation skipped.");
+      monitor.warn("schema fetch failed — config validation skipped");
     }
   }
 
@@ -113,7 +119,9 @@ export function createFunnel(config, mountEl, deps = {}) {
   if (deps.schema) {
     validation = validateConfig(config, deps.schema);
     if (!validation.valid) {
-      console.warn(`[ftd] config "${config.id}" failed schema validation:\n${formatValidationErrors(validation)}`);
+      // Routed through the monitor (ADR-0005): before initMonitor() it just console-warns,
+      // after boot() it also queues to the ring buffer / sheet.
+      monitor.warn(`config "${config.id}" failed schema validation`, { errors: formatValidationErrors(validation) });
     }
   }
 

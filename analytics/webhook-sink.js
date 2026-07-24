@@ -13,6 +13,8 @@
  * Node-safe.
  */
 
+import { appendAudit } from "./auditQueue.js";
+
 /** A usable webhook URL: http(s), non-empty, not a paste-placeholder. */
 export function isUsableWebhook(url) {
   return typeof url === "string" && /^https?:\/\//i.test(url) && !url.startsWith("PASTE_") && !/YOUR_WEBHOOK/i.test(url);
@@ -24,13 +26,8 @@ export function createWebhookSink(url) {
     async submit(payload) {
       if (!isUsableWebhook(url)) return { ok: false, reason: "no-endpoint" };
 
-      // Audit copy first — never lose a lead even if the network fails.
-      try {
-        const key = "ftd:webhook-leads:" + (payload.funnelId || "default");
-        const prev = JSON.parse(globalThis.localStorage?.getItem(key) || "[]");
-        prev.push(payload);
-        globalThis.localStorage?.setItem(key, JSON.stringify(prev.slice(-50)));
-      } catch { /* localStorage unavailable — non-fatal */ }
+      // Audit copy first — never lose a lead even if the network fails (bounded to 50).
+      appendAudit("ftd:webhook-leads:" + (payload.funnelId || "default"), payload, 50);
 
       if (typeof fetch !== "function") return { ok: false, reason: "no-fetch" };
 

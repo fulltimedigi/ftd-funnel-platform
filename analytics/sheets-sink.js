@@ -24,6 +24,7 @@
  */
 
 import { registerSink as _registerAnalyticsSink } from "../engine/analytics.js";
+import { appendAudit } from "./auditQueue.js";
 
 function isUsableEndpoint(endpoint) {
   return typeof endpoint === "string" && endpoint.length > 0 && !endpoint.startsWith("PASTE_");
@@ -37,15 +38,9 @@ export function createSheetsSink(endpoint) {
         return { ok: false, reason: "no-endpoint" };
       }
 
-      // Audit trail first — don't lose the lead even if the network fails.
-      try {
-        const key = "ftd:leads:" + (payload.funnelId || "default");
-        const prev = JSON.parse(globalThis.localStorage?.getItem(key) || "[]");
-        prev.push(payload);
-        globalThis.localStorage?.setItem(key, JSON.stringify(prev));
-      } catch {
-        /* localStorage unavailable — non-fatal */
-      }
+      // Audit trail first — don't lose the lead even if the network fails. Bounded to
+      // the last 50 (matches the webhook sink) so the buffer can't grow unbounded.
+      appendAudit("ftd:leads:" + (payload.funnelId || "default"), payload, 50);
 
       try {
         await fetch(endpoint, {

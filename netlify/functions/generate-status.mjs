@@ -7,26 +7,13 @@
 
 import { statusJob } from "../../platform/jobs/generateJob.js";
 import { createBlobStore } from "../../platform/jobs/blobStore.js";
+import { makeHttp, tokenOk } from "./lib/http.mjs";
 
-const ALLOWED_ORIGINS = (process.env.FTD_ALLOWED_ORIGINS || "https://ftd-studio-preview.netlify.app,https://fulltimedigi.com,https://www.fulltimedigi.com").split(",").map((s) => s.trim()).filter(Boolean);
-
-function cors(event) {
-  const o = event.headers && (event.headers.origin || event.headers.Origin);
-  const allow = o && ALLOWED_ORIGINS.includes(o) ? o : ALLOWED_ORIGINS[0];
-  return { "Access-Control-Allow-Origin": allow, "Vary": "Origin", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, x-ftd-token" };
-}
-const json = (event, statusCode, body) => ({ statusCode, headers: { "Content-Type": "application/json; charset=utf-8", ...cors(event) }, body: JSON.stringify(body) });
-
-function tokenOk(event) {
-  const need = process.env.FTD_PUBLIC_TOKEN;
-  if (!need) return true;
-  const got = event.headers && (event.headers["x-ftd-token"] || event.headers["X-Ftd-Token"]);
-  return got === need;
-}
+const { json, preflight } = makeHttp("GET, OPTIONS");
 
 export const handler = async (event = {}) => {
   const method = event.httpMethod;
-  if (method === "OPTIONS") return { statusCode: 204, headers: cors(event), body: "" };
+  if (method === "OPTIONS") return preflight(event);
   if (method !== "GET") return json(event, 405, { status: "error", reason: "method-not-allowed" });
   if (!tokenOk(event)) return json(event, 401, { status: "error", reason: "unauthorized" });
 
