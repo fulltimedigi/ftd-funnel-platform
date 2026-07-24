@@ -106,8 +106,10 @@ export function extractBrand(html, origin = "") {
   // (premium), then a strong FREQUENT brand colour, else a tasteful premium-gold fallback.
   const isWarm = (h) => { const hu = _hue(h); return hu >= 20 && hu <= 60; }; // amber/gold/bronze
   const distinct = (h) => h !== primary && Math.abs(lum(h) - lum(primary)) > 0.12;
-  let accent = vivid.find((h) => isWarm(h) && sat(h) >= 0.3 && distinct(h))
-    || vivid.slice(0, 4).find((h) => sat(h) >= 0.5 && distinct(h)) // a genuine bold brand colour (top-frequent only)
+  const repeats = (h) => (counts.get(h) || 0) >= 3; // a real brand accent recurs; a stray
+                                                    // payment/social glyph (1–2×) does not
+  let accent = vivid.find((h) => isWarm(h) && sat(h) >= 0.3 && distinct(h) && repeats(h))
+    || vivid.slice(0, 4).find((h) => sat(h) >= 0.5 && distinct(h) && repeats(h)) // a genuine bold brand colour
     || WARM_ACCENT;
   if (lum(accent) < 0.28) accent = shade(accent, 0.4);  // too dark → lift so it reads on light
   if (lum(accent) > 0.86) accent = shade(accent, -0.3); // too light → deepen
