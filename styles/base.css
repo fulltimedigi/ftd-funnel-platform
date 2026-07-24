@@ -174,6 +174,12 @@ body {
 .ftd-alt-name { font-size: 12px; font-weight: 600; line-height: 1.35; max-height: 2.7em; overflow: hidden; }
 .ftd-alt-price { font-size: 12px; color: var(--price); font-weight: 700; }
 
+/* Rule-level honesty note (ADR-0036) — shown when the pick relaxed a constraint. */
+.ftd-relax { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 2px; padding: 8px 12px;
+  background: var(--accent-soft); border: 1px solid var(--border-accent); border-radius: calc(var(--radius) - 8px);
+  font-size: 12.5px; color: var(--text-soft); }
+.ftd-relax-ic { color: var(--accent); font-weight: 700; }
+
 /* ─── Personas result layout (strengths / gaps / next-steps) ─── */
 .ftd-persona-section { margin: 16px 0; padding: 14px 16px; background: var(--surface, #fff); border-radius: var(--radius, 12px); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.06)); }
 .ftd-persona-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

@@ -225,6 +225,25 @@ function altStrip(alts, config) {
   ]);
 }
 
+/** Rule-level honesty (ADR-0036): if the fired rule had to relax a ranked/soft constraint
+ *  (the exact match didn't exist), say so plainly on the card — never a silent override. */
+function relaxNote(config, resolved) {
+  const rid = resolved && resolved.scoring && resolved.scoring.ruleId;
+  if (!rid) return null;
+  const rule = (config.decisionTable || []).find((r) => r.id === rid);
+  const rel = rule && rule.relaxed;
+  if (!rel || !rel.length) return null;
+  const parts = rel.map((r) => {
+    if (r.dir === "above") return "أعلى قليلاً من الميزانية المختارة";
+    if (r.dir === "below") return "أقل من الميزانية المختارة";
+    return "يختلف في: " + (r.label || r.axis);
+  });
+  return el("div", { class: "ftd-relax" }, [
+    el("span", { class: "ftd-relax-ic", text: "ℹ︎" }),
+    el("span", { class: "ftd-relax-txt", text: " أقرب اختيار متاح — " + parts.join(" · ") + "." }),
+  ]);
+}
+
 function renderCommerce(ctx) {
   const { resolved, config, answers, onRestart } = ctx;
   const { primary, secondary, proportion } = resolved;
@@ -255,6 +274,7 @@ function renderCommerce(ctx) {
       el("div", { class: "ftd-signature" }, [
         el("h3", { class: "ftd-section-title", text: copy.recommendationTitle || "توصيتنا" }),
         recommendationCard(sig, answers, config, { showCta: true, highlight: true, badge: config.decisiveResult ? (copy.bestBadge || "✦ الأنسب لك") : null }),
+        relaxNote(config, resolved),
       ])
     );
   }
