@@ -22,6 +22,10 @@ import { antiBlandCheck } from "./qualityGate.js";
 import { richnessCheck } from "../quality/richnessCheck.js";
 import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
 import { deriveBudgetAxis, looksLikeBudgetAxis } from "./budgetAxis.js";
+import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/constraintKernel.js";
+import { compileConstraints, compileUnits, comboAnswers } from "../../engine/kernel/compile.js";
+import { catalogVersion, policyVersion } from "../../engine/kernel/version.js";
+import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -43,76 +47,70 @@ function _bestProduct(list) {
  * match (routing to an already-reachable product).
  * @returns {{winnerByCombo:Map<string,Object>, altByUrl:Map<string,Object[]>}}
  */
-const SOFT_MISS = -0.5; // a soft-axis mismatch is a real cost (ADR-0034), not near-free
-
 /**
- * Covering assignment with an ORDERED CONSTRAINT LADDER (ADR-0036, "the Promise Principle").
- * Hard axes are RANKED by their order in axisSet (rank-1 first). For every combo we require
- * ALL hard ranks; if no product matches, we drop the LOWEST-rank hard axis and retry, until
- * ≥1 product appears. Rank-1 NEVER drops (its values always have products → no dead-end), so
- * we never silently fall to a product that ignores the shopper's top promise. Whatever ranks
- * were dropped are recorded per combo in `relaxedByCombo` and surfaced honestly on the rule.
+ * Covering assignment, DELEGATED TO THE CONSTRAINT KERNEL (ADR-0037, Promise Principle v3).
+ * ---------------------------------------------------------------------------------------------
+ * The kernel (engine/kernel/constraintKernel.js) is now the SINGLE source of truth for what
+ * "matches" means (Guardrail G1): for every answer-combo we call `kernel.select`, which runs the
+ * lexicographic partial-CSP (exclude never-relax violations/unknowns → smallest loss vector →
+ * exact dominance → relaxation bounds). This function keeps only the COVERAGE policy, expressed
+ * as the kernel's allowed *tie-break* between equal-quality matches: prefer a product not yet
+ * used as a #1, then the higher-quality shell. It carries NO independent matching logic.
+ *
+ * Returns per-combo the winning product AND the kernel's proof-carrying SelectionResult, plus
+ * the compiled constraints and the catalog/policy versions (Guardrail G2). Twins that tie the
+ * winner EXACTLY are recorded as ranked alternates.
  */
 function _assignCovering(products, axisSet, combos, overall) {
   const key = (c) => c.join("¦");
+  const constraints = compileConstraints(axisSet);
+  const units = compileUnits(products, axisSet);
+  const unitByUrl = new Map(units.map((u) => [u.id, u]));
+  const catalogUrls = new Set(units.map((u) => u.id));
+  const catVer = catalogVersion(products);
+  const polVer = policyVersion(constraints);
+  const nBudgetTiers = Math.max(1, ...axisSet.filter((a) => a.hard && a.ordinal).map((a) => a.values.length));
+
+  // Quality rank (lower = better shell): reproduces _bestProduct's ordering as a scalar for the
+  // fine tie-break, so equal-loss ties resolve to the premium product — deterministically.
+  const ranked = [...products].sort((a, b) => (_bestProduct([a, b]) === a ? -1 : 1));
+  const qualityRank = new Map(ranked.map((p, i) => [p.url, i]));
+  const used = new Set(); // #1 products so far — coverage tie-break prefers a FRESH one
+  const tieBreak = (u) => (used.has(u.id) ? 1e7 : 0) + (qualityRank.get(u.id) ?? 1e6);
+  const opts = { catalogVersion: catVer, policyVersion: polVer, catalogUrls, tieBreak, bounds: { maxBudgetOvershootTiers: nBudgetTiers } };
+
+  const winnerByCombo = new Map(), altByUrl = new Map(), proofByCombo = new Map();
+  // Two passes so the FRESH tie-break maximises distinct #1 coverage: pass 1 lets every product
+  // claim a home cell it wins outright; pass 2 fills the rest, still kernel-decided.
+  const order = [...combos];
+  for (const pass of [0, 1]) {
+    for (const combo of order) {
+      const k = key(combo);
+      if (winnerByCombo.has(k)) continue;
+      const answers = comboAnswers(axisSet, combo);
+      const res = kernelSelect(units, constraints, answers, opts);
+      let winner = res.product_id ? (unitByUrl.get(res.product_id) || {}).product : null;
+      if (!winner) { // honest NO_MATCH shouldn't occur for product-derived combos; keep coverage safe
+        if (pass === 0) continue;
+        winner = overall || products[0];
+      }
+      // In pass 0, only lock a cell whose winner is EXACT and still fresh (its true home); defer
+      // compromises to pass 1 so fresh products aren't consumed by a neighbour's relaxed cell.
+      if (pass === 0 && (res.match_state !== EXACT || used.has(winner.url))) continue;
+      winnerByCombo.set(k, winner); proofByCombo.set(k, res); used.add(winner.url);
+    }
+  }
+  // Ranked-alternate twins: any product whose OWN full profile equals a combo whose winner is a
+  // different product is that winner's nearest alternate (kernel-EXACT on the same cell).
   const val = (p, a) => a.profile.get(p.url);
   const isFull = (p) => axisSet.every((a) => val(p, a) != null);
-  const hardIdx = axisSet.map((a, i) => (a.hard ? i : -1)).filter((i) => i >= 0); // rank order
-  const softIdx = axisSet.map((a, i) => (a.hard ? -1 : i)).filter((i) => i >= 0);
-  const ordRank = new Map(hardIdx.filter((i) => axisSet[i].ordinal).map((i) => [i, new Map(axisSet[i].values.map((v, k) => [v.value, k]))]));
-
-  const matchesHard = (p, combo, active) => {
-    for (const i of active) { const pv = val(p, axisSet[i]); if (pv != null && pv !== combo[i]) return false; }
-    return true; // null value = wildcard (eligible), so nothing is orphaned
-  };
-  const softScore = (p, combo) => { let s = 0; for (const i of softIdx) { const pv = val(p, axisSet[i]); if (pv != null) s += pv === combo[i] ? 1 : SOFT_MISS; } return s; };
-  // Within a (possibly relaxed) pool: prefer NEAREST on any relaxed ordinal axis (so a
-  // relaxed price is honestly the closest), then the best soft match.
-  const selScore = (p, combo, relaxed) => {
-    let s = softScore(p, combo);
-    for (const i of relaxed) { const rk = ordRank.get(i); if (rk) { const pv = val(p, axisSet[i]); if (pv != null) s -= 10 * Math.abs((rk.get(pv) ?? 0) - (rk.get(combo[i]) ?? 0)); } }
-    return s;
-  };
-  const poolFor = (combo) => {
-    const active = hardIdx.slice();
-    const relaxed = [];
-    for (;;) {
-      const pool = products.filter((p) => matchesHard(p, combo, active));
-      if (pool.length || active.length <= 1) return { pool, relaxed };
-      relaxed.push(active.pop()); // drop the LOWEST-rank hard axis; rank-1 (index 0) never drops
-    }
-  };
-
-  // Pass 1 — full products own their exact home combo (all ranks satisfied → no relaxation).
-  const contenders = new Map();
-  for (const p of products) { if (!isFull(p)) continue; const k = key(axisSet.map((a) => val(p, a))); if (!contenders.has(k)) contenders.set(k, []); contenders.get(k).push(p); }
-  for (const list of contenders.values()) list.sort((a, b) => (_bestProduct([a, b]) === a ? -1 : 1));
-
-  const winnerByCombo = new Map(), altByUrl = new Map(), relaxedByCombo = new Map(), reached = new Set();
-  for (const combo of combos) {
-    const k = key(combo);
-    if (!contenders.has(k)) continue;
-    const list = contenders.get(k);
-    winnerByCombo.set(k, list[0]); reached.add(list[0].url); relaxedByCombo.set(k, []);
-    if (list.length > 1) altByUrl.set(list[0].url, list.slice(1));
+  for (const p of products) {
+    if (!isFull(p)) continue;
+    const homeKey = key(axisSet.map((a) => val(p, a)));
+    const w = winnerByCombo.get(homeKey);
+    if (w && w.url !== p.url) { const list = altByUrl.get(w.url) || []; list.push(p); altByUrl.set(w.url, list); }
   }
-
-  // Pass 2 — fill via the ladder. The winner always respects rank-1; any dropped ranks are
-  // recorded. Prefer a not-yet-#1 product among the top (keeps coverage ~100% within cells).
-  for (const combo of combos) {
-    const k = key(combo);
-    if (winnerByCombo.has(k)) continue;
-    const { pool, relaxed } = poolFor(combo);
-    const cands = pool.length ? pool : (overall ? [overall] : products.slice(0, 1));
-    let bs = -Infinity;
-    for (const p of cands) { const s = selScore(p, combo, relaxed); if (s > bs) bs = s; }
-    const top = cands.filter((p) => selScore(p, combo, relaxed) === bs);
-    const fresh = top.filter((p) => !reached.has(p.url));
-    const winner = (fresh.length ? _bestProduct(fresh) : _bestProduct(top)) || overall;
-    winnerByCombo.set(k, winner); reached.add(winner.url);
-    relaxedByCombo.set(k, relaxed.map((i) => axisSet[i]));
-  }
-  return { winnerByCombo, altByUrl, relaxedByCombo };
+  return { winnerByCombo, altByUrl, proofByCombo, constraints, catalogVersion: catVer, policyVersion: polVer };
 }
 
 /* ---- fact axes (categorical, fact-framed, ≤4 values each) ------------------ */
@@ -162,7 +160,7 @@ function buildConfig(catalog, axisSet, opts) {
   //    profile → no product is orphaned. "Results First, Questions Last."
   const combos = cartesian(axisSet.map((a) => a.values.map((v) => v.value)));
   const overall = _bestProduct(products);
-  const { winnerByCombo, altByUrl, relaxedByCombo } = _assignCovering(products, axisSet, combos, overall);
+  const { winnerByCombo, altByUrl, proofByCombo, constraints: kConstraints, catalogVersion: catVer, policyVersion: polVer } = _assignCovering(products, axisSet, combos, overall);
   const winners = new Map(); // url -> product (distinct combo winners)
   for (const p of winnerByCombo.values()) if (!winners.has(p.url)) winners.set(p.url, p);
 
@@ -243,40 +241,28 @@ function buildConfig(catalog, axisSet, opts) {
     derivedSignals.push({ id: `D_${a.id}`, from: [sid], rule: "identity", domain: a.values.map((v) => v.value) });
   });
 
-  // 4. decision table: one rule per combo → winner archetype. RULE-LEVEL HONESTY (ADR-0036):
-  //    if the ladder relaxed any ranked constraint for this combo (the exact cell was empty),
-  //    the rule carries `relaxed:[{axis,label,dir?}]` so the result can say so — never silent.
-  const axisPos = new Map(axisSet.map((a, i) => [a, i]));
-  const relaxedFor = (combo) => {
-    const winner = winnerByCombo.get(combo.join("¦"));
-    const out = [];
-    const seen = new Set();
-    const dirFor = (a) => {
-      const wv = a.profile.get(winner.url);
-      const wi = a.values.findIndex((v) => v.value === wv), ci = a.values.findIndex((v) => v.value === combo[axisPos.get(a)]);
-      return (wi >= 0 && ci >= 0 && wi !== ci) ? (wi > ci ? "above" : "below") : undefined;
-    };
-    // 1) HARD ranks the ladder had to relax (the exact cell was empty).
-    for (const a of relaxedByCombo.get(combo.join("¦")) || []) {
-      const o = { axis: a.id, label: a.label }; if (a.ordinal) { const d = dirFor(a); if (d) o.dir = d; }
-      out.push(o); seen.add(a.id);
-    }
-    // 2) SOFT axes the scorer couldn't fully honour — disclosed too (no silent override).
-    for (const a of axisSet) {
-      if (a.hard || seen.has(a.id)) continue;
-      const wv = a.profile.get(winner.url), cv = combo[axisPos.get(a)];
-      if (wv != null && wv !== cv) { const o = { axis: a.id, label: a.label, soft: true }; if (a.ordinal) { const d = dirFor(a); if (d) o.dir = d; } out.push(o); }
-    }
-    return out;
-  };
+  // 4. decision table: one rule per combo → winner archetype. The rule is a MATERIALIZED CACHE
+  //    of the kernel's SelectionResult for that answer-path (Guardrail G1): no matching logic
+  //    lives here. Each rule carries the kernel PROOF (match_state, matches, conflicts, unknowns,
+  //    variant_id) so the renderer and the runtime verifier read structured fields, never prose.
+  //    RULE-LEVEL HONESTY: `relaxed` (legacy shape) = the kernel's conflicts (VIOLATED answers),
+  //    with never-relax rank-1 guaranteed absent (the kernel excluded any unit that violates it).
   const decisionTable = combos.map((combo, ci) => {
+    const proof = proofByCombo.get(combo.join("¦"));
     const rule = {
       id: `r_${ci}`,
       when: Object.fromEntries(axisSet.map((a, i) => [`D_${a.id}`, combo[i]])),
       result: archId.get(winnerByCombo.get(combo.join("¦")).url),
     };
-    const relaxed = relaxedFor(combo);
-    if (relaxed.length) rule.relaxed = relaxed;
+    if (proof) {
+      rule.proof = {
+        match_state: proof.match_state, variant_id: proof.variant_id,
+        matches: proof.matches, conflicts: proof.conflicts, unknowns: proof.unknowns,
+        tie_break_reason: proof.tie_break_reason,
+      };
+      const relaxed = (proof.conflicts || []).map((c) => { const o = { axis: c.axis, label: c.label }; if (c.dir) o.dir = c.dir; if (c.soft) o.soft = true; return o; });
+      if (relaxed.length) rule.relaxed = relaxed;
+    }
     return rule;
   });
   decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id });
@@ -297,6 +283,13 @@ function buildConfig(catalog, axisSet, opts) {
     // The ordered constraint ladder (ADR-0036): hard axis ids, rank-1 first. rank-1 never
     // relaxes; lower ranks relax only into a `relaxed` disclosure on the rule.
     constraintLadder: axisSet.filter((a) => a.hard).map((a) => a.id),
+    // Guardrail G2 (ADR-0037): content-hash versions let the runtime verifier tell whether the
+    // served SKU still belongs to the catalog + policy this table was compiled against (staleness).
+    catalog_version: catVer,
+    policy_version: polVer,
+    // The typed constraint policy the kernel compiled — the runtime re-verifier re-derives status
+    // from this, so "matches" means the SAME thing at author time and at render time (G1).
+    constraintPolicy: (kConstraints || []).map((c) => ({ id: c.id, type: c.type, mode: c.mode, priority: c.priority, order: c.order })),
     signals, derivedSignals, decisionTable,
     resultLayout: "commerce",
     decisiveResult: true, // UX_INTERFACE_DECISION §6: one pick + 2–3 reasons + one CTA
@@ -404,9 +397,11 @@ export function authorFromAxes(catalog, axes, opts = {}) {
       const bland = antiBlandCheck(config);
       attempts.push({ axes: set.map((a) => a.id), size: set.length, trust: trust.ok, bland: bland.ok });
       if (trust.ok && bland.ok) {
+        const verify = verifyFunnel(config, cleanCat, set); // publish-time proof (ADR-0037)
+        if (!verify.ok) { attempts.push({ axes: set.map((a) => a.id), verifyFindings: verify.findings.slice(0, 6) }); continue; }
         const rich = richnessCheck(config, cleanCat);
         const cand = { config, coverage: rich.metrics.coverage, richOk: rich.ok, size: set.length,
-          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, hard: hard.map((h) => h.id) } };
+          meta: { axes: set.map((a) => a.id), questions: set.length, archetypes: config.archetypes.length, combos, coverage: rich.metrics.coverage, hard: hard.map((h) => h.id), verify } };
         if (!best || cand.coverage > best.coverage + 1e-9 || (Math.abs(cand.coverage - best.coverage) <= 1e-9 && cand.size > best.size)) best = cand;
         if (rich.ok && rich.metrics.coverage >= 0.999) break;
       }
@@ -446,7 +441,12 @@ export function authorFunnel(catalog, opts = {}) {
     const bland = antiBlandCheck(config);
     attempts.push({ set: set.map((a) => a.id), trust: trust.ok, bland: bland.ok, blandFindings: bland.findings.map((f) => f.code) });
     if (trust.ok && bland.ok) {
-      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, hard: hard.map((h) => h.id) } };
+      // PUBLISH-TIME exhaustive verification (ADR-0037): prove the v3 exit criteria for THIS
+      // funnel's finite table before it can ship. A finding is a hard authoring failure — we
+      // never publish a funnel whose promise we can't prove.
+      const verify = verifyFunnel(config, cleanCat, set);
+      if (!verify.ok) { attempts.push({ set: set.map((a) => a.id), verifyFindings: verify.findings.slice(0, 6) }); continue; }
+      return { ok: true, config, meta: { axes: set.map((a) => a.id), archetypes: config.archetypes.length, combos, hard: hard.map((h) => h.id), verify } };
     }
   }
   return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };

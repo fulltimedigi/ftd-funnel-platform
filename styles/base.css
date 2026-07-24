@@ -179,6 +179,8 @@ body {
   background: var(--accent-soft); border: 1px solid var(--border-accent); border-radius: calc(var(--radius) - 8px);
   font-size: 12.5px; color: var(--text-soft); }
 .ftd-relax-ic { color: var(--accent); font-weight: 700; }
+.ftd-relax-warn { background: #fff6ed; border-color: #f0b37e; color: #8a4b1f; }
+.ftd-relax-warn .ftd-relax-ic { color: #c05621; }
 
 /* ─── Personas result layout (strengths / gaps / next-steps) ─── */
 .ftd-persona-section { margin: 16px 0; padding: 14px 16px; background: var(--surface, #fff); border-radius: var(--radius, 12px); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.06)); }

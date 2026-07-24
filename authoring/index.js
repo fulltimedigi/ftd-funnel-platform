@@ -15,6 +15,7 @@
 import { ingestCatalog } from "./ingest/index.js";
 import { authorFunnel } from "./author/index.js";
 import { cleanCatalog } from "./author/axes.js";
+import { verifyFunnel } from "../engine/kernel/verifyFunnel.js";
 import { trustValidate } from "../engine/trustValidate.js";
 import { antiBlandCheck } from "./author/qualityGate.js";
 import { richnessCheck } from "./quality/richnessCheck.js";
@@ -87,6 +88,11 @@ export async function generateFunnelFromUrl(url, opts = {}) {
 
   const trust = trustValidate(config);
   const bland = antiBlandCheck(config);
+  // Publish-time proof (ADR-0037, Guardrail G2): the authoring layer already refused to return a
+  // config that fails the v3 exit criteria; re-assert it here at the pipeline boundary so EVERY
+  // published funnel — deterministic or AI — carries an explicit, checkable certificate. Prefer
+  // the axisSet-level proof from authoring (criteria 1–6); fall back to a proof-only re-check.
+  const verify = (meta && meta.verify) || verifyFunnel(config, catalog);
   return {
     ok: true,
     config,
@@ -96,6 +102,7 @@ export async function generateFunnelFromUrl(url, opts = {}) {
     trust,                 // { ok, findings }
     bland,                 // { ok, findings } — anti-bland gate (ADR-0016)
     richness,              // { ok, findings, metrics } — the "too thin" gate (ADR-0028)
+    verify,                // { ok, checked, findings } — v3 exit-criteria proof (ADR-0037)
     ai,                    // { attempted, enrichOk, accepted, reason?, error? } — live AI diagnostic
     meta,
     notes: ing.notes,

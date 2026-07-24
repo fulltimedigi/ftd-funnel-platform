@@ -23,6 +23,7 @@
 import { el } from "./dom.js";
 import { buildRecommendations } from "./recommend.js";
 import { localizeNum, formatPercent } from "./i18n-rtl.js";
+import { verifyServedResult } from "./kernel/verifyRuntime.js";
 
 /* ----------------------------------------------------------- helpers */
 
@@ -225,19 +226,41 @@ function altStrip(alts, config) {
   ]);
 }
 
-/** Rule-level honesty (ADR-0036): if the fired rule had to relax a ranked/soft constraint
- *  (the exact match didn't exist), say so plainly on the card — never a silent override. */
+/** Rule-level honesty (ADR-0036/0037): if the served result differs from any answer, say so
+ *  plainly on the card — never a silent override. The disclosure is read from the KERNEL PROOF
+ *  as STRUCTURED fields (conflicts vs unknowns get DISTINCT wording), not pre-authored prose, so
+ *  mobile/i18n/a11y can never hide a compromise. A cheap runtime verifier (G2) first refuses to
+ *  render if a never-relax constraint ever appears relaxed (a corrupted/stale table). */
 function relaxNote(config, resolved) {
   const rid = resolved && resolved.scoring && resolved.scoring.ruleId;
   if (!rid) return null;
   const rule = (config.decisionTable || []).find((r) => r.id === rid);
-  const rel = rule && rule.relaxed;
-  if (!rel || !rel.length) return null;
-  const parts = rel.map((r) => {
-    if (r.dir === "above") return "أعلى قليلاً من الميزانية المختارة";
-    if (r.dir === "below") return "أقل من الميزانية المختارة";
-    return "يختلف في: " + (r.label || r.axis);
-  });
+  if (!rule) return null;
+
+  const check = verifyServedResult(config, resolved);
+  if (!check.ok) {
+    // Never-relax break / stale table: do NOT print a confident "closest available" line that
+    // could imply the top promise held. Surface the honest state instead.
+    return el("div", { class: "ftd-relax ftd-relax-warn" }, [
+      el("span", { class: "ftd-relax-ic", text: "⚠︎" }),
+      el("span", { class: "ftd-relax-txt", text: " تعذّر تأكيد المطابقة لهذا الخيار — تحقّق من التفاصيل قبل الشراء." }),
+    ]);
+  }
+
+  // Prefer the structured kernel proof; fall back to the legacy `relaxed` list (hand-built configs).
+  const conflicts = check.conflicts.length || check.unknowns.length ? check.conflicts : ((rule.relaxed || []).filter((r) => !r.unknown));
+  const unknowns = check.unknowns;
+  if (!conflicts.length && !unknowns.length) return null;
+
+  const parts = [];
+  for (const r of conflicts) {
+    if (r.dir === "above") parts.push("أعلى قليلاً من الميزانية المختارة");
+    else if (r.dir === "below") parts.push("أقل من الميزانية المختارة");
+    else parts.push("يختلف في: " + (r.label || r.axis));
+  }
+  // UNKNOWN reads differently from a conflict: we couldn't CONFIRM it (not "it's wrong").
+  for (const u of unknowns) parts.push("لم نتمكّن من تأكيد: " + (u.label || u.axis));
+
   return el("div", { class: "ftd-relax" }, [
     el("span", { class: "ftd-relax-ic", text: "ℹ︎" }),
     el("span", { class: "ftd-relax-txt", text: " أقرب اختيار متاح — " + parts.join(" · ") + "." }),
