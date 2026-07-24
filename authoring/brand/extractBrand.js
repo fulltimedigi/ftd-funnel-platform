@@ -14,10 +14,12 @@
 const HEX_RE = /#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g;
 const WARM_ACCENT = "#c8a24a"; // premium gold — a tasteful warm fallback that always pops
 
+/** Absolute URL, and upgrade http→https so the asset loads on our https page (no mixed
+ *  content / CSP block). Modern store CDNs serve the same asset over https. */
 function _abs(url, origin) {
   if (!url) return "";
-  if (/^https?:\/\//i.test(url) || /^data:/i.test(url)) return url;
-  try { return new URL(url, origin).href; } catch { return url; }
+  let u = /^https?:\/\//i.test(url) || /^data:/i.test(url) ? url : (() => { try { return new URL(url, origin).href; } catch { return url; } })();
+  return u.replace(/^http:\/\//i, "https://");
 }
 
 function _meta(html, name) {
