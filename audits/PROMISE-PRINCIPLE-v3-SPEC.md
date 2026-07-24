@@ -104,3 +104,73 @@ Prior-art framing to adopt (not a heavy solver dep): constraint-based recommenda
 (Felfernig), constraint hierarchies (Borning), lexicographic/partial CSP, QuickXplain / minimal
 correction sets for relaxation+explanation, dynamic/conditional CSP, faceted navigation (every
 filter hard by default — our bug was deviating from that default).
+
+---
+
+# Clarifications v3.1 (GOVERNING — resolve every ambiguity here)
+
+External review (ChatGPT) rated the prompt 9/10 and flagged real ambiguities. These
+clarifications govern; on any conflict with the body above, follow these and note it.
+
+**C0 — workflow (corrected for OUR two-session setup).** Implement in the current worktree,
+run the full test suite, then **commit + push to `claude/stage-3-delivery`** (this is how the
+Netlify preview deploys and how the verifying session checks it live). Do NOT open a PR to
+main. "Preview only" meant *preview deploy + no PR* — NOT read-only.
+
+**C1 — authority.** This spec file is authoritative; the relayed inline digest is a summary.
+On any conflict, follow the spec and record the conflict in the report rather than guessing.
+
+**C2 — ADRs.** ADR-0034 (form) and ADR-0035 (price) stay as historical record, marked
+"Superseded by ADR-0037"; do not delete or rewrite their past decisions. Their logic is
+re-implemented *inside the kernel*, not kept as separate systems.
+
+**C3 — outcome is a union, not always a product:**
+`SelectionOutcome = SelectionResult{match_state: EXACT|COMPROMISE|UNVERIFIED} | NoExactMatchResult | StaleArtifactResult`.
+A `SelectionResult` is constructed ONLY with a passing verification certificate. If no SKU
+satisfies every NEVER_RELAX (or a relaxation BOUND is exceeded, or the artifact is stale),
+return `NoExactMatchResult` / `StaleArtifactResult` — never pass a violating product through.
+
+**C4 — result-state definitions (verbatim):**
+- EXACT: every active non-ADVISORY answer = SAT; no VIOLATED and no disclosable UNKNOWN.
+- COMPROMISE: every NEVER_RELAX = SAT; ≥1 RELAXABLE = VIOLATED within bounds; every extra UNKNOWN also disclosed.
+- UNVERIFIED: every NEVER_RELAX = SAT; no VIOLATED; ≥1 RELAXABLE/ADVISORY = UNKNOWN.
+- Classification order: any VIOLATED → COMPROMISE; else any UNKNOWN → UNVERIFIED; else EXACT.
+
+**C5 — variant conjunction.** ALL variant-level constraints must hold on ONE specific
+purchasable SKU. Never satisfy colour from one variant and size/price from a sibling variant
+and call the product shell a match (no cross-variant false conjunction).
+
+**C6 — UNKNOWN placement in the loss vector.** UNKNOWN is scored WITHIN its constraint's own
+`relaxation_priority`, not as a global end-of-vector penalty. Default: a *known bounded*
+violation is better than UNKNOWN at the same priority. UNKNOWN is forbidden on any asserted /
+NEVER_RELAX / sensitive attribute (it excludes the candidate there).
+
+**C7 — price wording (simpler).** price ≤ cap → SAT, loss 0. price > cap → VIOLATED, magnitude
+= overshoot. Do NOT prefer cheaper-within-cap unless a separate explicit preference asks for it.
+
+**C8 — SURFACED coverage denominator.** Coverage is over *eligible recommendable SKUs* only
+(active, buyable, with the minimum grounded claims for an honest path). Excluded SKUs are listed
+in a separate report with the exclusion reason — never hidden inside the coverage %.
+
+**C9 — "current catalog" in v3** = the latest in-system **normalized catalog snapshot**, NOT a
+live fetch from the store (live inventory/price is deferred). A changed snapshot version
+invalidates the cache and forces a kernel re-run before display.
+
+**C10 — richness vs honesty.** Do NOT change trust/anti-bland/richness definitions, thresholds,
+or weaken their tests. Change only the *orchestration order* so richness/anti-bland cannot force
+an ungrounded question. If that is impossible without editing a gate, STOP and log the conflict
+— do not work around the spec.
+
+**C11 — independent verifier (critical).** The publish-time verifier must be a SIMPLE reference
+evaluator INDEPENDENT of the optimized matcher. Matcher and verifier must NOT share the
+candidate-ranking / loss-vector code (they may share the documented predicate definitions).
+Verify exact-dominance and lexicographic optimality by an independent brute-force scan over all
+candidates, for every reachable path. Fuzz tests assert real invariants, not just "doesn't crash."
+
+**C12 — test fixtures.** Per-artifact acceptance uses REAL stores: oudfactory + two real stores
+from two different verticals; name them in the report. Do not invent synthetic stores merely to
+pass acceptance. (Property/fuzz catalogs may be synthetic.)
+
+**C13 — new-gate status.** Each added gate is labelled BLOCKING or REPORTING-ONLY with a
+threshold. At minimum specify thresholds for exact-path-rate, unknown-attribute-rate, and
+predicate-evidence-coverage.
