@@ -33,8 +33,24 @@ Unit-green on an unimported module is NOT done. Add: E2E render tests through th
 
 ---
 
-## PROMPT A — P0 correctness (the certified render gate)
-(see chat; also the authoritative text the round-2 session must follow)
+## Final corrections applied (2 external reviews)
+- UNVERIFIED is a match_state of a REAL product, NOT a terminal. Terminal = NO_MATCH | STALE |
+  RESTART_REQUIRED | HANDOFF_UNBOUND | INVALID_ARTIFACT.
+- The artifact stores a serializable ProvenSelection; the Symbol-branded CertifiedSelectionResult is
+  minted in-browser by certifyForRender only (Symbol never serialized).
+- Budget bound: ONE independent numbered policy registry; matcher + verifier each read
+  maxBudgetTierDistance=1 and derive independently; NEVER pass an effective bound matcher→verifier;
+  literal only inside a canary test.
+- Ambiguous product: UNKNOWN != OTHER; resolve/merchant/exclude-with-reason; "other" only if
+  positively proven outside known values — never for missing data; don't reject the funnel if the
+  exclusion is honest and coverage holds.
+- CanonicalOfferRecord (product- and variant-level fields with provenance); no composing across offers.
+- Close the advisory path (verifyServedResult internal-only; no {warning, product}).
+- Any post-certification override of product_id/variant_id/price/image/cta_url/availability = a
+  programming error / render refusal, not a silent downgrade.
+- Security: public job id = randomUUID + internal dedup HMAC(salt,url); timingSafeEqual on
+  fixed-length digests; SSRF must connect to the verified IP (pin, preserve Host/SNI) — resolve-then-
+  fetch is not enough; cost cap must use CAS, not documentation; CSP frame-ancestors = required
+  origins only, not open wildcard. Two commits (correctness, then security); full suite after each.
 
-## PROMPT B — P0 security (fail-closed)
-(see chat)
+The authoritative final prompts (A correctness, B security) were relayed to the round-2 session.
