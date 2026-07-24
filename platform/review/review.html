@@ -79,6 +79,7 @@
     import { buildReviewModel } from "./reviewModel.js";
     import { buildArtifact } from "../publish.js";
     import { resolveConfigSource } from "../configSource.js";
+    import { getSession, createFunnel, signOut } from "../auth/supabaseClient.js";
 
     const app = document.getElementById("app");
     const brandline = document.getElementById("brandline");
@@ -109,9 +110,48 @@
       return el("div", {}, kids);
     }
 
+    // ---- MVP accounts: save the generated draft to the signed-in user ---------
+    function draftStoreUrl(config) {
+      return sessionStorage.getItem("ftd:draft-url") || (config && config.store_url) || "";
+    }
+    function draftName(config) {
+      return (config && config.brand && config.brand.name) || (config && config.id) || draftStoreUrl(config) || "فانل جديد";
+    }
+    async function saveDraft(ctx, statusEl) {
+      const session = await getSession();
+      if (!session) {
+        // Not signed in → go to login, then return here and finish the save.
+        location.href = "../auth/login.html?next=" + encodeURIComponent("../review/review.html?draft=1&save=1");
+        return;
+      }
+      statusEl.className = "msg show info"; statusEl.textContent = "جارٍ الحفظ في حسابك…";
+      try {
+        const id = await createFunnel({ storeUrl: draftStoreUrl(ctx.config), artifact: ctx.config, name: draftName(ctx.config) });
+        statusEl.className = "msg show info";
+        statusEl.innerHTML = "تم الحفظ في حسابك ✓ — <a href='../dashboard/dashboard.html'>افتح فانلاتي</a>.";
+        return id;
+      } catch (e) {
+        statusEl.className = "msg show err";
+        statusEl.textContent = e && e.message ? e.message : "تعذّر الحفظ. حاول تاني.";
+      }
+    }
+    function saveCard(ctx) {
+      const status = el("div", { class: "msg", id: "save-msg" });
+      const btn = el("button", { class: "btn", text: "احفظ في حسابي ←" });
+      btn.addEventListener("click", () => saveDraft(ctx, status));
+      const dash = el("a", { class: "note", href: "../dashboard/dashboard.html", text: "فانلاتي المحفوظة" });
+      const card = el("div", { class: "publish card" }, [
+        el("h2", { text: "احفظ الفانل في حسابك" }),
+        el("p", { class: "note", text: "احفظه في حسابك عشان ترجعله وتعدّله من أي وقت. تسجيل الدخول بالإيميل فقط — من غير باسورد." }),
+        btn, status, el("div", { class: "row" }, [dash]),
+      ]);
+      return card;
+    }
+
     function render(model, ctx) {
       brandline.textContent = model.summary ? ("لـ " + (model.summary.brand || "متجرك")) : "";
       app.innerHTML = "";
+      if (ctx.draft) app.appendChild(saveCard(ctx));
 
       if (!model.ok) {
         const b = el("div", { class: "blocked-banner" }, [el("b", { text: "هذه المسودّة محظورة من النشر — وده تصرّف سليم، مش خطأ." })]);
@@ -217,6 +257,12 @@
       const trust = trustValidate(config);
       const bland = antiBlandCheck(config);
       render(buildReviewModel({ config, trust, bland }), ctx);
+
+      // Returned from login to finish a save (?save=1) → run it now, no re-click.
+      if (ctx.draft && new URLSearchParams(location.search).get("save") === "1") {
+        const status = document.getElementById("save-msg");
+        if (status) await saveDraft(ctx, status);
+      }
     })();
   </script>
 </body>

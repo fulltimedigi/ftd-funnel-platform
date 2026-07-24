@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!--
+  platform/auth/login.html — email magic-link / OTP sign-in (MVP accounts).
+  Enter email → receive a 6-digit code → enter it → signed in. No password.
+  Honours ?next=<same-origin path> to return the user where they came from
+  (e.g. back to the review screen to finish saving a draft).
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تسجيل الدخول — FullTimeDigi Studio</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <style>
+    :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f8fafc; --brand:#0f766e; --bad:#b91c1c; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+      font-family:system-ui,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif; line-height:1.7; }
+    .wrap { max-width:460px; margin:0 auto; padding:3rem 1.5rem; }
+    .sub { color:var(--muted); }
+    h1 { font-size:1.6rem; margin:.3rem 0 .4rem; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:1.5rem; margin-top:1.5rem; }
+    label { display:block; font-weight:600; margin:.9rem 0 .35rem; }
+    input { width:100%; padding:.8rem .9rem; border:1px solid var(--line); border-radius:10px; font-size:1rem; font-family:inherit; }
+    input:focus { outline:2px solid var(--brand); border-color:var(--brand); }
+    input#code { letter-spacing:.4em; text-align:center; font-size:1.3rem; direction:ltr; }
+    .hint { color:var(--muted); font-size:.85rem; margin-top:.25rem; }
+    .btn { width:100%; margin-top:1.25rem; background:var(--ink); color:#fff; border:0; border-radius:12px; padding:.9rem 1rem; font-size:1.05rem; cursor:pointer; }
+    .btn:disabled { opacity:.55; cursor:progress; }
+    .link { background:none; border:0; color:var(--brand); cursor:pointer; text-decoration:underline; font-size:.9rem; padding:0; margin-top:1rem; }
+    .msg { margin-top:1rem; padding:.9rem 1rem; border-radius:10px; font-size:.92rem; display:none; }
+    .msg.show { display:block; }
+    .msg.err { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .msg.info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+    .step { display:none; } .step.show { display:block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="sub">FullTimeDigi Studio</div>
+    <h1>ادخل على حسابك</h1>
+    <p class="sub">من غير باسورد. اكتب إيميلك، هنبعتلك رمز، تكتبه وتدخل.</p>
+
+    <div class="card">
+      <!-- Step 1: email -->
+      <div class="step show" id="step-email">
+        <label for="email">البريد الإلكتروني</label>
+        <input id="email" type="email" inputmode="email" placeholder="you@example.com" autocomplete="email" spellcheck="false" />
+        <button class="btn" id="send">أرسل الرمز ←</button>
+      </div>
+
+      <!-- Step 2: code -->
+      <div class="step" id="step-code">
+        <label for="code">الرمز اللي وصلك على <span id="email-echo" style="color:var(--brand)"></span></label>
+        <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="______" maxlength="8" />
+        <div class="hint">شيك على الإيميل (والـSpam لو مش لاقيه). الرمز صالح لدقائق.</div>
+        <button class="btn" id="verify">دخول ←</button>
+        <button class="link" id="back">تغيير الإيميل / إعادة الإرسال</button>
+      </div>
+
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { signInWithOtp, verifyOtp, getSession } from "./supabaseClient.js";
+
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+
+    // Safe post-login redirect: only same-origin, relative paths (no open redirect).
+    function safeNext() {
+      const n = params.get("next") || "";
+      if (!n || /^[a-z][a-z0-9+.-]*:/i.test(n) || n.startsWith("//")) return "../dashboard/dashboard.html";
+      return n;
+    }
+    const NEXT = safeNext();
+
+    function setMsg(kind, text) { const m = $("msg"); m.className = "msg show " + kind; m.textContent = text; }
+    function clearMsg() { $("msg").className = "msg"; }
+    function show(step) { $("step-email").className = "step" + (step === "email" ? " show" : ""); $("step-code").className = "step" + (step === "code" ? " show" : ""); }
+
+    let email = "";
+
+    async function send() {
+      email = $("email").value.trim().toLowerCase();
+      clearMsg();
+      $("send").disabled = true;
+      try {
+        await signInWithOtp(email);
+        $("email-echo").textContent = email;
+        show("code");
+        setMsg("info", "بعتنا الرمز على إيميلك. اكتبه فوق.");
+        $("code").focus();
+      } catch (e) {
+        setMsg("err", e.message || "تعذّر إرسال الرمز.");
+      } finally { $("send").disabled = false; }
+    }
+
+    async function verify() {
+      const code = $("code").value.trim();
+      clearMsg();
+      $("verify").disabled = true;
+      try {
+        await verifyOtp(email, code);
+        setMsg("info", "تم تسجيل الدخول. جارٍ التحويل…");
+        location.href = NEXT;
+      } catch (e) {
+        setMsg("err", e.message || "الرمز غير صحيح.");
+        $("verify").disabled = false;
+      }
+    }
+
+    $("send").addEventListener("click", send);
+    $("email").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+    $("verify").addEventListener("click", verify);
+    $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") verify(); });
+    $("back").addEventListener("click", () => { show("email"); clearMsg(); });
+
+    // Already signed in? Skip straight to the destination.
+    (async () => { if (await getSession()) location.href = NEXT; })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<!--
+  platform/dashboard/dashboard.html — "My Funnels" (MVP accounts).
+  Lists the signed-in user's saved funnels (RLS-scoped to their tenant) and lets
+  them open, rename, or delete each. Requires a session; redirects to login if
+  absent. Opening a funnel loads its latest saved artifact back into the review
+  screen (same-origin sessionStorage).
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>فانلاتي — FullTimeDigi Studio</title>
+  <link rel="stylesheet" href="../../themes/_tokens.css" />
+  <style>
+    :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f8fafc; --brand:#0f766e; --bad:#b91c1c; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+      font-family:system-ui,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif; line-height:1.6; }
+    .wrap { max-width:880px; margin:0 auto; padding:1.5rem; }
+    header.top { display:flex; align-items:center; justify-content:space-between; gap:1rem;
+      padding:.5rem 0 1.1rem; border-bottom:1px solid var(--line); margin-bottom:1.25rem; flex-wrap:wrap; }
+    header.top h1 { margin:.1rem 0; font-size:1.4rem; }
+    .sub { color:var(--muted); font-size:.9rem; }
+    .actions { display:flex; align-items:center; gap:.6rem; }
+    .btn { background:var(--ink); color:#fff; border:0; border-radius:10px; padding:.6rem 1rem; font-size:.95rem; cursor:pointer; text-decoration:none; display:inline-block; }
+    .btn.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+    .list { display:grid; gap:.8rem; }
+    .item { background:#fff; border:1px solid var(--line); border-radius:14px; padding:1rem 1.2rem;
+      display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .item .meta h3 { margin:0 0 .2rem; font-size:1.05rem; }
+    .item .meta .sub { direction:ltr; text-align:left; }
+    .pill { background:#eef2ff; color:#3730a3; border-radius:999px; padding:.15rem .6rem; font-size:.78rem; }
+    .pill.published { background:#ccfbf1; color:var(--brand); }
+    .item .ops { display:flex; gap:.4rem; flex-wrap:wrap; }
+    .op { background:#f1f5f9; color:var(--ink); border:0; border-radius:8px; padding:.4rem .8rem; font-size:.85rem; cursor:pointer; }
+    .op.danger { color:var(--bad); }
+    .empty { background:#fff; border:1px dashed var(--line); border-radius:14px; padding:2rem 1.25rem; text-align:center; color:var(--muted); }
+    .msg { margin:0 0 1rem; padding:.8rem 1rem; border-radius:10px; font-size:.92rem; display:none; }
+    .msg.show { display:block; }
+    .msg.err { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .msg.info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <div class="sub">FullTimeDigi Studio</div>
+        <h1>فانلاتي</h1>
+        <div class="sub" id="who">…</div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="../intake/start.html">+ فانل جديد</a>
+        <button class="btn ghost" id="signout">خروج</button>
+      </div>
+    </header>
+
+    <div class="msg" id="msg"></div>
+    <div id="app"><p class="sub">جارٍ التحميل…</p></div>
+  </div>
+
+  <script type="module">
+    import { getSession, signOut, listFunnels, renameFunnel, deleteFunnel, getFunnelArtifact } from "../auth/supabaseClient.js";
+    import { toDisplayList } from "./dashboardModel.js";
+
+    const $ = (id) => document.getElementById(id);
+    const app = $("app");
+
+    function setMsg(kind, text) { const m = $("msg"); m.className = "msg show " + kind; m.textContent = text; }
+    function clearMsg() { $("msg").className = "msg"; }
+
+    function el(tag, props = {}, kids = []) {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+      }
+      for (const c of [].concat(kids)) if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+      return n;
+    }
+
+    async function open(id) {
+      clearMsg();
+      try {
+        const artifact = await getFunnelArtifact(id);
+        if (!artifact) { setMsg("err", "مفيش نسخة محفوظة للفانل ده."); return; }
+        sessionStorage.setItem("ftd:draft-config", JSON.stringify(artifact));
+        sessionStorage.setItem("ftd:draft-url", artifact.store_url || "");
+        location.href = "../review/review.html?draft=1";
+      } catch (e) { setMsg("err", e.message || "تعذّر فتح الفانل."); }
+    }
+
+    async function rename(item) {
+      const name = window.prompt("اسم الفانل الجديد:", item.title);
+      if (name == null) return;
+      clearMsg();
+      try { await renameFunnel(item.id, name.trim()); await load(); }
+      catch (e) { setMsg("err", e.message || "تعذّر إعادة التسمية."); }
+    }
+
+    async function remove(item) {
+      if (!window.confirm("متأكد إنك عايز تحذف «" + item.title + "»؟ الإجراء ده نهائي.")) return;
+      clearMsg();
+      try { await deleteFunnel(item.id); await load(); }
+      catch (e) { setMsg("err", e.message || "تعذّر الحذف."); }
+    }
+
+    function itemRow(item) {
+      const pillCls = "pill" + (item.status === "published" ? " published" : "");
+      const meta = el("div", { class: "meta" }, [
+        el("h3", { text: item.title }),
+        item.host ? el("div", { class: "sub", text: item.host }) : null,
+      ]);
+      const ops = el("div", { class: "ops" }, [
+        el("span", { class: pillCls, text: item.statusLabel }),
+        (() => { const b = el("button", { class: "op", text: "افتح" }); b.addEventListener("click", () => open(item.id)); return b; })(),
+        (() => { const b = el("button", { class: "op", text: "إعادة تسمية" }); b.addEventListener("click", () => rename(item)); return b; })(),
+        (() => { const b = el("button", { class: "op danger", text: "حذف" }); b.addEventListener("click", () => remove(item)); return b; })(),
+      ]);
+      return el("div", { class: "item" }, [meta, ops]);
+    }
+
+    async function load() {
+      try {
+        const rows = await listFunnels();
+        const items = toDisplayList(rows);
+        app.innerHTML = "";
+        if (!items.length) {
+          app.appendChild(el("div", { class: "empty" }, [
+            el("p", { text: "لسه مفيش فانلات محفوظة." }),
+            el("a", { class: "btn", href: "../intake/start.html", text: "ابدأ فانلك الأول ←" }),
+          ]));
+          return;
+        }
+        app.appendChild(el("div", { class: "list" }, items.map(itemRow)));
+      } catch (e) { setMsg("err", e.message || "تعذّر تحميل الفانلات."); }
+    }
+
+    $("signout").addEventListener("click", async () => { await signOut(); location.href = "../auth/login.html"; });
+
+    (async () => {
+      const session = await getSession();
+      if (!session) { location.href = "../auth/login.html?next=" + encodeURIComponent("../dashboard/dashboard.html"); return; }
+      $("who").textContent = session.user && session.user.email ? session.user.email : "";
+      await load();
+    })();
+  </script>
+</body>
+</html>
