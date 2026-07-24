@@ -26,7 +26,8 @@ import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/con
 import { compileConstraints, compileUnits, comboAnswers } from "../../engine/kernel/compile.js";
 import { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash } from "../../engine/kernel/version.js";
 import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
-import { pickCalibrated, exactPathStats, surfacedCoverage, EXACT_PATH_TARGET } from "../quality/depthCalibration.js";
+import { pickCalibrated, exactPathStats, surfacedCoverage, differentiatingDensity, EXACT_PATH_TARGET } from "../quality/depthCalibration.js";
+import { RICHNESS_DEFAULTS } from "../quality/richnessCheck.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
 const slug = (s) => String(s || "funnel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "funnel";
@@ -462,26 +463,34 @@ export function authorFromAxes(catalog, axes, opts = {}) {
         if (!(trust.ok && bland.ok)) continue;
         const verify = verifyFunnel(config, cleanCat, set); // publish-time proof (ADR-0037)
         if (!verify.ok) { attempts.push({ axes: set.map((a) => a.id), verifyFindings: verify.findings.slice(0, 6) }); continue; }
-        const rich = richnessCheck(config, cleanCat);
-        candidates.push({ config, set, verify, richOk: rich.ok, coverage: rich.metrics.coverage, combos });
+        // NO richness pre-filter (ADR-0037): richness must not reject candidates by product count
+        // before calibration. Coverage floor is a hard gate; richness verifies the pick afterwards.
+        candidates.push({ config, set, verify, coverage: surfacedCoverage(config) / products.length, combos });
       }
     }
   }
-  const rich = candidates.filter((c) => c.richOk);
-  const pool = rich.length ? rich : candidates; // richness is a gate; only fall back if none pass it
+  const minCov = RICHNESS_DEFAULTS.minCoverage;
+  const covPass = candidates.filter((c) => c.coverage >= minCov - 1e-9); // hard surfaced-coverage floor
+  const pool = covPass.length ? covPass : candidates;
   if (pool.length) {
     const T = opts.exactPathTarget != null ? opts.exactPathTarget : EXACT_PATH_TARGET;
-    let chosen, targetMet = null, limiting = null, scored = pool;
-    if (opts.legacyDepth) { // baseline: old max-coverage-then-deepest pick
-      const s = pool.slice().sort((a, b) => b.coverage - a.coverage || b.set.length - a.set.length);
+    const density = differentiatingDensity(cleanCat);
+    let chosen, targetMet = null, limiting = null, scored = pool, deeperFeasibleExists = false;
+    if (opts.legacyDepth) { // baseline: old max-coverage-then-deepest pick (with the old count-richness prefilter)
+      const withRich = pool.filter((c) => richnessCheck(c.config, cleanCat, { deeperFeasibleExists: differentiatingDensity(cleanCat) >= RICHNESS_DEFAULTS.richDensityMin }).ok);
+      const s = (withRich.length ? withRich : pool).slice().sort((a, b) => b.coverage - a.coverage || b.set.length - a.set.length);
       chosen = { config: s[0].config };
-    } else ({ chosen, targetMet, limiting, scored } = pickCalibrated(pool, cleanCat, T));
+    } else ({ chosen, targetMet, limiting, scored, deeperFeasibleExists } = pickCalibrated(pool, cleanCat, T, minCov));
     const cand = pool.find((c) => c.config === chosen.config);
+    // richness now VERIFIES the calibrated pick (never re-selects): thin only if a deeper FEASIBLE
+    // funnel exists (it doesn't — pickCalibrated took the deepest feasible), coverage floor enforced.
+    const rich = richnessCheck(chosen.config, cleanCat, { deeperFeasibleExists, density, minCoverage: minCov });
+    if (!rich.ok) return { ok: false, reason: "richness", meta: { findings: rich.findings, density } };
     const st = exactPathStats(chosen.config);
     return { ok: true, config: chosen.config, meta: {
       axes: cand.set.map((a) => a.id), questions: cand.set.length, archetypes: chosen.config.archetypes.length, combos: cand.combos,
       coverage: cand.coverage, hard: hard.map((h) => h.id), verify: cand.verify,
-      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), candidatesEvaluated: scored.length, limiting },
+      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), density, deeperFeasibleExists, candidatesEvaluated: scored.length, limiting },
     } };
   }
   return { ok: false, reason: "no-gatepassing-axis-set", meta: { attempts } };
@@ -532,17 +541,23 @@ export function authorFunnel(catalog, opts = {}) {
       candidates.push({ config, set, verify, combos });
     }
   }
-  if (candidates.length) {
+  const minCov = RICHNESS_DEFAULTS.minCoverage;
+  const covPass = candidates.filter((c) => surfacedCoverage(c.config) / products.length >= minCov - 1e-9);
+  const pool = covPass.length ? covPass : candidates;
+  if (pool.length) {
     const T = opts.exactPathTarget != null ? opts.exactPathTarget : EXACT_PATH_TARGET;
-    let chosen, targetMet = null, limiting = null, scored = candidates;
+    const density = differentiatingDensity(cleanCat);
+    let chosen, targetMet = null, limiting = null, scored = pool, deeperFeasibleExists = false;
     if (opts.legacyDepth) { // baseline: old first-passing (order already deepest-hard-first) → first
-      chosen = { config: candidates[0].config };
-    } else ({ chosen, targetMet, limiting, scored } = pickCalibrated(candidates, cleanCat, T));
-    const cand = candidates.find((c) => c.config === chosen.config);
+      chosen = { config: pool[0].config };
+    } else ({ chosen, targetMet, limiting, scored, deeperFeasibleExists } = pickCalibrated(pool, cleanCat, T, minCov));
+    const cand = pool.find((c) => c.config === chosen.config);
+    const rich = richnessCheck(chosen.config, cleanCat, { deeperFeasibleExists, density, minCoverage: minCov });
+    if (!rich.ok) return { ok: false, reason: "richness", meta: { findings: rich.findings, density } };
     const st = exactPathStats(chosen.config);
     return { ok: true, config: chosen.config, meta: {
       axes: cand.set.map((a) => a.id), archetypes: chosen.config.archetypes.length, combos: cand.combos, hard: hard.map((h) => h.id), verify: cand.verify,
-      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), candidatesEvaluated: scored.length, limiting },
+      depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), density, deeperFeasibleExists, candidatesEvaluated: scored.length, limiting },
     } };
   }
   return { ok: false, reason: "no-nonbland-funnel", meta: { triedAxes: axes.map((a) => a.id), attempts } };

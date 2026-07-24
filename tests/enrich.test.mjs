@@ -22,13 +22,18 @@ async function check(name, fn) {
 }
 
 /* ---- a synthetic catalog with real multi-dimensional structure ------------- */
-// 16 products = every combination of 4 binary dimensions. url is the ground truth.
+// 16 products = every combination of 4 binary dimensions. url is the ground truth. The 4 dimensions
+// are ALSO encoded as grounded structured data (type + differentiators + price band), so the
+// differentiating DENSITY (ADR-0037) is high — this is a genuinely RICH catalog that justifies depth,
+// and a 2-question funnel on it is legitimately THIN.
 const ORIGIN = "https://brand.example";
+const bit = (i, n) => (i >> n) & 1;
 const PRODUCTS = Array.from({ length: 16 }, (_, i) => ({
-  name: "Product " + i, url: `${ORIGIN}/p/${i}`, price: 40 + i * 10, currency: "USD", attributes: {},
+  name: "Product " + i, url: `${ORIGIN}/p/${i}`, price: 40 + i * 120, currency: "USD",
+  attributes: { type: ["occ-daily", "occ-event"][bit(i, 0)] },
+  differentiators: [["sil-soft", "sil-strong"][bit(i, 1)], ["chr-fresh", "chr-warm"][bit(i, 2)]],
 }));
 const CATALOG = { origin: ORIGIN, products: PRODUCTS, brandUrl: ORIGIN };
-const bit = (i, n) => (i >> n) & 1;
 
 /** A RICH expert design: 4 discriminating axes, every product mapped on each. */
 function richDesign() {

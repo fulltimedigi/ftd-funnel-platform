@@ -225,7 +225,37 @@ combinations (4 character × 2 intensity), so most cells couldn't match exactly.
 
 Results (deterministic path, before → after): **laptops 6/9 = 67 % → 20/24 = 83 %** (target met);
 **coffee 6/9 = 67 % → 18/27 = 67 %** (target met, +personalisation); **oud 10/27 = 37 % → 30/81 =
-37 %** — 37 % is this catalog's honest ceiling (richness floor forces depth; taste density caps
-exactness), so `targetMet:false` is recorded with the limiting reason. The AI path on the oud-shaped
-proxy rose **12 % → 37 %** (3×) via ADVISORY demotion. Every result still carries a proof; surfaced
-coverage held; **all 63** suites green; trust / anti-bland / richness untouched. Preview only; no PR.
+37 %** — 37 % is this catalog's honest ceiling (taste density caps exactness), so `targetMet:false`
+is recorded with the limiting reason. The AI path on the oud-shaped proxy rose **12 % → 37 %** (3×)
+via ADVISORY demotion. Every result still carries a proof; surfaced coverage held. Preview only; no PR.
+
+## Richness redefined: differentiating density, not product count (the one authorized gate change)
+
+The depth phase left one wrong tooth: `richnessCheck` gated depth on `products.length ≥ 12` and
+then forced `questions ≥ 4`, so oudfactory (43 products but LOW differentiation) was force-fed a 4th
+axis it couldn't match — before `pickCalibrated` ever saw the shorter, higher-exact-rate funnel. The
+spec's principle: **"a rich store = enough trustworthy differentiating data, not a product count."**
+
+- **`differentiatingDensity(catalog)`** (`depthCalibration.js`): the count of DISTINCT grounded,
+  canonicalized product profiles — structured type + merchant differentiators/tags + the
+  deterministic form + a PRICE **band** (tertiles, never the raw number). Identity/high-cardinality
+  fields (url, name, SEO tags) are excluded; UNKNOWN contributes nothing; two products with the same
+  type+band+differentiators are ONE profile. So 43 distinct raw prices can't fake density, and a
+  bare name/url catalog scores 0.
+- **`richnessCheck` redefinition** (trust / anti-bland untouched): depth is justified by density, not
+  count. Precisely, thinness = **a deeper FEASIBLE funnel exists** (passes the meaning guard AND
+  exact-path-rate ≥ T AND the coverage floor); the authoring pipeline computes that and passes
+  `deeperFeasibleExists`, and standalone the gate falls back to `density ≥ richDensityMin` (12
+  distinct grounded profiles). The **coverage floor (0.9) is kept** as a hard, density-gated tooth.
+- **Pipeline order fixed** (no circularity): generate candidates → `pickCalibrated` picks the deepest
+  feasible → `richnessCheck` only VERIFIES the pick isn't shallower than a deeper feasible candidate.
+  Richness never rejects candidates by product count before calibration and never re-selects a funnel.
+- **Teeth preserved:** a genuinely differentiated catalog with a shallow funnel still FAILS
+  (`tests/richness.test.mjs`), and a **causality** test proves two catalogs with the SAME product
+  count but different density get OPPOSITE verdicts — it's density, not count.
+
+Densities measured: oud-shaped **8**, laptops **11**, coffee **6** (all below the floor → no forced
+depth), a bare 51-product catalog **0**, a genuinely rich catalog **≥ 20**. Every ADR-0037 lock
+holds after the change (0 never-relax leak, 100 % proof coverage, 0 dead options, prefix-support
+100 %, version coherence, no bypass). **All 63** suites green; trust / anti-bland untouched; the
+coverage floor kept. Preview only; no PR.

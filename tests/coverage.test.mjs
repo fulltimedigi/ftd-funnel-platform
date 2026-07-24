@@ -123,8 +123,9 @@ await (async () => {
 
   console.log("\ncoverage gate — a gate that can't fail is theater:");
   await check("a funnel that orphans most of the catalog FAILS the coverage gate", () => {
-    // 30-product catalog, but a config that only surfaces 3 → 10% coverage.
-    const products = range(30).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 10 + i }));
+    // 30-product DENSE catalog (real type × band × differentiator → high differentiating density),
+    // but a config that only surfaces 3 → 10% coverage. A dense catalog that's orphaned must fail.
+    const products = range(30).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, price: 50 + i * 40, attributes: { type: ["a", "b", "c", "d"][i % 4] }, differentiators: [["p", "q", "r", "s", "t"][i % 5]] }));
     const config = {
       questions: [{ id: "q1" }, { id: "q2" }, { id: "q3" }, { id: "q4" }],
       archetypes: [0, 1, 2].map((i) => ({ id: "R" + i, recommendations: { primary: { url: `${O}/p/${i}` } } })),

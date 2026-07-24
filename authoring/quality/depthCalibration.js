@@ -14,7 +14,41 @@
  * Pure, deterministic. Reads only the materialized config (proofs) + the catalog.
  */
 
+import { productFormat } from "../author/formatAxis.js";
+import { priceCutpoints as _pc, cleanPrice, tierOf } from "../author/budgetAxis.js";
+
 export const EXACT_PATH_TARGET = 0.6;
+
+/**
+ * differentiatingDensity(catalog) — the count of DISTINCT grounded, canonicalized product profiles
+ * (ADR-0037 richness redefinition). "Rich" = enough trustworthy DIFFERENTIATING data, not product
+ * count. A profile is the tuple of a product's GROUNDED, canonical values on the axes a funnel can
+ * actually decide on:
+ *   • structured type (attributes.type), merchant differentiators/tags, and the deterministic form
+ *     ontology — all grounded; UNKNOWN/missing contributes nothing.
+ *   • PRICE as a BAND (tertile cutpoints), never the raw number — 43 distinct prices must NOT look
+ *     like 43 distinct profiles.
+ *   • identity/high-cardinality fields (url, title/name, SEO tags) are EXCLUDED.
+ * Two products with the same type + band + differentiators are ONE profile — they support one taste
+ * combination, not many. Deterministic, pure.
+ */
+export function differentiatingDensity(catalog) {
+  const products = (catalog && catalog.products) || (Array.isArray(catalog) ? catalog : []);
+  const cuts = _pc(products); // catalog-wide tertile bands (not per-product raw price)
+  const sigs = new Set();
+  for (const p of products) {
+    const parts = [];
+    const type = String((p.attributes && p.attributes.type) || "").trim().toLowerCase();
+    if (type) parts.push("t:" + type);
+    const form = productFormat(p); if (form) parts.push("f:" + String(form).toLowerCase());
+    const band = cuts ? tierOf(cleanPrice(p), cuts) : null; if (band != null) parts.push("b:" + band);
+    for (const d of (p.differentiators || [])) { const v = String(d).trim().toLowerCase(); if (v) parts.push("d:" + v); }
+    for (const g of (p.tags || [])) { const v = String(g).trim().toLowerCase(); if (v) parts.push("g:" + v); }
+    parts.sort();
+    if (parts.length) sigs.add(parts.join("|")); // an all-UNKNOWN product adds no differentiating profile
+  }
+  return sigs.size;
+}
 
 /** exact-path-rate with its numerator and denominator (never just the ratio). */
 export function exactPathStats(config) {
@@ -80,42 +114,54 @@ export function meetsMeaningGuard(config) {
 
 function score(config, catalog) {
   const stats = exactPathStats(config);
+  const products = ((catalog && catalog.products) || []).length || 1;
   return {
     config,
     rate: stats.rate,
     exactPaths: stats.exactPaths,
     reachablePaths: stats.reachablePaths,
     coverage: surfacedCoverage(config),
+    coverageRatio: surfacedCoverage(config) / products,
     depth: (config.signals || []).length,
     meaningful: meetsMeaningGuard(config),
   };
 }
 
+/** A candidate is FEASIBLE iff it passes the meaning guard AND exact-path-rate ≥ T AND coverage floor. */
+export function isFeasible(config, catalog, T = EXACT_PATH_TARGET, minCoverage = 0.9) {
+  const s = score(config, catalog);
+  return s.meaningful && s.rate >= T - 1e-9 && s.coverageRatio >= minCoverage - 1e-9;
+}
+
 /**
- * Pick the calibrated funnel from gate-passing candidates.
- * @param {Array<{config}>} candidates  each is a gate + verify passing config
- * @param {Object} catalog
- * @param {number} [T]
- * @returns {{ chosen, targetMet, scored, limiting }}
+ * Pick the calibrated funnel from gate-passing candidates (ADR-0037).
+ * Feasible = meaning guard + exact-path-rate ≥ T + surfaced coverage ≥ floor. Among feasible pick the
+ * DEEPEST (tie → rate, then coverage). If none feasible, the best HONEST funnel (highest rate, then
+ * coverage, then depth). Also reports `deeperFeasibleExists` — whether a feasible candidate DEEPER
+ * than the pick exists — which richnessCheck uses to decide thinness (there never is, by construction,
+ * so the pick always passes the THIN check: the gate agrees with the calibration, never fights it).
+ * @returns {{ chosen, targetMet, scored, limiting, deeperFeasibleExists }}
  */
-export function pickCalibrated(candidates, catalog, T = EXACT_PATH_TARGET) {
+export function pickCalibrated(candidates, catalog, T = EXACT_PATH_TARGET, minCoverage = 0.9) {
   const scored = candidates.map((c) => score(c.config, catalog));
   const meaningful = scored.filter((s) => s.meaningful);
   const pool = meaningful.length ? meaningful : scored; // guard: prefer meaningful; fall back if none
 
-  const meetT = pool.filter((s) => s.rate >= T - 1e-9);
+  const feasible = pool.filter((s) => s.rate >= T - 1e-9 && s.coverageRatio >= minCoverage - 1e-9);
   let chosen, targetMet;
-  if (meetT.length) {
-    // deepest meaningful funnel that still hits the target; tie → coverage, then rate.
-    meetT.sort((a, b) => b.depth - a.depth || b.coverage - a.coverage || b.rate - a.rate);
-    chosen = meetT[0]; targetMet = true;
+  if (feasible.length) {
+    // FEASIBLE (≥ target): a rich catalog earns depth — pick the DEEPEST, then rate, then coverage.
+    feasible.sort((a, b) => b.depth - a.depth || b.rate - a.rate || b.coverage - a.coverage);
+    chosen = feasible[0]; targetMet = true;
   } else {
-    // best HONEST funnel: highest exact-path-rate, then coverage, then depth. No gaming.
-    pool.sort((a, b) => b.rate - a.rate || b.coverage - a.coverage || b.depth - a.depth);
+    // DENSITY-CAPPED (nothing meets the target): deepening can't improve the promise, so the honest
+    // best is the LEANEST funnel at the highest rate — highest rate, then coverage, then FEWER questions.
+    pool.sort((a, b) => b.rate - a.rate || b.coverage - a.coverage || a.depth - b.depth);
     chosen = pool[0]; targetMet = false;
   }
-  const limiting = targetMet ? null : `catalog density: best honest exact-path-rate ${chosen.exactPaths}/${chosen.reachablePaths} (${(chosen.rate * 100).toFixed(0)}%) < target ${(T * 100).toFixed(0)}% — deeper sets only lower it`;
-  return { chosen, targetMet, scored, limiting };
+  const deeperFeasibleExists = feasible.some((s) => s.depth > chosen.depth); // deeper AND feasible than the pick
+  const limiting = targetMet ? null : `catalog density: best honest exact-path-rate ${chosen.exactPaths}/${chosen.reachablePaths} (${(chosen.rate * 100).toFixed(0)}%) < target ${(T * 100).toFixed(0)}% — no deeper funnel stays ≥ target on this catalog`;
+  return { chosen, targetMet, scored, limiting, deeperFeasibleExists };
 }
 
 export default { EXACT_PATH_TARGET, exactPathStats, surfacedCoverage, tasteAxisIds, meaningfulTasteAxes, meetsMeaningGuard, pickCalibrated };
