@@ -79,6 +79,12 @@ export function groundClaim(product, axisId, value, meta = {}) {
     return out(true, SOURCE.EXTRACTION, "name token (validated)");
   }
 
+  // 4b. VALIDATED EXTERNAL MAPPING (SOFT axes only): a domain-expert model's per-product value,
+  //     already validated against the real catalog (real url + in-domain), is a grounding tier
+  //     ABOVE uncorroborated inference. It grounds a SOFT axis (always disclosed on mismatch) but
+  //     NEVER a hard one — so an inferred value can never become a hard filter.
+  if (kind === "soft" && meta.provenance === "ai-validated") return out(true, SOURCE.MERCHANT, "expert mapping validated to the catalog");
+
   // 5. otherwise uncorroborated → UNKNOWN.
   return out(false, SOURCE.INFERENCE, "uncorroborated");
 }

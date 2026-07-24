@@ -52,7 +52,7 @@ export function compileUnits(products, axisSet) {
       if (v == null) continue; // absent → UNKNOWN in the kernel (never a silent wildcard match)
       // GROUND the claim (BLOCKER-2): a present profile value is trusted only if real evidence
       // backs it; an ungrounded value stays in the kernel as UNKNOWN, never a silent match.
-      const g = groundClaim(p, a.id, v, { kind: axisKind(a), catalogVersion: catVer });
+      const g = groundClaim(p, a.id, v, { kind: axisKind(a), catalogVersion: catVer, provenance: a.provenance });
       values.set(a.id, { value: v, grounded: g.grounded, source_type: g.source_type, evidence: g.evidence, extractor_version: g.extractor_version, catalog_version: g.catalog_version });
     }
     return { id: p.url, product: p, variantId: null, variants: p.variants || null, values };
@@ -70,7 +70,7 @@ export function groundingReport(products, axisSet) {
     for (const p of products) {
       const v = a.profile.get(p.url);
       if (v == null) { absent++; continue; }
-      const g = groundClaim(p, a.id, v, { kind: "soft", catalogVersion: catVer });
+      const g = groundClaim(p, a.id, v, { kind: "soft", catalogVersion: catVer, provenance: a.provenance });
       bySource[g.source_type] = (bySource[g.source_type] || 0) + 1;
       if (g.grounded) groundedTrue++; else groundedFalse++;
     }

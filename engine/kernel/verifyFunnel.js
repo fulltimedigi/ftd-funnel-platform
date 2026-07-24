@@ -22,6 +22,7 @@
 import { NEVER_RELAX } from "./constraintKernel.js";
 import { compileConstraints, compileUnits, comboAnswers } from "./compile.js";
 import { proveSelection } from "./referenceEvaluator.js";
+import { checkPromiseBinding } from "./promiseBinding.js";
 
 /**
  * @param {Object} config   authored funnel config (decisionTable with proofs, constraintPolicy, versions, archetypes)
@@ -105,6 +106,13 @@ export function verifyFunnel(config, catalog, axisSet) {
   }
   const proofCoverage = renderable ? proven / renderable : 1;
   if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `proof coverage ${proven}/${renderable} < 100%` });
+
+  // PROMISE BINDING (item 1): each offered option's group is derived from its predicate; witness
+  // that no option is dead, and no label inverts/widens its value. A contradiction fails the funnel.
+  if (axisSet) {
+    const pb = checkPromiseBinding(axisSet, { products });
+    for (const f of pb.findings) findings.push({ rule: `option ${f.axis}=${f.value}`, criterion: 8, msg: `promise-binding witness ${f.witness}: ${f.msg}` });
+  }
 
   return { ok: findings.length === 0, checked, proofCoverage, renderable, findings };
 }

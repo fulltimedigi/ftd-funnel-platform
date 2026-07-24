@@ -24,7 +24,7 @@ import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
 import { deriveBudgetAxis, looksLikeBudgetAxis } from "./budgetAxis.js";
 import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/constraintKernel.js";
 import { compileConstraints, compileUnits, comboAnswers } from "../../engine/kernel/compile.js";
-import { catalogVersion, policyVersion } from "../../engine/kernel/version.js";
+import { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash } from "../../engine/kernel/version.js";
 import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
 
 const clamp = (s, n) => (String(s || "").length > n ? String(s).slice(0, n) : String(s || ""));
@@ -156,6 +156,13 @@ function buildConfig(catalog, axisSet, opts) {
   const brandName = opts.brandName || (catalog.origin ? new URL(catalog.origin).host.replace(/^www\./, "") : "المتجر");
   const homeUrl = catalog.origin || catalog.brandUrl || (products[0] && new URL(products[0].url).origin) || "";
 
+  // PROMISE BINDING (ADR-0037 closing): never OFFER an answer no product carries. Prune option
+  // values with zero SKUs in the profile (a dead option) — honesty > depth: the funnel gets
+  // shorter, it never asks a question that leads nowhere. Axes left with <2 live values are dropped.
+  axisSet = axisSet
+    .map((a) => { const present = new Set([...a.profile.values()].filter((v) => v != null).map(String)); const values = a.values.filter((v) => present.has(String(v.value))); return values.length === a.values.length ? a : { ...a, values }; })
+    .filter((a) => a.values.length >= 2);
+
   // 1. COVERING assignment (ADR-0031): every product owns the combo matching its own
   //    profile → no product is orphaned. "Results First, Questions Last."
   const combos = cartesian(axisSet.map((a) => a.values.map((v) => v.value)));
@@ -278,7 +285,7 @@ function buildConfig(catalog, axisSet, opts) {
     };
     if (proof) {
       rule.proof = {
-        match_state: proof.match_state, variant_id: proof.variant_id,
+        product_id: proof.product_id, match_state: proof.match_state, variant_id: proof.variant_id,
         matches: proof.matches, conflicts: proof.conflicts, unknowns: proof.unknowns,
         tie_break_reason: proof.tie_break_reason,
       };
@@ -296,7 +303,7 @@ function buildConfig(catalog, axisSet, opts) {
   const complete = combos.length === fullSpace;
   decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id, unreachable: complete, _reason: complete ? "table covers the full answer space" : "table incomplete — reachable fallback" });
 
-  return {
+  const config = {
     _generatedBy: "ftd-authoring/stage2",
     id: slug(brandName) + "-advisor",
     brand: { name: brandName, logo: "", tagline: `مرشدك لاختيار المنتج الأنسب من ${brandName}` },
@@ -342,6 +349,13 @@ function buildConfig(catalog, axisSet, opts) {
       result: { eyebrow: "توصيتك", recommendationTitle: "نوصيك بـ", whyTitle: "لماذا تناسبك", whyNotTitle: "لماذا ليست البدائل", nextTitle: "الخطوة التالية", contextualTitle: "قد يناسبك أيضاً" },
     },
   };
+  // VERSION COHERENCE stamps (ADR-0037 closing): the NAMED answer contract, the locale bundle, and
+  // one config hash covering the decision-relevant shape. The runtime verifier compares these with
+  // what the client actually saw — any drift is STALE, never a silent mix of two versions.
+  config.answer_contract_version = answerContractVersion(signals, questions);
+  config.locale_bundle_version = localeBundleVersion(config);
+  config.config_hash = configHash(config);
+  return config;
 }
 
 /* ---- orchestrator: reject-and-regenerate over axis-sets until a gate-passing,

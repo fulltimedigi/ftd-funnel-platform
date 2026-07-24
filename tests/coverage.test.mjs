@@ -88,11 +88,13 @@ await (async () => {
     // combos. The fill pass should give each orphaned twin its own matching empty combo,
     // so all 8 become PRIMARIES (not just alternates) — coverage ~100% by construction.
     const N = 8;
-    const base = cartesian([0, 1, 2, 3].map(() => ["0", "1"])); // 16 combos
-    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, differentiators: [...new Set(base[i % 4])] }));
+    // 4 distinct profiles that between them carry BOTH values on EVERY axis, so no option is a
+    // dead end (the promise-binding witness rightly forbids offering an answer no SKU satisfies).
+    const profs = [["0", "0", "0", "0"], ["1", "1", "1", "1"], ["0", "1", "1", "0"], ["1", "0", "0", "1"]];
+    const products = range(N).map((i) => ({ name: "P" + i, url: `${O}/p/${i}`, differentiators: [...new Set(profs[i % 4])] }));
     const axes = [0, 1, 2, 3].map((ax) => {
       const profile = new Map();
-      products.forEach((p, i) => profile.set(p.url, base[i % 4][ax])); // only 4 distinct profiles
+      products.forEach((p, i) => profile.set(p.url, profs[i % 4][ax])); // only 4 distinct profiles
       return { id: "ax" + ax, label: "محور" + ax, question: "سؤال" + ax + "؟", values: [{ value: "0", label: "a" + ax + "0" }, { value: "1", label: "a" + ax + "1" }], profile };
     });
     const r = authorFromAxes({ origin: O, products, brandUrl: O }, axes, { maxQuestions: 4, maxCombos: 64 });

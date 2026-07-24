@@ -143,6 +143,12 @@ export function designToAxes(design, catalog) {
       question: a.question || a.label || "؟",
       values: a.values.map((v) => ({ value: v.value, label: v.label || v.value })),
       profile,
+      // Provenance for grounding (ADR-0037 BLOCKER-2): this mapping is a domain-expert model's
+      // reading of the REAL catalog, VALIDATED here (real url + in-domain value). That is a
+      // validated external mapping — grounded enough for a SOFT axis (always disclosed on
+      // mismatch, never a hard filter). Hard axes never take this path, so the AI can never
+      // manufacture a hard constraint from an inferred value.
+      provenance: "ai-validated",
     });
   }
   return axes;

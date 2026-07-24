@@ -35,4 +35,38 @@ export function policyVersion(constraints) {
   return "pol_" + fnv1a(rows.join("\n"));
 }
 
-export default { catalogVersion, policyVersion };
+/**
+ * Stable identity of the NAMED ANSWER CONTRACT (ADR-0037 closing, VERSION COHERENCE): the exact
+ * set of questions, options, and the value each option compiles to that the shopper answered
+ * against. If the questions or an option→value mapping change, the contract changes — a proof
+ * minted against the old contract must not be shown against the new one.
+ */
+export function answerContractVersion(signals, questions) {
+  const opt = new Map();
+  for (const q of questions || []) for (const o of q.options || []) opt.set(o.id, o.label);
+  const rows = (signals || [])
+    .map((s) => `${s.id}|${(s.domain || []).join(",")}|${Object.entries(s.map || {}).sort().map(([oid, v]) => `${oid}=>${v}:${opt.get(oid) || ""}`).join(";")}`)
+    .sort();
+  return "ans_" + fnv1a(rows.join("\n"));
+}
+
+/** Version of the shopper-facing locale bundle (labels/copy) — a translation swap is a new bundle. */
+export function localeBundleVersion(config) {
+  const lang = config.lang || "";
+  const strings = [];
+  for (const q of config.questions || []) { strings.push(q.text || ""); for (const o of q.options || []) strings.push(o.label || ""); }
+  for (const a of config.archetypes || []) strings.push(a.name || "");
+  return "loc_" + lang + "_" + fnv1a(strings.join(""));
+}
+
+/** One coherence stamp covering the whole decision-relevant config (the "config_hash"). */
+export function configHash(config) {
+  const decisive = JSON.stringify({
+    id: config.id, ladder: config.constraintLadder, policy: config.constraintPolicy,
+    table: (config.decisionTable || []).map((r) => [r.id, r.when, r.result, r.unreachable || false]),
+    cat: config.catalog_version, pol: config.policy_version, ans: config.answer_contract_version,
+  });
+  return "cfg_" + fnv1a(decisive);
+}
+
+export default { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash };

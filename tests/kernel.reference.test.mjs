@@ -8,6 +8,9 @@
 import assert from "node:assert/strict";
 import { proveSelection } from "../engine/kernel/referenceEvaluator.js";
 import { select, NEVER_RELAX, RELAXABLE } from "../engine/kernel/constraintKernel.js";
+import { authorFunnel } from "../authoring/author/index.js";
+import { verifyServedResult } from "../engine/kernel/verifyRuntime.js";
+import { readFileSync } from "node:fs";
 
 let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
@@ -87,6 +90,30 @@ check("M7 — variant swapped to a SKU that doesn't satisfy the constraints join
   assert.ok(flags(r, 7), "a variant that doesn't satisfy the answer must be caught");
 });
 
+check("M8 — CTA/card points to a DIFFERENT product than the proof certified → HANDOFF break", () => {
+  const cat = JSON.parse(readFileSync(new URL("./fixtures/oud-shaped.synthetic.json", import.meta.url), "utf8"));
+  const gen = authorFunnel(cat, { brandName: "Oud" });
+  const rule = gen.config.decisionTable.find((r) => r.when && Object.keys(r.when).length && r.proof && r.proof.product_id);
+  const arch = gen.config.archetypes.find((a) => a.id === rule.result);
+  const swapped = { ...arch, recommendations: { ...arch.recommendations, primary: { ...arch.recommendations.primary, url: "https://oud-shop.example/products/SOMETHING-ELSE" } } };
+  const resolved = { scoring: { ruleId: rule.id }, primary: swapped };
+  const r = verifyServedResult(gen.config, resolved);
+  assert.equal(r.ok, false, "a swapped CTA/card must be refused");
+  assert.ok(r.reasons.some((x) => /HANDOFF/.test(x)), r.reasons.join("; "));
+});
+
+check("M9 — mixing an OLD catalog_version / answer_contract with a new result → STALE", () => {
+  const cat = JSON.parse(readFileSync(new URL("./fixtures/oud-shaped.synthetic.json", import.meta.url), "utf8"));
+  const gen = authorFunnel(cat, { brandName: "Oud" });
+  const cfg = gen.config;
+  const rule = cfg.decisionTable.find((r) => r.when && Object.keys(r.when).length);
+  const resolved = { scoring: { ruleId: rule.id }, primary: cfg.archetypes.find((a) => a.id === rule.result) };
+  const staleCatalog = verifyServedResult(cfg, resolved, { catalog_version: "cat_OLD.1", policy_version: cfg.policy_version, answer_contract_version: cfg.answer_contract_version, config_hash: cfg.config_hash, locale_bundle_version: cfg.locale_bundle_version });
+  assert.ok(staleCatalog.stale && !staleCatalog.ok, "old catalog_version → STALE");
+  const staleAnswer = verifyServedResult(cfg, resolved, { catalog_version: cfg.catalog_version, policy_version: cfg.policy_version, answer_contract_version: "ans_OLD", config_hash: cfg.config_hash, locale_bundle_version: cfg.locale_bundle_version });
+  assert.ok(staleAnswer.stale && !staleAnswer.ok, "old answer_contract → STALE");
+});
+
 check("INJECTION — a deliberately reversed chooser is flagged by the oracle (independence proven)", () => {
   // a matcher test-double that picks the WORST eligible unit (reverse of the policy).
   function reversedChooser(units) {
@@ -107,4 +134,4 @@ check("INJECTION — a deliberately reversed chooser is flagged by the oracle (i
 });
 
 if (process.exitCode === 1) console.error("\nFAIL — the reference oracle missed a corruption.\n");
-else console.log(`\nPASS — all ${passed} reference-oracle assertions passed (7 mutations + injection).\n`);
+else console.log(`\nPASS — all ${passed} reference-oracle assertions passed (9 mutations + injection).\n`);

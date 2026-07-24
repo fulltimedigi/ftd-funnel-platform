@@ -150,3 +150,48 @@ applies the identical kernel): **EXACT 10 / COMPROMISE 17 / UNVERIFIED 0 / NoExa
 27 paths; proof coverage **100 %**; max relaxation severity **1 tier**; top conflict axes budget
 then a character facet; independent-oracle findings **0**. All 57 suites green; trust / anti-bland /
 richness untouched. Preview only; no PR.
+
+## Final closing (verified-snapshot scope)
+
+A last pass bound the guarantee to a **named, verified snapshot** and locked the by-construction
+links with regression tests (not a rebuild — client-side evaluation against the loaded config,
+rendered from one record):
+
+- **Rule-based promise binding.** An option's meaning is its **predicate**; its group is derived
+  (`group = { SKU : SAT }`), never authored separately — on conflict the predicate/value/derived
+  grouping win, the label may not widen or narrow. Strict labels come from the ontology/template
+  (form, price band); the model only proposes copy. A publish-time per-option **witness** fails the
+  funnel on a dead option or an inverted/widened label (`promiseBinding.js`), and authoring now
+  **prunes** any option value no SKU carries — honesty > depth, the funnel shortens rather than ask
+  a dead question. AI-designed soft axes are grounded via a *validated external mapping* tier
+  (`designToAxes` confirms real url + in-domain), so the moat survives while a hard filter can still
+  never be manufactured from an inferred value.
+- **Presentation / handoff / version coherence locked by tests.** A result's name/price/image/url
+  come from ONE real SKU record (non-composite); the CTA is the **proven** product/variant url with
+  **no** parent/brand-home fallback (`handoff.js` → `HANDOFF_UNBOUND` when a variant isn't
+  deep-linkable); and five stamps — `catalog_version`, `policy_version`, `answer_contract_version`,
+  `config_hash`, `locale_bundle_version` — must all match what the client saw or the result is
+  **STALE** (`version.js` / `verifyRuntime.js`).
+- **Fail-closed safety guard** (`safety.js`, preventive): a safety/allergen/compatibility/legal axis
+  is hard only from a single official source with no competing evidence; disagreement →
+  CONTRADICTED, unofficial-only → UNKNOWN — never a silent SAT (`NEVER_RELAX` + require-proof).
+- **Structural verifier independence:** `tests/verifier-architecture.test.mjs` fails CI if the
+  reference oracle or the verifier ever imports the kernel's chooser; predicate truth tables +
+  metamorphic properties pin the shared TCB.
+
+### The bounded guarantee (as written)
+
+> For a catalog + policy + answer-contract (including locale) **named in the certificate and
+> verified exhaustively on every path**, every result is either **(a)** a recommendation with a
+> certificate — its title, price, image, attributes, and exit link all from the **same real,
+> eligible SKU**; every hard constraint SAT; every other answer either SAT or explicitly disclosed;
+> exact match dominating; and no step (fallback / coverage / boost / render / handoff) corrupting the
+> certificate — **or (b)** an explicit base state: **NO_MATCH / UNVERIFIED / STALE /
+> HANDOFF_UNBOUND**. The guarantee is **relative to the named snapshot**; it does not warrant the
+> merchant's live stock, live price, cart substitution, or physical reality after handoff. A
+> safety-sensitive claim counts as verified **only** if its official evidence is uncontradicted.
+
+Closing metrics (oud-shaped proxy): mutation matrix **9/9 + injection** caught (incl. CTA-mismatch
+and stale-hash); architecture import-ban **green**; promise-binding witness **all options pass, 0
+dead / 0 inverted** after pruning; version coherence **5/5 stamps present and enforced**. All **62**
+suites green; trust / anti-bland / richness untouched. Preview only; no PR.
