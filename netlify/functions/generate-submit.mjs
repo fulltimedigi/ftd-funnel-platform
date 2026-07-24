@@ -5,15 +5,30 @@
  * internal shared secret so the heavy fn can't be invoked externally), return pending.
  */
 
+import { createHmac } from "node:crypto";
 import { buildIntake } from "../../platform/intake/intakeModel.js";
-import { submitJob, reserveDailySlot } from "../../platform/jobs/generateJob.js";
+import { submitJob, reserveDailySlot, reserveRateSlot } from "../../platform/jobs/generateJob.js";
 import { createBlobStore } from "../../platform/jobs/blobStore.js";
 import { assertUrlAllowed } from "../../authoring/ingest/ssrfGuard.js";
 import { makeHttp, tokenOk } from "./lib/http.mjs";
 import { requireSecret } from "../../platform/security/secrets.js";
 
 const { cors, json, preflight } = makeHttp("POST, OPTIONS");
-const DAILY_CAP = Number(process.env.FTD_DAILY_CAP || 200);
+const DAILY_CAP = Number(process.env.FTD_DAILY_CAP || 200);   // global daily cost ceiling
+const HOUR_MS = 3600e3, DAY_MS = 86400e3;
+const IP_HOURLY_CAP = Number(process.env.FTD_IP_HOURLY_CAP || 8);   // per-client burst
+const IP_DAILY_CAP = Number(process.env.FTD_IP_DAILY_CAP || 25);    // per-client sustained
+
+/** The real client IP (Netlify sets x-nf-client-connection-ip; fall back to XFF). */
+export function clientIp(event = {}) {
+  const h = event.headers || {};
+  return (h["x-nf-client-connection-ip"] || (h["x-forwarded-for"] || "").split(",")[0] || "noip").trim() || "noip";
+}
+/** Salted, non-reversible IP key — we rate-limit by IP without storing raw IPs. */
+function ipKey(ip) {
+  const salt = (typeof process !== "undefined" && process.env && process.env.FTD_ID_SALT) || "ftd-dev-insecure-salt";
+  return createHmac("sha256", salt).update(String(ip)).digest("hex").slice(0, 24);
+}
 
 /** The trusted base for the secret-bearing internal trigger (ADR-0040): a server-side env var ONLY.
  *  NEVER derived from event.headers.host — that is attacker-controlled and would leak the secret. */
@@ -25,6 +40,21 @@ export function triggerBase(env = (typeof process !== "undefined" && process.env
  *  race past the only cost guard before an Opus call. */
 async function underDailyCap(store) {
   return reserveDailySlot({ store, key: "spend:" + new Date().toISOString().slice(0, 10), cap: DAILY_CAP });
+}
+
+/**
+ * The pre-generation abuse guard: per-IP burst (hourly) + sustained (daily) BEFORE the shared
+ * global cap. All atomic (fail-closed). Runs only when submitJob is about to actually generate —
+ * cache hits and in-flight de-dupes never consume a slot — so a client can't exhaust the global
+ * budget or hammer the Opus path. On any cap hit → deny (submitJob returns rate-limited → 429).
+ */
+function makeGuard(store, event) {
+  const ik = ipKey(clientIp(event));
+  return async () => {
+    if (!(await reserveRateSlot({ store, scope: "ip-h", id: ik, cap: IP_HOURLY_CAP, windowMs: HOUR_MS }))) return false;
+    if (!(await reserveRateSlot({ store, scope: "ip-d", id: ik, cap: IP_DAILY_CAP, windowMs: DAY_MS }))) return false;
+    return await underDailyCap(store);
+  };
 }
 
 export const handler = async (event = {}) => {
@@ -80,7 +110,7 @@ export const handler = async (event = {}) => {
     regenerate: input.regenerate === true,
     store,
     trigger,
-    guard: () => underDailyCap(store),
+    guard: makeGuard(store, event),
   });
   if (!r.ok) return json(event, r.reason === "rate-limited" ? 429 : 400, r);
   return json(event, 200, r);

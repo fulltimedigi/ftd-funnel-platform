@@ -61,6 +61,24 @@ export async function reserveDailySlot({ store, key, cap, now = Date.now, maxRet
   return false; // couldn't reserve under contention → fail closed (deny rather than risk over-spend)
 }
 
+/** A fixed-window rate-limit key: scope + id + the current window bucket (so the counter
+ *  auto-resets each window without any cleanup step). */
+export function windowKey(scope, id, windowMs, now = Date.now) {
+  const bucket = Math.floor(now() / windowMs);
+  return `rl:${scope}:${id}:${bucket}`;
+}
+
+/**
+ * Reserve one slot in a PER-KEY fixed window, ATOMICALLY. Reuses reserveDailySlot's CAS so
+ * concurrent requests from the same key can't race past the cap. This is the per-IP / per-user
+ * abuse limiter that sits IN FRONT of the global daily cost cap: a single client can burn only
+ * its own small budget, so it can't exhaust the shared budget or hammer the Opus path.
+ * @returns {Promise<boolean>} true = reserved (proceed); false = cap reached / contention (deny).
+ */
+export async function reserveRateSlot({ store, scope, id, cap, windowMs, now = Date.now }) {
+  return reserveDailySlot({ store, key: windowKey(scope, id, windowMs, now), cap, now });
+}
+
 /** Shape the record we persist from a generateFunnelFromUrl result. */
 export function recordFrom(res, url) {
   if (res && res.ok) {
