@@ -74,16 +74,21 @@ export async function verifyOtp(email, token) {
   return session;
 }
 
-/** Exchange the refresh token for a fresh session. Clears the session on failure. */
+/** Exchange the refresh token for a fresh session. Never throws: a bad response
+ *  OR a network failure returns null (a transient blip leaves the stored session
+ *  intact so a later call can retry; an explicit auth failure clears it). */
 export async function refresh() {
   const cur = readStored();
   if (!cur || !cur.refresh_token) return null;
-  const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
-    method: "POST",
-    headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: cur.refresh_token }),
-  });
-  if (!res.ok) { writeStored(null); return null; }
+  let res;
+  try {
+    res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: cur.refresh_token }),
+    });
+  } catch { return null; } // network error → keep the session, let the caller retry
+  if (!res.ok) { writeStored(null); return null; } // rejected token → clear
   const session = parseSession(await res.json(), nowSec());
   writeStored(session);
   return session;

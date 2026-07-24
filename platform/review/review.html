@@ -80,6 +80,7 @@
     import { buildArtifact } from "../publish.js";
     import { resolveConfigSource } from "../configSource.js";
     import { getSession, createFunnel, signOut } from "../auth/supabaseClient.js";
+    import { draftStoreUrl as _draftStoreUrl, draftName as _draftName } from "./saveModel.js";
 
     const app = document.getElementById("app");
     const brandline = document.getElementById("brandline");
@@ -111,34 +112,43 @@
     }
 
     // ---- MVP accounts: save the generated draft to the signed-in user ---------
-    function draftStoreUrl(config) {
-      return sessionStorage.getItem("ftd:draft-url") || (config && config.store_url) || "";
+    // Idempotency guard: a funnel is saved at most once per page load — blocks a
+    // double-click AND the ?save=1 auto-save re-firing on a manual refresh.
+    let _saveState = "idle"; // idle | saving | saved
+    function draftStoreUrl(config) { return _draftStoreUrl(config, sessionStorage.getItem("ftd:draft-url")); }
+    function draftName(config) { return _draftName(config, draftStoreUrl(config)); }
+    function stripSaveParam() {
+      try { const u = new URL(location.href); if (u.searchParams.has("save")) { u.searchParams.delete("save"); history.replaceState(null, "", u); } } catch { /* ignore */ }
     }
-    function draftName(config) {
-      return (config && config.brand && config.brand.name) || (config && config.id) || draftStoreUrl(config) || "فانل جديد";
-    }
-    async function saveDraft(ctx, statusEl) {
+    async function saveDraft(ctx, statusEl, btn) {
+      if (_saveState !== "idle") return;            // already saving or saved this load
       const session = await getSession();
       if (!session) {
         // Not signed in → go to login, then return here and finish the save.
         location.href = "../auth/login.html?next=" + encodeURIComponent("../review/review.html?draft=1&save=1");
         return;
       }
+      _saveState = "saving";
+      if (btn) btn.disabled = true;
       statusEl.className = "msg show info"; statusEl.textContent = "جارٍ الحفظ في حسابك…";
       try {
         const id = await createFunnel({ storeUrl: draftStoreUrl(ctx.config), artifact: ctx.config, name: draftName(ctx.config) });
+        _saveState = "saved";
+        stripSaveParam();                            // never let a refresh re-save
         statusEl.className = "msg show info";
         statusEl.innerHTML = "تم الحفظ في حسابك ✓ — <a href='../dashboard/dashboard.html'>افتح فانلاتي</a>.";
         return id;
       } catch (e) {
+        _saveState = "idle";                         // allow a retry
+        if (btn) btn.disabled = false;
         statusEl.className = "msg show err";
         statusEl.textContent = e && e.message ? e.message : "تعذّر الحفظ. حاول تاني.";
       }
     }
     function saveCard(ctx) {
       const status = el("div", { class: "msg", id: "save-msg" });
-      const btn = el("button", { class: "btn", text: "احفظ في حسابي ←" });
-      btn.addEventListener("click", () => saveDraft(ctx, status));
+      const btn = el("button", { class: "btn", id: "save-btn", text: "احفظ في حسابي ←" });
+      btn.addEventListener("click", () => saveDraft(ctx, status, btn));
       const dash = el("a", { class: "note", href: "../dashboard/dashboard.html", text: "فانلاتي المحفوظة" });
       const card = el("div", { class: "publish card" }, [
         el("h2", { text: "احفظ الفانل في حسابك" }),
@@ -261,7 +271,7 @@
       // Returned from login to finish a save (?save=1) → run it now, no re-click.
       if (ctx.draft && new URLSearchParams(location.search).get("save") === "1") {
         const status = document.getElementById("save-msg");
-        if (status) await saveDraft(ctx, status);
+        if (status) await saveDraft(ctx, status, document.getElementById("save-btn"));
       }
     })();
   </script>

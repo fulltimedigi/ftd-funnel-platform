@@ -79,20 +79,22 @@
       return n;
     }
 
-    async function open(id) {
+    async function open(item) {
       clearMsg();
       try {
-        const artifact = await getFunnelArtifact(id);
+        const artifact = await getFunnelArtifact(item.id);
         if (!artifact) { setMsg("err", "مفيش نسخة محفوظة للفانل ده."); return; }
         sessionStorage.setItem("ftd:draft-config", JSON.stringify(artifact));
-        sessionStorage.setItem("ftd:draft-url", artifact.store_url || "");
+        // store_url lives on the funnel row, not inside the artifact — carry it so a
+        // re-save from the review screen keeps the URL.
+        sessionStorage.setItem("ftd:draft-url", item.storeUrl || "");
         location.href = "../review/review.html?draft=1";
       } catch (e) { setMsg("err", e.message || "تعذّر فتح الفانل."); }
     }
 
     async function rename(item) {
       const name = window.prompt("اسم الفانل الجديد:", item.title);
-      if (name == null) return;
+      if (name == null || !name.trim()) return;     // cancel or empty → no-op
       clearMsg();
       try { await renameFunnel(item.id, name.trim()); await load(); }
       catch (e) { setMsg("err", e.message || "تعذّر إعادة التسمية."); }
@@ -113,7 +115,7 @@
       ]);
       const ops = el("div", { class: "ops" }, [
         el("span", { class: pillCls, text: item.statusLabel }),
-        (() => { const b = el("button", { class: "op", text: "افتح" }); b.addEventListener("click", () => open(item.id)); return b; })(),
+        (() => { const b = el("button", { class: "op", text: "افتح" }); b.addEventListener("click", () => open(item)); return b; })(),
         (() => { const b = el("button", { class: "op", text: "إعادة تسمية" }); b.addEventListener("click", () => rename(item)); return b; })(),
         (() => { const b = el("button", { class: "op danger", text: "حذف" }); b.addEventListener("click", () => remove(item)); return b; })(),
       ]);

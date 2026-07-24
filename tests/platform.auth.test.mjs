@@ -11,6 +11,7 @@ import {
   isValidEmail, parseSession, isExpired, isSessionShape, authHeaders, restHeaders, SESSION_KEY,
 } from "../platform/auth/authModel.js";
 import { statusLabelAr, hostOf, titleOf, toDisplayItem, toDisplayList } from "../platform/dashboard/dashboardModel.js";
+import { draftStoreUrl, draftName } from "../platform/review/saveModel.js";
 
 let passed = 0;
 function check(name, fn) {
@@ -92,6 +93,27 @@ check("toDisplayList sorts newest-updated first", () => {
     { id: "c", store_url: "c.com", status: "draft", updated_at: "2026-02-01" },
   ]);
   assert.deepEqual(list.map((x) => x.id), ["b", "c", "a"]);
+});
+
+console.log("\nsave — draft url/name resolution (re-open→re-save safety):");
+check("draftStoreUrl prefers the stashed/opened URL, then config, then ''", () => {
+  const cfg = { id: "a", brand: { name: "A" } }; // generated config has NO url
+  assert.equal(draftStoreUrl(cfg, "https://s.test"), "https://s.test"); // first save / reopened row
+  assert.equal(draftStoreUrl(cfg, "  https://t.test  "), "https://t.test");
+  assert.equal(draftStoreUrl({ store_url: "https://c.test" }, ""), "https://c.test");
+  assert.equal(draftStoreUrl(cfg, ""), "");
+  assert.equal(draftStoreUrl(cfg, null), "");
+});
+check("re-open path keeps the URL (regression: it used to blank on re-save)", () => {
+  const cfg = { id: "a", brand: { name: "A" } };
+  const stashedFromRow = "https://reopened.test";
+  assert.equal(draftStoreUrl(cfg, stashedFromRow), "https://reopened.test");
+});
+check("draftName: brand.name → id → url → generic", () => {
+  assert.equal(draftName({ brand: { name: "متجري" }, id: "x" }, "u"), "متجري");
+  assert.equal(draftName({ id: "abc" }, "u"), "abc");
+  assert.equal(draftName({}, "https://u.test"), "https://u.test");
+  assert.equal(draftName({}, ""), "فانل جديد");
 });
 
 console.log(`\nplatform.auth — ${passed} checks passed.\n`);

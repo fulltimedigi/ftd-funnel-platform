@@ -68,11 +68,18 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
 
-    // Safe post-login redirect: only same-origin, relative paths (no open redirect).
+    // Safe post-login redirect: resolve against THIS page's URL and accept only a
+    // same-origin result — never re-emit the raw string. This neutralizes
+    // javascript:/data: (opaque origin), control-char scheme tricks (java\tscript:),
+    // backslashes (\\host), and protocol-relative //host, all of which the browser's
+    // URL parser folds into a non-matching origin → fall through to the default.
     function safeNext() {
       const n = params.get("next") || "";
-      if (!n || /^[a-z][a-z0-9+.-]*:/i.test(n) || n.startsWith("//")) return "../dashboard/dashboard.html";
-      return n;
+      try {
+        const u = new URL(n, location.href);
+        if (u.origin === location.origin) return u.pathname + u.search + u.hash;
+      } catch { /* unparseable → default */ }
+      return "../dashboard/dashboard.html";
     }
     const NEXT = safeNext();
 
