@@ -17,7 +17,7 @@
  */
 
 export function funnelMetrics(config, catalog) {
-  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length);
+  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length && r.kind !== "TERMINAL");
   const n = rules.length || 1;
 
   let exact = 0, unknownCells = 0, askedCells = 0, maxSeverity = 0, discOk = 0, discNeeded = 0, variantOk = 0, variantTot = 0;

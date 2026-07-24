@@ -36,16 +36,22 @@ export function verifyFunnel(config, catalog, axisSet) {
   const catalogUrls = new Set(products.map((p) => p.url));
   const modeById = new Map((config.constraintPolicy || []).map((c) => [c.id, c.mode]));
   const archById = new Map((config.archetypes || []).map((a) => [a.id, a]));
-  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length);
+  // Discriminated union (ADR-0039): a combo rule is COMMERCE (proven product) or TERMINAL (honest
+  // ending — NO_MATCH/RESTART/… carrying a reason + next_action, and NO product). Both are verified,
+  // but differently: a COMMERCE rule proves the chosen product is optimal; a NO_MATCH terminal proves
+  // (independently) that NO eligible product exists within the numbered budget policy.
+  const withWhen = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length);
+  const rules = withWhen.filter((r) => r.kind !== "TERMINAL");
+  const terminals = withWhen.filter((r) => r.kind === "TERMINAL");
 
   // Independent re-run inputs (criteria 4–6): rebuild the kernel constraints/units from axisSet.
-  let constraints = null, units = null, unitByUrl = null;
+  // NO budget bound is threaded from here into the oracle — the reference evaluator reads the
+  // numbered policy registry itself (audit #6), so the matcher can never hand it a value.
+  let constraints = null, units = null;
   if (axisSet) {
     constraints = compileConstraints(axisSet);
     units = compileUnits(products, axisSet);
-    unitByUrl = new Map(units.map((u) => [u.id, u]));
   }
-  const nTiers = axisSet ? Math.max(1, ...axisSet.filter((a) => a.hard && a.ordinal).map((a) => a.values.length)) : 1;
 
   let checked = 0;
   for (const rule of rules) {
@@ -54,12 +60,15 @@ export function verifyFunnel(config, catalog, axisSet) {
     const prod = arch && arch.recommendations && arch.recommendations.primary;
 
     // (1) product & SKU exist in the served catalog
-    if (!prod || !prod.url) { findings.push({ rule: rule.id, criterion: 1, msg: "rule resolves to no product" }); continue; }
+    if (!prod || !prod.url) { findings.push({ rule: rule.id, criterion: 1, msg: "COMMERCE rule resolves to no product" }); continue; }
     if (!catalogUrls.has(prod.url)) findings.push({ rule: rule.id, criterion: 1, msg: `product ${prod.url} not in served catalog` });
 
     const proof = rule.proof || {};
     const conflicts = proof.conflicts || [];
     const unknowns = proof.unknowns || [];
+
+    // COMMERCE with no ProvenSelection is unrepresentable — reject at publish time.
+    if (!proof.match_state) findings.push({ rule: rule.id, criterion: 3, msg: "COMMERCE rule has no ProvenSelection" });
 
     // (2) never-relax never relaxed / unknown
     for (const c of conflicts) if (modeById.get(c.axis) === NEVER_RELAX) findings.push({ rule: rule.id, criterion: 2, msg: `never-relax ${c.axis} relaxed` });
@@ -69,18 +78,38 @@ export function verifyFunnel(config, catalog, axisSet) {
 
     // INDEPENDENT reference oracle (BLOCKER-1 / C11) for this exact answer-path. It shares only the
     // base predicates with the kernel — its selection/comparator/tie-break are a separate
-    // implementation — so this is a genuine second opinion on criteria 3, 4, 5, 6, 7.
+    // implementation — so this is a genuine second opinion on criteria 3, 4, 5, 6, 7. No bound is
+    // passed: the oracle reads maxBudgetTierDistance from the policy registry itself.
     const combo = orderedCombo(axisSet, rule.when);
     const answers = comboAnswers(axisSet, combo);
     const claimed = { product_id: prod.url, variant_id: proof.variant_id || null, match_state: proof.match_state, conflicts, unknowns };
-    const proof2 = proveSelection(units, constraints, answers, claimed, { maxBudgetOvershootTiers: nTiers });
+    const proof2 = proveSelection(units, constraints, answers, claimed);
     for (const f of proof2.findings) findings.push({ rule: rule.id, criterion: f.criterion, msg: f.msg });
   }
 
-  // BLOCKER-3: NO renderable result without a proof. Count renderable slots (combo-rule primaries
-  // + every surfaced alternate) and assert each carries a proof; the default rule must be proven
-  // UNREACHABLE by construction (the combo rules cover the full answer space) or itself carry a
-  // proof. Target: proofCoverage === 1.
+  // TERMINAL verification (ADR-0039). A NO_MATCH terminal must be PROVEN: the independent oracle
+  // re-runs its own eligibility over the served catalog for that exact answer-path and confirms NO
+  // eligible unit exists within the numbered budget policy (claimed product_id = null). If any
+  // eligible product DID exist, the terminal is a fabricated dead-end and the funnel FAILS. Non-
+  // NO_MATCH terminals (RESTART/STALE/…) are runtime states, not catalog claims — nothing to prove
+  // here beyond the structural checks trustValidate already enforces.
+  for (const t of terminals) {
+    checked++;
+    if (t.result || (t.proof && t.proof.product_id)) { findings.push({ rule: t.id, criterion: 1, msg: "TERMINAL rule carries a product" }); }
+    if (t.terminal_state === "NO_MATCH") {
+      if (!t.terminal_proof) { findings.push({ rule: t.id, criterion: 3, msg: "NO_MATCH terminal has no terminal_proof" }); }
+      if (!axisSet) continue;
+      const combo = orderedCombo(axisSet, t.when);
+      const answers = comboAnswers(axisSet, combo);
+      const proof2 = proveSelection(units, constraints, answers, { product_id: null });
+      for (const f of proof2.findings) findings.push({ rule: t.id, criterion: f.criterion, msg: `NO_MATCH unproven — ${f.msg}` });
+    }
+  }
+
+  // BLOCKER-3: NO renderable COMMERCE result without a proof. Denominator = COMMERCE slots only
+  // (combo-rule primaries + every surfaced alternate); TERMINAL cells render a state, not a product,
+  // so they are NOT proof-coverage slots (they're proven separately above). Target: proofCoverage
+  // === 1 over COMMERCE. The when:{} default MUST be TERMINAL (ADR-0039) — never a product.
   let renderable = 0, proven = 0;
   for (const rule of rules) { renderable++; if (rule.proof && rule.proof.match_state) proven++; }
   for (const a of config.archetypes || []) {
@@ -94,18 +123,14 @@ export function verifyFunnel(config, catalog, axisSet) {
       }
     }
   }
-  // default rule: reachable only if the table is INCOMPLETE. Prove unreachability by construction.
+  // default rule (when:{}): the honest catch-all for a missing/edited answer. It MUST be TERMINAL —
+  // a when:{} COMMERCE default is a global product fallback (exactly what ADR-0039 forbids).
   const dflt = (config.decisionTable || []).find((r) => r.when && !Object.keys(r.when).length);
-  if (dflt) {
-    renderable++;
-    const fullSpace = axisSet ? axisSet.reduce((n, ax) => n * ax.values.length, 1) : null;
-    const complete = fullSpace != null ? rules.length === fullSpace : dflt.unreachable === true;
-    if (complete && dflt.unreachable) proven++; // unreachable-by-construction counts as covered
-    else if (dflt.proof && dflt.proof.match_state) proven++;
-    else findings.push({ rule: dflt.id, criterion: 3, msg: "default rule is reachable but has no proof" });
+  if (dflt && dflt.kind !== "TERMINAL") {
+    findings.push({ rule: dflt.id, criterion: 3, msg: "default rule (when:{}) is not TERMINAL — a global product fallback is forbidden" });
   }
   const proofCoverage = renderable ? proven / renderable : 1;
-  if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `proof coverage ${proven}/${renderable} < 100%` });
+  if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `COMMERCE proof coverage ${proven}/${renderable} < 100%` });
 
   // PROMISE BINDING (item 1): each offered option's group is derived from its predicate; witness
   // that no option is dead, and no label inverts/widens its value. A contradiction fails the funnel.

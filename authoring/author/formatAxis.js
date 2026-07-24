@@ -7,8 +7,13 @@
  * store data (title + attributes.type + tags) and marked `hard:true`; the covering
  * assignment then filters on it absolutely (see _assignCovering in index.js).
  *
- * Pure/Node-safe. `productFormat` returns "perfume" | "oil" | "raw" | "set" | null
- * (null = ambiguous → eligible for ANY format so it is never orphaned).
+ * Pure/Node-safe. `productFormat` returns "perfume" | "oil" | "raw" | "set" | null.
+ * null = AMBIGUOUS: the form cannot be resolved deterministically from the real text. Such a product
+ * is left ABSENT from the format profile, so the kernel reads its format as UNKNOWN. Because format is
+ * a NEVER_RELAX hard constraint, an UNKNOWN format is EXCLUDED from the eligible SKUs when a shopper
+ * picks a specific form — NEVER auto-mapped to an "OTHER"/any bucket (ADR-0039 / audit: no auto-OTHER,
+ * no weakened filter, OTHER only on positive proof). It is reported as an excluded SKU with a reason,
+ * and coverage is measured against the ELIGIBLE SKUs, not the whole catalog.
  */
 
 const FORMAT_META = {

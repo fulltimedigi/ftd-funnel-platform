@@ -24,14 +24,22 @@
 
 import { verifyServedResult } from "./verifyRuntime.js"; // internal-only: called ONLY from here
 import { handoffTarget } from "./handoff.js";
+import { isSafetyAxis } from "./safety.js"; // the single safety-axis detector (wired, not inline)
 
 // The module-private brand. NOT exported. An object is a real certificate iff it carries this.
 const SEAL = Symbol("ftd.CertifiedSelectionResult");
 
 export const TERMINAL_KINDS = ["NO_MATCH", "STALE", "RESTART_REQUIRED", "HANDOFF_UNBOUND", "INVALID_ARTIFACT"];
 
-function terminal(kind, reason) {
-  return Object.freeze({ certified: false, terminal: kind, reason: reason || null });
+/** The renderer needs an actionable next step for a terminal; map each state to its default action.
+ *  A fired TERMINAL rule may override it via rule.next_action. */
+const DEFAULT_NEXT_ACTION = {
+  NO_MATCH: "EDIT_ANSWERS", STALE: "REFRESH", RESTART_REQUIRED: "START_OVER",
+  HANDOFF_UNBOUND: "BROWSE_CATALOG", INVALID_ARTIFACT: "START_OVER",
+};
+
+function terminal(kind, reason, extra) {
+  return Object.freeze({ certified: false, terminal: kind, reason: reason || null, next_action: DEFAULT_NEXT_ACTION[kind] || "START_OVER", ...(extra || {}) });
 }
 
 /** A CanonicalOfferRecord: every commercial field drawn from ONE product record, with provenance.
@@ -76,6 +84,17 @@ export function certifyForRender(config, resolved, answers, clientVersions) {
   const rule = (config.decisionTable || []).find((r) => r.id === ruleId);
   if (!rule) return terminal("INVALID_ARTIFACT", "fired rule not present in the served table");
 
+  // Discriminated union (ADR-0039): a fired TERMINAL rule is an HONEST ending — render its declared
+  // state + next_action, never a product. It carries no proof by construction; do not treat it as a
+  // proofless fallback. The state is validated at publish time (trustValidate + verifyFunnel).
+  if (rule.kind === "TERMINAL") {
+    const kind = TERMINAL_KINDS.includes(rule.terminal_state) ? rule.terminal_state : "NO_MATCH";
+    return terminal(kind, rule.reason_code || null, {
+      next_action: rule.next_action || DEFAULT_NEXT_ACTION[kind],
+      message_key: rule.message_key || null,
+    });
+  }
+
   // RECEIPT: proof — a renderable product requires a ProvenSelection for THIS path. A proofless
   // fallback rule (the old r_default → overall) has no proof → NO product card (audit #3 closed here).
   const proof = rule.proof;
@@ -97,8 +116,10 @@ export function certifyForRender(config, resolved, answers, clientVersions) {
   if (h.state === "HANDOFF_UNBOUND") return terminal("HANDOFF_UNBOUND", h.reason);
 
   // RECEIPT: safety — a safety/allergen/compat/legal axis must be SAT; none present → NOT_APPLICABLE
-  // (an explicit PASS, never "skipped"). Omission would be a construction error.
-  const safetyAxis = (config.constraintPolicy || []).find((c) => c.category);
+  // (an explicit PASS, never "skipped"). Omission would be a construction error. safety.js is the
+  // single detector (wired here + at authoring, where such an axis is BLOCKED until official-evidence
+  // grounding exists — ADR-0039). If one is ever served, it must be satisfied, else fail closed.
+  const safetyAxis = (config.constraintPolicy || []).find((c) => isSafetyAxis(c));
   let safety = "PASSED_NOT_APPLICABLE";
   if (safetyAxis) {
     const broke = [...(proof.conflicts || []), ...(proof.unknowns || [])].some((x) => x.axis === safetyAxis.id);

@@ -33,6 +33,8 @@
  *   the search happened to drop). Conflicts (VIOLATED) and relevant unknowns are distinct.
  */
 
+import { maxBudgetTierDistance as _policyBudgetDistance, policyHash as _policyHash } from "./policyRegistry.js";
+
 export const SAT = "SAT";
 export const VIOLATED = "VIOLATED";
 export const UNKNOWN = "UNKNOWN";
@@ -200,13 +202,18 @@ function compareLoss(a, b) {
  * Returns { eligible, reason }.
  */
 function eligibility(constraints, perC, bounds) {
+  // The relaxation DISTANCE (=1 tier) is read from the numbered policy registry HERE (the matcher),
+  // directly — a TierDistance, never a TierCount, never a value handed in. The independent reference
+  // evaluator reads the SAME registry with its OWN code; a bound is never passed matcher → verifier
+  // (audit #6). `bounds` may still carry a merchant price overshoot, but not the budget-tier cap.
+  const budgetDist = _policyBudgetDistance();
   for (const c of constraints) {
     const s = perC[c.id];
     if (c.mode === NEVER_RELAX && s.state !== SAT) return { eligible: false, reason: `never-relax ${c.id} ${s.state}` };
     if (c.requireProof && s.state === UNKNOWN) return { eligible: false, reason: `require-proof ${c.id} UNKNOWN` };
     if (c.mode === RELAXABLE && s.state === VIOLATED) {
-      if (c.type === "ordinal" && bounds.maxBudgetOvershootTiers != null && s.magnitude > bounds.maxBudgetOvershootTiers) return { eligible: false, reason: `ordinal ${c.id} over-cap ${s.magnitude}` };
-      if (c.type === "price" && bounds.maxPriceOvershoot != null && s.magnitude > bounds.maxPriceOvershoot) return { eligible: false, reason: `price ${c.id} over-cap ${s.magnitude}` };
+      if (c.type === "ordinal" && s.magnitude > budgetDist) return { eligible: false, reason: `ordinal ${c.id} over-cap ${s.magnitude} > ${budgetDist}` };
+      if (c.type === "price" && bounds && bounds.maxPriceOvershoot != null && s.magnitude > bounds.maxPriceOvershoot) return { eligible: false, reason: `price ${c.id} over-cap ${s.magnitude}` };
     }
   }
   return { eligible: true, reason: null };
@@ -275,6 +282,7 @@ function makeSelectionResult(cert, fields) {
     variant_id: fields.variant_id ?? null,
     catalog_version: fields.catalog_version ?? null,
     policy_version: fields.policy_version ?? null,
+    policy_hash: _policyHash(), // the numbered policy this selection was made under (audit #6)
     match_state: fields.match_state,
     matches: fields.matches || [],
     conflicts: fields.conflicts || [],
@@ -283,9 +291,12 @@ function makeSelectionResult(cert, fields) {
   });
 }
 
-/** Default relaxation bounds. Merchant-overridable via opts.bounds. */
+/** Default relaxation bounds. Merchant-overridable via opts.bounds. NOTE (ADR-0039): the budget-tier
+ *  cap is NO LONGER a bound — it is read from the numbered policy registry (maxBudgetTierDistance) by
+ *  `eligibility` directly, so it cannot be overridden per-call. `bounds` now carries only the optional
+ *  merchant price overshoot (a different, price-typed axis) and the asserted-match flag. */
 const DEFAULT_BOUNDS = {
-  maxBudgetOvershootTiers: 1, // an ordinal budget may relax at most one tier
+  maxPriceOvershoot: null, // optional merchant price bound (price-typed axis only; not the budget tier cap)
   noUnknownOnAssertedMatch: true,
 };
 

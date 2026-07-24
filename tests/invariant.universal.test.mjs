@@ -69,6 +69,7 @@ for (const store of STORES) {
     let ruleCount = 0, disclosedCount = 0;
     for (const rule of cfg.decisionTable) {
       if (!rule.when || !Object.keys(rule.when).length) continue; // the default safety-net rule
+      if (rule.kind === "TERMINAL") continue; // a NO_MATCH terminal (no product within the budget policy) is an honest ending, not a broken promise — ADR-0039
       ruleCount++;
       const prod = byUrl.get((A[rule.result] || {}).url);
       assert.ok(prod, `rule ${rule.id} resolves to a real product`);

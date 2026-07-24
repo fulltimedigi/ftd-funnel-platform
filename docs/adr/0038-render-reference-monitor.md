@@ -62,8 +62,12 @@ DEFERRED to a follow-up commit, with the exact blocker recorded — do NOT claim
   ready to re-land the moment the trust-gate change is authorized. (The render gate still refuses to
   render any over-relaxed result whose proof fails re-verification, so the shopper-facing risk is
   bounded even before #6 lands.)
+  → **RESOLVED in [ADR-0039](0039-discriminated-union-terminal-trust.md):** the operator authorized the
+  one trust change; budget cap=1 is now enforced from the numbered policy registry, the COMMERCE|TERMINAL
+  discriminated union is live, and trust is TERMINAL-aware without losing its teeth.
 - Ambiguous-product UNKNOWN≠OTHER handling and the coverage-denominator report (#10) ride on the same
-  discriminated-union work and are deferred with it.
+  discriminated-union work and are deferred with it. → **RESOLVED in ADR-0039** (excluded-SKU report,
+  UNKNOWN-on-NEVER_RELAX excludes with a reason, coverage measured against the eligible denominator).
 
 ## Consequences
 

@@ -62,6 +62,7 @@ check("ZERO budget leak for populated cells; empty cells fall to the NEAREST sam
   for (const rule of cfg.decisionTable) {
     const wantF = rule.when && rule.when.D_format, wantB = rule.when && rule.when.D_budget;
     if (!wantF || wantB == null) continue;
+    if (rule.kind === "TERMINAL") continue; // a NO_MATCH terminal (>1 tier from any same-form product) is honest, not a leak — ADR-0039
     const prod = prodByUrl.get(archById.get(rule.result).recommendations.primary.url);
     const gotF = productFormat(prod), gotB = tierOf(prod);
     if (gotF !== wantF) formLeak++;
@@ -79,6 +80,7 @@ check("the operator's disaster is gone: a low-budget path never returns a top-ti
   for (const rule of r.config.decisionTable) {
     const wantF = rule.when && rule.when.D_format, wantB = rule.when && rule.when.D_budget;
     if (!wantF || wantB == null) continue;
+    if (rule.kind === "TERMINAL") continue; // honest NO_MATCH, not a cross-tier disaster — ADR-0039
     const prod = prodByUrl.get(archById.get(rule.result).recommendations.primary.url);
     // never more than one tier away, and never a different form
     assert.equal(productFormat(prod), wantF);

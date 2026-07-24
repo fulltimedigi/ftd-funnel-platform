@@ -82,6 +82,31 @@ export function groundingReport(products, axisSet) {
   return report;
 }
 
+/**
+ * excludedSkuReport (ADR-0039 / audit: UNKNOWN on a NEVER_RELAX axis). A product whose value on a
+ * HARD (NEVER_RELAX) axis is UNKNOWN — absent from the profile, or present-but-ungrounded — is NOT
+ * eligible for any specific value of that axis: it is EXCLUDED with a reason, never auto-mapped to an
+ * "OTHER"/any bucket. This lists those SKUs so coverage is measured against the ELIGIBLE denominator
+ * and the exclusion is honest, not silent. Pure, deterministic.
+ * @returns {{ excluded: Array<{url, axis, reason}>, eligibleCount:number, totalCount:number }}
+ */
+export function excludedSkuReport(products, axisSet) {
+  const catVer = catalogVersion(products);
+  const hardAxes = (axisSet || []).filter((a) => a.hard && !a.ordinal); // NEVER_RELAX nominal axes (e.g. format)
+  const excluded = [];
+  const excludedUrls = new Set();
+  for (const p of products || []) {
+    for (const a of hardAxes) {
+      const v = a.profile.get(p.url);
+      if (v == null) { excluded.push({ url: p.url, axis: a.id, reason: "UNKNOWN_ABSENT — no deterministic value for a NEVER_RELAX axis" }); excludedUrls.add(p.url); continue; }
+      const g = groundClaim(p, a.id, v, { kind: axisKind(a), catalogVersion: catVer, provenance: a.provenance, advisory: a.advisory });
+      if (!g.grounded) { excluded.push({ url: p.url, axis: a.id, reason: "UNKNOWN_UNGROUNDED — value present but not backed by evidence" }); excludedUrls.add(p.url); }
+    }
+  }
+  const total = (products || []).length;
+  return { excluded, eligibleCount: total - excludedUrls.size, totalCount: total };
+}
+
 /** Answers for a materialization combo: constraintId → the combo's value on that axis. */
 export function comboAnswers(axisSet, combo) {
   const answers = {};
@@ -89,4 +114,4 @@ export function comboAnswers(axisSet, combo) {
   return answers;
 }
 
-export default { compileConstraints, compileUnits, comboAnswers };
+export default { compileConstraints, compileUnits, comboAnswers, excludedSkuReport };

@@ -52,7 +52,7 @@ export function differentiatingDensity(catalog) {
 
 /** exact-path-rate with its numerator and denominator (never just the ratio). */
 export function exactPathStats(config) {
-  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length);
+  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length && r.kind !== "TERMINAL");
   const exactPaths = rules.filter((r) => r.proof && r.proof.match_state === "EXACT").length;
   const reachablePaths = rules.length;
   return { exactPaths, reachablePaths, rate: reachablePaths ? exactPaths / reachablePaths : 0 };
@@ -77,7 +77,7 @@ export function tasteAxisIds(config) {
  * axis that never flips the result is a mirror/decorative question — not meaningful.
  */
 export function meaningfulTasteAxes(config) {
-  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length);
+  const rules = (config.decisionTable || []).filter((r) => r.when && Object.keys(r.when).length && r.kind !== "TERMINAL");
   const byKey = new Map(rules.map((r) => [JSON.stringify(r.when), r.result]));
   const out = new Set();
   for (const id of tasteAxisIds(config)) {

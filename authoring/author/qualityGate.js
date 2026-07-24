@@ -52,7 +52,9 @@ function sweep(config) {
     const cell = {};
     keys.forEach((k, i) => { cell[k] = combo[i]; });
     const sig = { ...presDefaults, ...cell };
-    const { result, ruleId } = decide(sig, table);
+    const { result, ruleId, kind } = decide(sig, table);
+    if (kind === "TERMINAL" || result == null) continue; // a TERMINAL (NO_MATCH/RESTART) cell is not a
+    // RESULT — anti-bland analyses product outcomes only; its definitions/thresholds are unchanged.
     const out = buildRecommendations({ primary: archById.get(result) }, { signals: sig, ruleId }, config);
     cells.push({ cell, sig, result, out });
   }

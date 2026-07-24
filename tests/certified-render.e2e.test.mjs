@@ -109,6 +109,21 @@ check("ALTERNATES: an alternate WITHOUT a proof is never drawn; a proven one is"
   assert.ok(!links.includes("https://shop.example/products/no-proof"), "the uncertified alternate is NOT drawn");
 });
 
+check("FIRED TERMINAL cell: a NO_MATCH combo rule → terminal screen, NO card, NO buy CTA (ADR-0039)", () => {
+  const config = baseConfig();
+  // the fired rule IS a TERMINAL (a NO_MATCH cell — no product within the budget policy for this path)
+  config.decisionTable[0] = {
+    id: "r_0", kind: "TERMINAL", when: { D_format: "oil" },
+    terminal_state: "NO_MATCH", reason_code: "NO_PRODUCT_WITHIN_CONSTRAINTS",
+    message_key: "terminal.no_match", next_action: "EDIT_ANSWERS",
+    terminal_proof: { product_id: null },
+  };
+  const root = render(config, resolvedFor(config, "r_0"), V);
+  assert.equal(terminalKind(root), "NO_MATCH", "the fired terminal's state is drawn");
+  assert.ok(!hasClass(root, "ftd-signature"), "NO product card");
+  assert.ok(!hrefs(root).includes(PROVEN), "NO buy CTA to any product");
+});
+
 check("POISON-CANARY: breaking the handoff guard (unbound SKU) turns the card into a terminal", () => {
   // a product with no deep-linkable url must NOT fall back to brand-home — it becomes HANDOFF_UNBOUND.
   assert.equal(handoffTarget({ name: "x", url: "" }, null).state, "HANDOFF_UNBOUND", "guard: no url → unbound (if this regressed, the E2E below would draw a card)");

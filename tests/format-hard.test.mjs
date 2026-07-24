@@ -56,13 +56,17 @@ check("ZERO cross-format leakage: every rule's result matches the rule's chosen 
   for (const rule of cfg.decisionTable) {
     const want = rule.when && rule.when.D_format;
     if (!want) continue; // the default rule has no when
+    if (rule.kind === "TERMINAL") continue; // a NO_MATCH terminal (no product in this band within the budget policy) is an honest ending, not format leakage — ADR-0039
     const arch = archById.get(rule.result);
     assert.ok(arch, "rule resolves to a real archetype");
     const got = fmtOf(arch.recommendations.primary.url);
     assert.equal(got, want, `rule ${rule.id}: form ${got} must equal chosen ${want}`);
     checkedFormatRules++;
   }
-  assert.ok(checkedFormatRules >= 8, "format rules were actually exercised");
+  // 3 forms × 3 budget bands = 9 format cells; in this fixture form⟺price are perfectly correlated,
+  // so 2 cross-tier cells (perfume+high, raw+low) have no product within the 1-tier budget policy and
+  // become honest NO_MATCH terminals (ADR-0039) — 7 COMMERCE format rules remain, all leak-free.
+  assert.ok(checkedFormatRules >= 6, "format rules were actually exercised");
 });
 
 check("a SPRAY path yields only sprays; a RAW path only raw (the operator's exact bug)", () => {
@@ -70,7 +74,7 @@ check("a SPRAY path yields only sprays; a RAW path only raw (the operator's exac
   const cfg = r.config;
   const archById = new Map(cfg.archetypes.map((a) => [a.id, a]));
   const resultsFor = (form) => cfg.decisionTable
-    .filter((rule) => rule.when && rule.when.D_format === form)
+    .filter((rule) => rule.when && rule.when.D_format === form && rule.kind !== "TERMINAL")
     .map((rule) => fmtOf(archById.get(rule.result).recommendations.primary.url));
   assert.ok(resultsFor("perfume").length > 0 && resultsFor("perfume").every((f) => f === "perfume"), "spray → only sprays");
   assert.ok(resultsFor("raw").every((f) => f === "raw"), "raw → only raw");

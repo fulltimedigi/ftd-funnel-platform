@@ -25,16 +25,23 @@
  */
 
 import { status, evaluateUnit, SAT, VIOLATED, UNKNOWN, NEVER_RELAX, RELAXABLE, ADVISORY } from "./constraintKernel.js";
+import { maxBudgetTierDistance } from "./policyRegistry.js";
 
-/** Independent eligibility — re-derived, not imported. */
-function isEligible(constraints, perC, bounds) {
+/**
+ * Independent eligibility — re-derived, NOT imported from the matcher. The relaxation distance is
+ * read from the numbered policy registry by THIS module's own call; NO bound is accepted from the
+ * matcher, so the verifier can never inherit the matcher's value (audit #6). A fault-injection test
+ * feeds the matcher a wrong TierCount while the policy stays 1, and asserts this verifier still
+ * catches the over-relaxed pick.
+ */
+function isEligible(constraints, perC) {
+  const budgetDist = maxBudgetTierDistance(); // independent read of the SAME registry
   for (const c of constraints) {
     const s = perC[c.id];
     if (c.mode === NEVER_RELAX && s.state !== SAT) return false;
     if (c.requireProof && s.state === UNKNOWN) return false;
     if (c.mode === RELAXABLE && s.state === VIOLATED) {
-      if (c.type === "ordinal" && bounds.maxBudgetOvershootTiers != null && s.magnitude > bounds.maxBudgetOvershootTiers) return false;
-      if (c.type === "price" && bounds.maxPriceOvershoot != null && s.magnitude > bounds.maxPriceOvershoot) return false;
+      if (c.type === "ordinal" && s.magnitude > budgetDist) return false;
     }
   }
   return true;
@@ -102,7 +109,7 @@ export function proveSelection(units, constraints, answers, claimed, bounds = {}
   const add = (criterion, msg) => findings.push({ criterion, msg });
   const byId = new Map(units.map((u) => [u.id, u]));
 
-  const eligible = units.filter((u) => isEligible(constraints, evaluateUnit(u, constraints, answers), bounds));
+  const eligible = units.filter((u) => isEligible(constraints, evaluateUnit(u, constraints, answers)));
 
   if (claimed.product_id == null) {
     // A NoExactMatch claim is only valid if there truly is no eligible unit.
@@ -113,7 +120,7 @@ export function proveSelection(units, constraints, answers, claimed, bounds = {}
   const chosen = byId.get(claimed.product_id);
   if (!chosen) { add(1, `claimed product ${claimed.product_id} is not a unit`); return { ok: false, findings }; }
   const chosenPerC = evaluateUnit(chosen, constraints, answers);
-  if (!isEligible(constraints, chosenPerC, bounds)) add(2, `claimed product ${claimed.product_id} is INELIGIBLE (never-relax/require-proof/over-cap)`);
+  if (!isEligible(constraints, chosenPerC)) add(2, `claimed product ${claimed.product_id} is INELIGIBLE (never-relax/require-proof/over-cap)`);
 
   const chosenLoss = independentLoss(constraints, chosenPerC);
 

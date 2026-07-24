@@ -73,10 +73,23 @@ export function trustValidate(config) {
   const signals = config.signals || [];
 
   /* ---- TV1 — all results clearly defined ---------------------------------- */
-  const reachable = new Set(table.map((r) => r.result));
+  // Discriminated union (ADR-0039, the ONE authorized trust change): a rule is COMMERCE (routes a
+  // proven product) OR TERMINAL (an actionable honest ending — NO_MATCH/RESTART/… with a reason and
+  // a next_action, and NO product/CTA). A TERMINAL cell is a valid trusted outcome, NOT a dead-end.
+  const reachable = new Set(table.filter((r) => r.kind !== "TERMINAL").map((r) => r.result));
   for (const rule of table) {
+    if (rule.kind === "TERMINAL") { validateTerminalRule(rule, push); continue; }
+    // COMMERCE (or a legacy rule): must route to a real archetype AND carry a ProvenSelection when
+    // the config is kernel-authored (legacy hand-built configs have no `proof` and are trusted via
+    // the reachability + recommendation checks below).
     if (!archById.has(rule.result)) {
       push("blocker", "TV1_RESULT_MISSING", `rule "${rule.id}" → "${rule.result}" has no archetype`);
+    }
+    if (rule.when && !Object.keys(rule.when).length && rule.kind === "COMMERCE") {
+      push("blocker", "TV1_DEFAULT_COMMERCE", `rule "${rule.id}" is when:{} COMMERCE — the default must be TERMINAL, never a product`);
+    }
+    if (rule.kind === "COMMERCE" && (!rule.proof || !rule.proof.product_id || !rule.proof.match_state)) {
+      push("blocker", "TV1_COMMERCE_NO_PROOF", `COMMERCE rule "${rule.id}" has no ProvenSelection`);
     }
   }
   for (const a of archetypes) {
@@ -139,9 +152,12 @@ export function trustValidate(config) {
     const sig = { ...presDefaults };
     keys.forEach((k, i) => { sig[k] = combo[i]; });
     const cellId = keys.map((k) => sig[k]).join("/");
-    const { result, ruleId } = decide(sig, table);
+    const { result, ruleId, kind } = decide(sig, table);
+    // A TERMINAL cell is a trusted, actionable ending (validated at rule level in TV1) — NOT a
+    // dead-end. It carries no product; the runtime draws its state + next_action, never a blank.
+    if (kind === "TERMINAL") continue;
     const arch = archById.get(result);
-    if (!arch) { push("blocker", "TV3_NO_RESULT", `cell ${cellId} resolves to nothing`); continue; }
+    if (!arch) { push("blocker", "TV3_DEAD_END", `cell ${cellId} resolves to nothing (no product, no honest terminal)`); continue; }
     const out = buildRecommendations({ primary: arch }, { signals: sig, ruleId }, config);
     const where = `${result} @ ${cellId}`;
     if (!out.primary) push("blocker", "TV3_NO_BECAUSE", `${where}: recommendation suppressed (no because)`);
@@ -152,6 +168,24 @@ export function trustValidate(config) {
   }
 
   return { ok: !findings.some((f) => f.severity === "blocker"), findings };
+}
+
+/** An honest TERMINAL rule: a known state, a reason, a message key, an actionable next step, and
+ *  NO product/CTA. A publish-time NO_MATCH must carry a terminal_proof (kernel proved no candidate).
+ *  This is the authorized trust extension — it keeps trust's teeth: a blank screen or an
+ *  action-less terminal or a terminal carrying a product still FAILS. */
+const TERMINAL_STATES = new Set(["NO_MATCH", "RESTART_REQUIRED", "STALE", "HANDOFF_UNBOUND", "INVALID_ARTIFACT"]);
+const NEXT_ACTIONS = new Set(["START_OVER", "EDIT_ANSWERS", "REFRESH", "BROWSE_CATALOG"]);
+function validateTerminalRule(rule, push) {
+  const id = rule.id;
+  if (!TERMINAL_STATES.has(rule.terminal_state)) push("blocker", "TV_TERMINAL_STATE", `terminal rule "${id}" has no valid terminal_state`);
+  if (!rule.reason_code) push("blocker", "TV_TERMINAL_REASON", `terminal rule "${id}" has no reason_code`);
+  if (!rule.message_key) push("blocker", "TV_TERMINAL_MESSAGE", `terminal rule "${id}" has no message_key`);
+  if (!NEXT_ACTIONS.has(rule.next_action)) push("blocker", "TV_TERMINAL_NO_ACTION", `terminal rule "${id}" has no actionable next_action (a blank screen is a dead-end)`);
+  // a terminal must NEVER carry a product / buy CTA
+  if (rule.result || (rule.proof && rule.proof.product_id) || rule.product || rule.cta) push("blocker", "TV_TERMINAL_HAS_PRODUCT", `terminal rule "${id}" must not carry a product/CTA`);
+  // an authored NO_MATCH must prove no candidate exists (kernel returned no product within bounds).
+  if (rule.terminal_state === "NO_MATCH" && !rule.terminal_proof) push("blocker", "TV_TERMINAL_NO_PROOF", `NO_MATCH rule "${id}" has no terminal_proof`);
 }
 
 function product(...arrs) {

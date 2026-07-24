@@ -23,9 +23,10 @@ import { richnessCheck } from "../quality/richnessCheck.js";
 import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
 import { deriveBudgetAxis, looksLikeBudgetAxis } from "./budgetAxis.js";
 import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/constraintKernel.js";
-import { compileConstraints, compileUnits, comboAnswers } from "../../engine/kernel/compile.js";
+import { compileConstraints, compileUnits, comboAnswers, excludedSkuReport } from "../../engine/kernel/compile.js";
 import { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash } from "../../engine/kernel/version.js";
 import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
+import { isSafetyAxis } from "../../engine/kernel/safety.js";
 import { pickCalibrated, exactPathStats, surfacedCoverage, differentiatingDensity, EXACT_PATH_TARGET } from "../quality/depthCalibration.js";
 import { RICHNESS_DEFAULTS } from "../quality/richnessCheck.js";
 
@@ -71,7 +72,6 @@ function _assignCovering(products, axisSet, combos, overall) {
   const catalogUrls = new Set(units.map((u) => u.id));
   const catVer = catalogVersion(products);
   const polVer = policyVersion(constraints);
-  const nBudgetTiers = Math.max(1, ...axisSet.filter((a) => a.hard && a.ordinal).map((a) => a.values.length));
 
   // Quality rank (lower = better shell): reproduces _bestProduct's ordering as a scalar for the
   // fine tie-break, so equal-loss ties resolve to the premium product — deterministically.
@@ -79,22 +79,26 @@ function _assignCovering(products, axisSet, combos, overall) {
   const qualityRank = new Map(ranked.map((p, i) => [p.url, i]));
   const used = new Set(); // #1 products so far — coverage tie-break prefers a FRESH one
   const tieBreak = (u) => (used.has(u.id) ? 1e7 : 0) + (qualityRank.get(u.id) ?? 1e6);
-  const opts = { catalogVersion: catVer, policyVersion: polVer, catalogUrls, tieBreak, bounds: { maxBudgetOvershootTiers: nBudgetTiers } };
+  // NO loosened budget bound is passed: the kernel reads the relaxation DISTANCE (=1 tier) from the
+  // numbered policy registry itself (audit #6). A cell with no product within 1 tier is an honest
+  // NO_MATCH — NEVER a global-best fallback (the forbidden path of audit #3 is deleted here).
+  const opts = { catalogVersion: catVer, policyVersion: polVer, catalogUrls, tieBreak };
 
-  const winnerByCombo = new Map(), altByUrl = new Map(), proofByCombo = new Map();
+  const winnerByCombo = new Map(), altByUrl = new Map(), proofByCombo = new Map(), terminalByCombo = new Map();
   // Two passes so the FRESH tie-break maximises distinct #1 coverage: pass 1 lets every product
   // claim a home cell it wins outright; pass 2 fills the rest, still kernel-decided.
   const order = [...combos];
   for (const pass of [0, 1]) {
     for (const combo of order) {
       const k = key(combo);
-      if (winnerByCombo.has(k)) continue;
+      if (winnerByCombo.has(k) || terminalByCombo.has(k)) continue;
       const answers = comboAnswers(axisSet, combo);
       const res = kernelSelect(units, constraints, answers, opts);
-      let winner = res.product_id ? (unitByUrl.get(res.product_id) || {}).product : null;
-      if (!winner) { // honest NO_MATCH shouldn't occur for product-derived combos; keep coverage safe
-        if (pass === 0) continue;
-        winner = overall || products[0];
+      const winner = res.product_id ? (unitByUrl.get(res.product_id) || {}).product : null;
+      if (!winner) { // honest NO_MATCH: no product within budget on this path — a first-class TERMINAL cell.
+        if (pass === 0) continue; // defer to pass 1 (a fresher home might still claim a neighbour)
+        terminalByCombo.set(k, res); // NO_MATCH — no product routed, ever (kernel-proven no candidate)
+        continue;
       }
       // In pass 0, only lock a cell whose winner is EXACT and still fresh (its true home); defer
       // compromises to pass 1 so fresh products aren't consumed by a neighbour's relaxed cell.
@@ -112,7 +116,7 @@ function _assignCovering(products, axisSet, combos, overall) {
     const w = winnerByCombo.get(homeKey);
     if (w && w.url !== p.url) { const list = altByUrl.get(w.url) || []; list.push(p); altByUrl.set(w.url, list); }
   }
-  return { winnerByCombo, altByUrl, proofByCombo, constraints, catalogVersion: catVer, policyVersion: polVer };
+  return { winnerByCombo, altByUrl, proofByCombo, terminalByCombo, constraints, catalogVersion: catVer, policyVersion: polVer };
 }
 
 /* ---- fact axes (categorical, fact-framed, ≤4 values each) ------------------ */
@@ -169,7 +173,7 @@ function buildConfig(catalog, axisSet, opts) {
   //    profile → no product is orphaned. "Results First, Questions Last."
   const combos = cartesian(axisSet.map((a) => a.values.map((v) => v.value)));
   const overall = _bestProduct(products);
-  const { winnerByCombo, altByUrl, proofByCombo, constraints: kConstraints, catalogVersion: catVer, policyVersion: polVer } = _assignCovering(products, axisSet, combos, overall);
+  const { winnerByCombo, altByUrl, proofByCombo, terminalByCombo, constraints: kConstraints, catalogVersion: catVer, policyVersion: polVer } = _assignCovering(products, axisSet, combos, overall);
   const winners = new Map(); // url -> product (distinct combo winners)
   for (const p of winnerByCombo.values()) if (!winners.has(p.url)) winners.set(p.url, p);
 
@@ -247,14 +251,16 @@ function buildConfig(catalog, axisSet, opts) {
   const kUnits = compileUnits(products, axisSet);
   const kUnitByUrl = new Map(kUnits.map((u) => [u.id, u]));
   const homeAnswersOf = (url) => { const u = kUnitByUrl.get(url); const ans = {}; if (u) for (const a of axisSet) { const g = u.values.get(a.id); if (g) ans[a.id] = g.value; } return ans; };
-  const nTiersB = Math.max(1, ...axisSet.filter((a) => a.hard && a.ordinal).map((a) => a.values.length));
   for (const a of archetypes) {
     const ans = homeAnswersOf(a.recommendations.primary.url);
     const kept = [];
     for (const c of a.recommendations.contextual || []) {
       const u = kUnitByUrl.get(c.url);
       if (!u) continue;
-      const res = kernelSelect([u], kConstraints, ans, { catalogUrls: new Set([c.url]), bounds: { maxBudgetOvershootTiers: nTiersB } });
+      // No budget bound is handed to the matcher — the kernel reads maxBudgetTierDistance from the
+      // numbered policy registry itself (ADR-0039 / audit #6). An alternate proven against its OWN
+      // home answers is EXACT by construction; the cap only matters if the home answers ever relax.
+      const res = kernelSelect([u], kConstraints, ans, { catalogUrls: new Set([c.url]) });
       if (!res.product_id) continue; // fails NEVER_RELAX for this path → not renderable → drop
       c.proof = { match_state: res.match_state, conflicts: res.conflicts, unknowns: res.unknowns, variant_id: res.variant_id };
       kept.push(c);
@@ -281,32 +287,43 @@ function buildConfig(catalog, axisSet, opts) {
   //    variant_id) so the renderer and the runtime verifier read structured fields, never prose.
   //    RULE-LEVEL HONESTY: `relaxed` (legacy shape) = the kernel's conflicts (VIOLATED answers),
   //    with never-relax rank-1 guaranteed absent (the kernel excluded any unit that violates it).
+  //    DISCRIMINATED UNION (ADR-0039 / audit #3): a rule is COMMERCE (ProvenSelection) or TERMINAL
+  //    (an actionable NO_MATCH — reason + next_action + a terminal_proof that no candidate exists
+  //    within the constraints & the 1-tier budget bound). A cell with no product is NEVER routed to
+  //    a global best; it is an honest, actionable dead-end the shopper can act on.
   const decisionTable = combos.map((combo, ci) => {
-    const proof = proofByCombo.get(combo.join("¦"));
-    const rule = {
-      id: `r_${ci}`,
-      when: Object.fromEntries(axisSet.map((a, i) => [`D_${a.id}`, combo[i]])),
-      result: archId.get(winnerByCombo.get(combo.join("¦")).url),
-    };
-    if (proof) {
-      rule.proof = {
-        product_id: proof.product_id, match_state: proof.match_state, variant_id: proof.variant_id,
-        matches: proof.matches, conflicts: proof.conflicts, unknowns: proof.unknowns,
-        tie_break_reason: proof.tie_break_reason,
+    const k = combo.join("¦");
+    const when = Object.fromEntries(axisSet.map((a, i) => [`D_${a.id}`, combo[i]]));
+    const winner = winnerByCombo.get(k);
+    if (!winner) {
+      const tres = terminalByCombo.get(k);
+      return {
+        id: `r_${ci}`, kind: "TERMINAL", when,
+        terminal_state: "NO_MATCH", reason_code: "NO_PRODUCT_WITHIN_CONSTRAINTS",
+        message_key: "terminal.no_match", next_action: "EDIT_ANSWERS",
+        // terminal_proof: the kernel returned NO product for this path — records why (bounds).
+        terminal_proof: { product_id: null, policy_hash: tres && tres.policy_hash, tie_break_reason: (tres && tres.tie_break_reason) || "no eligible unit within the 1-tier budget bound" },
       };
-      const relaxed = (proof.conflicts || []).map((c) => { const o = { axis: c.axis, label: c.label }; if (c.dir) o.dir = c.dir; if (c.soft) o.soft = true; return o; });
-      if (relaxed.length) rule.relaxed = relaxed;
     }
+    const proof = proofByCombo.get(k);
+    const rule = { id: `r_${ci}`, kind: "COMMERCE", when, result: archId.get(winner.url) };
+    rule.proof = {
+      product_id: proof.product_id, match_state: proof.match_state, variant_id: proof.variant_id,
+      matches: proof.matches, conflicts: proof.conflicts, unknowns: proof.unknowns,
+      tie_break_reason: proof.tie_break_reason, policy_hash: proof.policy_hash,
+    };
+    const relaxed = (proof.conflicts || []).map((c) => { const o = { axis: c.axis, label: c.label }; if (c.dir) o.dir = c.dir; if (c.soft) o.soft = true; if (c.advisory) o.advisory = true; return o; });
+    if (relaxed.length) rule.relaxed = relaxed;
     return rule;
   });
-  // The table maps EVERY combo of the full answer space, so the default safety-net rule is
-  // UNREACHABLE by construction (ADR-0037 BLOCKER-3): any real signal combination hits a combo
-  // rule first. We keep it as an engine terminal guard but mark it unreachable + prove it below
-  // (verifyFunnel asserts combo-rule count == the full cartesian size), so no renderable path
-  // lacks a proof. `complete` records the construction proof for the verifier.
-  const fullSpace = axisSet.reduce((n, a) => n * a.values.length, 1);
-  const complete = combos.length === fullSpace;
-  decisionTable.push({ id: "r_default", when: {}, result: archId.get(overall.url) || archetypes[0].id, unreachable: complete, _reason: complete ? "table covers the full answer space" : "table incomplete — reachable fallback" });
+  // The default rule (when:{}) is TERMINAL only (audit #3): it can NEVER route a product. It fires
+  // only when NO combo rule matched — a missing / edited / stale answer left a signal undefined — so
+  // the honest, actionable outcome is RESTART_REQUIRED (never NO_MATCH, never a product).
+  decisionTable.push({
+    id: "r_default", kind: "TERMINAL", when: {},
+    terminal_state: "RESTART_REQUIRED", reason_code: "INCOMPLETE_ANSWERS",
+    message_key: "terminal.restart", next_action: "START_OVER",
+  });
 
   const config = {
     _generatedBy: "ftd-authoring/stage2",
@@ -430,6 +447,13 @@ export function authorFromAxes(catalog, axes, opts = {}) {
   if (products.length < 4) return { ok: false, reason: "too-few-products", meta: { count: products.length } };
   const cleanCat = { ...catalog, products };
 
+  // SAFETY BLOCK (ADR-0039, explicit honesty item): safety.js's fail-closed enforcement needs an
+  // official-evidence pipeline (resolveSafetyEvidence) that the ingestion path does NOT yet supply.
+  // Until it does, publishing a safety/allergen/compatibility/legal axis is REFUSED — we never ship a
+  // safety promise we can't ground from an official source. safety.js is the single detector (wired).
+  const safetyAxes = (axes || []).filter((a) => isSafetyAxis(a));
+  if (safetyAxes.length) return { ok: false, reason: "safety-axis-unsupported", meta: { axes: safetyAxes.map((a) => a.id), categories: safetyAxes.map((a) => a.category), note: "safety/allergen/compatibility/legal axes are blocked until official-evidence grounding is wired (engine/kernel/safety.js resolveSafetyEvidence)" } };
+
   const usable = (axes || []).filter((a) => a && a.values && a.values.length >= 2 && a.profile && a.profile.size);
   // HARD axes are derived from the real catalog and, when present, are ALWAYS in the set:
   // FORMAT (strict — spray→sprays only, ADR-0034) and BUDGET (ordinal — the chosen price
@@ -487,9 +511,14 @@ export function authorFromAxes(catalog, axes, opts = {}) {
     const rich = richnessCheck(chosen.config, cleanCat, { deeperFeasibleExists, density, minCoverage: minCov });
     if (!rich.ok) return { ok: false, reason: "richness", meta: { findings: rich.findings, density } };
     const st = exactPathStats(chosen.config);
+    // Excluded-SKU report (ADR-0039): SKUs UNKNOWN on a NEVER_RELAX axis (e.g. ambiguous format) are
+    // excluded from the eligible pool with a reason — never auto-mapped to an "OTHER" bucket. Coverage
+    // is reported against the ELIGIBLE denominator so the exclusion is honest, not silent.
+    const excl = excludedSkuReport(products, chosen.set);
     return { ok: true, config: chosen.config, meta: {
       axes: cand.set.map((a) => a.id), questions: cand.set.length, archetypes: chosen.config.archetypes.length, combos: cand.combos,
       coverage: cand.coverage, hard: hard.map((h) => h.id), verify: cand.verify,
+      excludedSkus: { count: excl.excluded.length, eligible: excl.eligibleCount, total: excl.totalCount, items: excl.excluded },
       depthCalibration: { targetMet, target: T, exactPaths: st.exactPaths, reachablePaths: st.reachablePaths, rate: st.rate, surfaced: surfacedCoverage(chosen.config), density, deeperFeasibleExists, candidatesEvaluated: scored.length, limiting },
     } };
   }

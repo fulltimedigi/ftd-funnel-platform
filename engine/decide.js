@@ -41,10 +41,13 @@ export function matchRule(signals, when) {
 export function decide(signals, decisionTable = []) {
   for (const rule of decisionTable) {
     if (matchRule(signals, rule.when)) {
-      return { result: rule.result, ruleId: rule.id };
+      // Discriminated union (ADR-0039): a TERMINAL rule yields NO product — an actionable outcome.
+      if (rule.kind === "TERMINAL") return { result: null, ruleId: rule.id, kind: "TERMINAL", terminal: rule };
+      return { result: rule.result, ruleId: rule.id, kind: rule.kind || "COMMERCE" };
     }
   }
-  return { result: null, ruleId: null }; // total tables never reach here
+  // No rule matched — a missing/edited answer left a signal undefined. Honest: RESTART, never a product.
+  return { result: null, ruleId: null, kind: "TERMINAL", terminal: { terminal_state: "RESTART_REQUIRED", reason_code: "INCOMPLETE_ANSWERS", message_key: "terminal.restart", next_action: "START_OVER" } };
 }
 
 /**
@@ -53,7 +56,7 @@ export function decide(signals, decisionTable = []) {
  */
 export function scoreDecisionTable(config, answers) {
   const signals = deriveSignals(config, collectRawSignals(answers, config));
-  const { result, ruleId } = decide(signals, config.decisionTable);
+  const { result, ruleId, kind, terminal } = decide(signals, config.decisionTable);
   const id = result;
   return {
     primary: id,
@@ -63,6 +66,8 @@ export function scoreDecisionTable(config, answers) {
     sorted: id ? [[id, 1]] : [],
     signals, // derived DS1/DS2/DS3/DS5 + goal/learning_mode (+ clamp meta)
     ruleId, // which rule fired — traceability/audit
+    kind: kind || "COMMERCE", // COMMERCE | TERMINAL (ADR-0039 discriminated union)
+    terminal: kind === "TERMINAL" ? (terminal || null) : null,
   };
 }
 

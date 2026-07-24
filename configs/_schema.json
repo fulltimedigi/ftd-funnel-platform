@@ -96,14 +96,21 @@
     },
     "decisionTable": {
       "type": "array",
-      "description": "STEP 7 Decision Logic (required for scoring.mode 'decision-table'). ORDERED, first-match-wins rules over derived signals → archetype id. Evaluated by engine/decide.js. End with a `when: {}` safety rule to guarantee totality.",
+      "description": "STEP 7 Decision Logic (required for scoring.mode 'decision-table'). ORDERED, first-match-wins rules over derived signals. A rule is a discriminated union (ADR-0039): kind 'COMMERCE' routes to a proven archetype `result`; kind 'TERMINAL' is an honest ending (terminal_state + next_action, NO product). Evaluated by engine/decide.js. End with a `when: {}` TERMINAL safety rule to guarantee totality (a when:{} COMMERCE default is a forbidden global fallback). The COMMERCE `result`/TERMINAL discipline is enforced at publish time by trustValidate + verifyFunnel.",
       "items": {
         "type": "object",
-        "required": ["when", "result"],
+        "required": ["when"],
         "properties": {
           "id": { "type": "string", "description": "rule label for audit/analytics" },
+          "kind": { "type": "string", "enum": ["COMMERCE", "TERMINAL"], "description": "COMMERCE (proven product) | TERMINAL (honest ending). Absent = legacy COMMERCE." },
           "when": { "type": "object", "description": "{ signalKey: value | [values] }; omitted key = wildcard" },
-          "result": { "type": "string", "description": "archetype id to select" }
+          "result": { "type": "string", "description": "COMMERCE only: archetype id to select" },
+          "proof": { "type": "object", "description": "COMMERCE ProvenSelection (product_id, match_state, variant_id, matches/conflicts/unknowns, tie_break_reason, policy_hash)" },
+          "terminal_state": { "type": "string", "enum": ["NO_MATCH", "RESTART_REQUIRED", "STALE", "HANDOFF_UNBOUND", "INVALID_ARTIFACT"], "description": "TERMINAL only: the honest ending state" },
+          "reason_code": { "type": "string", "description": "TERMINAL only: machine reason" },
+          "message_key": { "type": "string", "description": "TERMINAL only: i18n key for the shown message" },
+          "next_action": { "type": "string", "enum": ["START_OVER", "EDIT_ANSWERS", "REFRESH", "BROWSE_CATALOG"], "description": "TERMINAL only: the actionable next step" },
+          "terminal_proof": { "type": "object", "description": "TERMINAL NO_MATCH only: proof that no eligible product exists within the numbered budget policy" }
         }
       }
     },
