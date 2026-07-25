@@ -115,7 +115,7 @@
     // Idempotency guard: a funnel is saved at most once per page load — blocks a
     // double-click AND the ?save=1 auto-save re-firing on a manual refresh.
     let _saveState = "idle"; // idle | saving | saved
-    function draftStoreUrl(config) { return _draftStoreUrl(config, sessionStorage.getItem("ftd:draft-url")); }
+    function draftStoreUrl(config) { return _draftStoreUrl(config, localStorage.getItem("ftd:draft-url")); }
     function draftName(config) { return _draftName(config, draftStoreUrl(config)); }
     function stripSaveParam() {
       try { const u = new URL(location.href); if (u.searchParams.has("save")) { u.searchParams.delete("save"); history.replaceState(null, "", u); } } catch { /* ignore */ }
@@ -135,6 +135,8 @@
         const id = await createFunnel({ storeUrl: draftStoreUrl(ctx.config), artifact: ctx.config, name: draftName(ctx.config) });
         _saveState = "saved";
         stripSaveParam();                            // never let a refresh re-save
+        localStorage.removeItem("ftd:draft-config"); // saved to the account now — drop the local copy
+        localStorage.removeItem("ftd:draft-url");
         statusEl.className = "msg show info";
         statusEl.innerHTML = "تم الحفظ في حسابك ✓ — <a href='../dashboard/dashboard.html'>افتح فانلاتي</a>.";
         return id;
@@ -228,7 +230,7 @@
       });
       sel.addEventListener("change", () => {
         ctx.config.theme = sel.value;                                  // edit the draft in place
-        sessionStorage.setItem("ftd:draft-config", JSON.stringify(ctx.config));
+        localStorage.setItem("ftd:draft-config", JSON.stringify(ctx.config));
         iframe.src = "../../embed/funnel.html?draft=1&t=" + Date.now(); // re-preview from the draft
       });
       body.appendChild(el("div", { class: "adv-row" }, [el("span", { text: "ثيم العلامة:" }), sel]));
@@ -243,9 +245,9 @@
       if (!ctx) { app.innerHTML = '<p class="err">لا يوجد فانل محدّد. أضِف <code>?funnel=&lt;id&gt;</code> إلى الرابط.</p>'; return; }
       let config;
       if (ctx.draft) {
-        // A freshly generated draft, handed over same-origin via sessionStorage.
+        // A freshly generated draft, handed over same-origin via localStorage.
         try {
-          config = JSON.parse(sessionStorage.getItem("ftd:draft-config") || "null");
+          config = JSON.parse(localStorage.getItem("ftd:draft-config") || "null");
           if (!config) throw new Error("no draft");
         } catch (e) {
           app.innerHTML = '<p class="err">لا توجد مسودّة جاهزة. ابدأ من شاشة «الصق الرابط».</p>';

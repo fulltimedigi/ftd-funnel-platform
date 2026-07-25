@@ -4,7 +4,7 @@
   Lists the signed-in user's saved funnels (RLS-scoped to their tenant) and lets
   them open, rename, or delete each. Requires a session; redirects to login if
   absent. Opening a funnel loads its latest saved artifact back into the review
-  screen (same-origin sessionStorage).
+  screen (same-origin localStorage).
 -->
 <html lang="ar" dir="rtl">
 <head>
@@ -84,10 +84,10 @@
       try {
         const artifact = await getFunnelArtifact(item.id);
         if (!artifact) { setMsg("err", "مفيش نسخة محفوظة للفانل ده."); return; }
-        sessionStorage.setItem("ftd:draft-config", JSON.stringify(artifact));
+        localStorage.setItem("ftd:draft-config", JSON.stringify(artifact));
         // store_url lives on the funnel row, not inside the artifact — carry it so a
         // re-save from the review screen keeps the URL.
-        sessionStorage.setItem("ftd:draft-url", item.storeUrl || "");
+        localStorage.setItem("ftd:draft-url", item.storeUrl || "");
         location.href = "../review/review.html?draft=1";
       } catch (e) { setMsg("err", e.message || "تعذّر فتح الفانل."); }
     }

@@ -185,10 +185,10 @@
         const found = (res.catalog && (res.catalog.count ?? (res.catalog.products && res.catalog.products.length))) || 0;
         if (found) { if (_tick) { clearInterval(_tick); _tick = null; } $("status").textContent = `تمّ! قرأنا ${found} منتج وبنينا الفانل…`; }
 
-        // Hand the fresh draft to the review screen (same-origin sessionStorage).
+        // Hand the fresh draft to the review screen (same-origin localStorage).
         // Stash the store URL too so "save to my account" can record it.
-        sessionStorage.setItem("ftd:draft-config", JSON.stringify(res.config));
-        sessionStorage.setItem("ftd:draft-url", intake.request.url || "");
+        localStorage.setItem("ftd:draft-config", JSON.stringify(res.config));
+        localStorage.setItem("ftd:draft-url", intake.request.url || "");
         setTimeout(() => { location.href = "../review/review.html?draft=1"; }, 500);
       } catch (err) {
         busy(false);

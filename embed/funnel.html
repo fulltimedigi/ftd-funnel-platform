@@ -57,12 +57,12 @@
     }
 
     // Draft preview: a freshly generated, in-memory config shared same-origin via
-    // sessionStorage (the Studio review screen sets it). No fetch — render directly.
+    // localStorage (the Studio review screen sets it). No fetch — render directly.
     if (q.get("draft")) {
       try {
-        const raw = sessionStorage.getItem("ftd:draft-config");
+        const raw = localStorage.getItem("ftd:draft-config");
         const config = raw ? JSON.parse(raw) : null;
-        if (!config) throw new Error("no draft in sessionStorage");
+        if (!config) throw new Error("no draft in localStorage");
         createFunnel(config, mountEl);
       } catch (err) {
         console.error("[ftd] draft preview failed:", err);
