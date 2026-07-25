@@ -1,5 +1,13 @@
 # FullTimeDigi Funnel Quality Standard v1 — The Anti-Bland Gate
 
+> **⚠️ SUPERSEDED (2026-07-25).** The authoritative funnel-build law is now
+> **[`funnel-constitution.md`](./funnel-constitution.md)** (النتائج أولًا — v1.1,
+> 22 laws), which subsumes this anti-bland gate (see ق1, ق5, ق6, ق12). This document
+> is kept for historical/reference context only. Where the two differ, **the
+> constitution wins.** It will be retired once the P1 brain replaces the mechanisms
+> it describes. **Until then this gate stays active** — do not remove the code that
+> enforces it (`authoring/author/qualityGate.js`).
+
 ## STATUS
 
 **NON-NEGOTIABLE.** Applies to every funnel this platform produces — whether authored

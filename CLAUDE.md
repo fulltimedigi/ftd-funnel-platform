@@ -77,6 +77,19 @@ Read it before building any UI; don't silently deviate.
 
 ## MANDATORY DESIGN STANDARD
 
+**⭐ SUPREME LAW — `docs/standards/funnel-constitution.md`** (دستور بناء الفانل —
+النتائج أولًا, v1.1, 22 laws) is the **authoritative, binding** funnel-build law and the
+literal reference for the P1 brain. Read it first and in full. Its governing architecture
+is fixed: *design-time semantic authoring (LLM) → deterministic evidence verification &
+compilation → fully deterministic runtime (zero runtime LLM).* Where anything below
+differs from the constitution, **the constitution wins.**
+
+The three standards below (`decision-funnel-design-standard-v1.md`,
+`funnel-engine-reference-v1.md`, `funnel-quality-anti-bland-standard-v1.md`) are earlier
+formulations of the same *Results First* philosophy, now **superseded** by the
+constitution and kept for reference; their still-wired gates (e.g. the anti-bland gate in
+`authoring/author/qualityGate.js`) stay active until the P1 brain replaces them.
+
 Before designing any funnel/recommendation/diagnostic, read and apply
 `docs/standards/decision-funnel-design-standard-v1.md` (the 12 rules). Core law:
 **Results First, Questions Last.** To build one, follow

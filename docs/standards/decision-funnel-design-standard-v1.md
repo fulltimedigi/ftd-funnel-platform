@@ -1,5 +1,12 @@
 # FULLTIMEDIGI DECISION FUNNEL DESIGN STANDARD v1
 
+> **⚠️ SUPERSEDED (2026-07-25).** The authoritative funnel-build law is now
+> **[`funnel-constitution.md`](./funnel-constitution.md)** (النتائج أولًا — v1.1,
+> 22 laws). This document is an earlier, less-complete formulation of the same
+> *Results First, Questions Last* philosophy; it is kept for historical/reference
+> context only. Where the two differ, **the constitution wins.** This file will be
+> retired once the P1 brain replaces the mechanisms it describes.
+
 ## STATUS
 
 NON-NEGOTIABLE

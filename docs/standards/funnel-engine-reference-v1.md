@@ -1,5 +1,11 @@
 # FULLTIMEDIGI FUNNEL ENGINE — REFERENCE IMPLEMENTATION v1
 
+> **⚠️ SUPERSEDED (2026-07-25).** The authoritative funnel-build law is now
+> **[`funnel-constitution.md`](./funnel-constitution.md)** (النتائج أولًا — v1.1,
+> 22 laws). This reference predates the constitution and is kept for historical
+> context only. Where the two differ, **the constitution wins.** It will be retired
+> once the P1 brain replaces the mechanisms it describes.
+
 **Status: canonical.** This is the engineering companion to
 [`decision-funnel-design-standard-v1.md`](./decision-funnel-design-standard-v1.md)
 (the non-negotiable design law: *Results First, Questions Last*).
