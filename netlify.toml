@@ -47,3 +47,27 @@
   to = "/.netlify/functions/generate-status"
   status = 200
   force = true
+
+# Production entry (app.fulltimedigi.com). The repo root has no page — the platform
+# lives under /platform/*. These give clean entry URLs. They are 302 (temporary) and
+# land on the REAL deep path so each page's relative asset/module imports still resolve
+# (a 200 rewrite would keep the short URL and break ../../ asset paths).
+[[redirects]]
+  from = "/"
+  to = "/platform/intake/start.html"
+  status = 302
+
+[[redirects]]
+  from = "/start"
+  to = "/platform/intake/start.html"
+  status = 302
+
+[[redirects]]
+  from = "/login"
+  to = "/platform/auth/login.html"
+  status = 302
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/platform/dashboard/dashboard.html"
+  status = 302
