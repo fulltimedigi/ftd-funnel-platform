@@ -14,13 +14,15 @@
  * Pure/Node-safe. NOT a stopword whack-a-mole substitute for P1 — a floor, not the ceiling.
  */
 
-// Latin function words + commerce/packaging boilerplate that are never a decision ATTRIBUTE.
+// Latin function words + commerce/packaging boilerplate + units that are never a decision ATTRIBUTE.
 const JUNK = new Set([
   "de", "du", "des", "la", "le", "les", "el", "of", "the", "and", "or", "for", "with", "by", "to", "in", "on", "an",
   "eau", "based", "pack", "packs", "package", "packages", "box", "boxes", "set", "sets", "kit", "kits",
   "collection", "new", "sale", "buy", "shop", "store", "default", "bundle", "combo", "value", "size", "sizes",
-  "item", "items", "product", "products", "edp", "edt", "edc", "ml", "oz", "gm", "gr", "free", "gift",
+  "item", "items", "product", "products", "edp", "edt", "edc", "free", "gift",
   "offer", "offers", "deal", "deals",
+  // units of weight/volume/quantity — a size is a purchase choice, never a taste attribute
+  "ml", "oz", "gm", "gr", "kg", "cl", "mm", "cm", "pcs", "pc", "tola", "tolas", "gram", "grams", "liter", "litre",
 ]);
 
 /** True when a label is meaningless as a user-facing decision option. */

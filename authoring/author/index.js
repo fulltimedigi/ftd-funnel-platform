@@ -141,11 +141,13 @@ export function buildFactAxes(products) {
   }
 
   // name-mined mutually-exclusive facet axes (form / origin / size), clustered by
-  // co-occurrence in axes.js — each already carries a url→value profile.
-  // P0 (FUNNEL-QUALITY-FIX-PLAN): a mined token is used as the RAW label here, so junk like
-  // "de" / "based" / "packages" must never reach a shopper. Drop junk-labelled options; if a
-  // taste axis has <2 meaningful options left, drop the whole axis — the funnel gets shorter
-  // (honesty > depth). Proper naming/translation of these axes is P1 (LLM-designed).
+  // co-occurrence in axes.js — each carries a url→value profile.
+  // P0 (FUNNEL-QUALITY-FIX-PLAN): the mined token is used as the RAW label here, so obvious
+  // non-attributes must never reach a shopper — junk/function words ("de"/"based"/"packages")
+  // and UNITS ("tola"/"3ml"). Drop those options; a taste axis with <2 meaningful options is
+  // dropped entirely (honesty > depth). The axis STRUCTURE is real (origin/form) and kept when
+  // it survives — P1 replaces these raw labels with LLM-designed, translated names
+  // (e.g. المصدر: هندي/كمبودي) behind an evidence + validity gate.
   for (const fa of d.axes.filter((a) => String(a.id).startsWith("facet"))) {
     const values = meaningfulOptions(fa.values.map((v) => ({ value: v.value, label: v.value })));
     if (values.length < 2) continue;
