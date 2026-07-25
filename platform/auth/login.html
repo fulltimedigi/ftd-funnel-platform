@@ -49,11 +49,12 @@
         <button class="btn" id="send">أرسل الرمز ←</button>
       </div>
 
-      <!-- Step 2: code -->
+      <!-- Step 2: open the magic link (code kept as a fallback) -->
       <div class="step" id="step-code">
-        <label for="code">الرمز اللي وصلك على <span id="email-echo" style="color:var(--brand)"></span></label>
+        <p style="margin:.4rem 0 0">بعتنالك رسالة على <span id="email-echo" style="color:var(--brand)"></span> فيها <b>لينك للدخول</b>. افتح اللينك من نفس المتصفح وهتدخل على طول.</p>
+        <div class="hint">شيك على الإيميل (والـSpam لو مش لاقيه). صالح لدقائق.</div>
+        <label for="code" style="margin-top:1.1rem">ولو وصلك رمز رقمي، اكتبه هنا:</label>
         <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="______" maxlength="8" />
-        <div class="hint">شيك على الإيميل (والـSpam لو مش لاقيه). الرمز صالح لدقائق.</div>
         <button class="btn" id="verify">دخول ←</button>
         <button class="link" id="back">تغيير الإيميل / إعادة الإرسال</button>
       </div>
@@ -63,7 +64,7 @@
   </div>
 
   <script type="module">
-    import { signInWithOtp, verifyOtp, getSession } from "./supabaseClient.js";
+    import { signInWithOtp, verifyOtp, getSession, consumeMagicLinkHash } from "./supabaseClient.js";
 
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
@@ -82,6 +83,8 @@
       return "../dashboard/dashboard.html";
     }
     const NEXT = safeNext();
+    // Where the magic link returns the user — this same login page (keeps ?next), no hash.
+    const CALLBACK = location.href.split("#")[0];
 
     function setMsg(kind, text) { const m = $("msg"); m.className = "msg show " + kind; m.textContent = text; }
     function clearMsg() { $("msg").className = "msg"; }
@@ -94,13 +97,12 @@
       clearMsg();
       $("send").disabled = true;
       try {
-        await signInWithOtp(email);
+        await signInWithOtp(email, CALLBACK);
         $("email-echo").textContent = email;
         show("code");
-        setMsg("info", "بعتنا الرمز على إيميلك. اكتبه فوق.");
-        $("code").focus();
+        setMsg("info", "بعتنالك رسالة على إيميلك فيها لينك للدخول — افتحه من نفس المتصفح وهتدخل تلقائيًا.");
       } catch (e) {
-        setMsg("err", e.message || "تعذّر إرسال الرمز.");
+        setMsg("err", e.message || "تعذّر إرسال رسالة الدخول.");
       } finally { $("send").disabled = false; }
     }
 
@@ -124,8 +126,12 @@
     $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") verify(); });
     $("back").addEventListener("click", () => { show("email"); clearMsg(); });
 
-    // Already signed in? Skip straight to the destination.
-    (async () => { if (await getSession()) location.href = NEXT; })();
+    // Returned from a magic link (tokens in the URL hash) → log in and continue.
+    // Also skip straight through if already signed in.
+    (async () => {
+      const s = await consumeMagicLinkHash();
+      if (s || await getSession()) location.href = NEXT;
+    })();
   </script>
 </body>
 </html>

@@ -44,17 +44,45 @@ async function readError(res, fallback) {
 
 /* ----------------------------------------------------------------- auth ---- */
 
-/** Send a one-time login code (and magic link) to the email. Creates the user if new. */
-export async function signInWithOtp(email) {
+/** Send a sign-in email (magic link + code). `redirectTo` is where the link returns
+ *  the user (must be in the project's allowed Redirect URLs). Creates the user if new. */
+export async function signInWithOtp(email, redirectTo) {
   const e = String(email || "").trim().toLowerCase();
   if (!isValidEmail(e)) throw new Error("البريد الإلكتروني غير صحيح.");
-  const res = await fetch(SUPABASE_URL + "/auth/v1/otp", {
+  const qs = redirectTo ? ("?redirect_to=" + encodeURIComponent(redirectTo)) : "";
+  const res = await fetch(SUPABASE_URL + "/auth/v1/otp" + qs, {
     method: "POST",
     headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ email: e, create_user: true }),
   });
-  if (!res.ok) throw await readError(res, "تعذّر إرسال الرمز. حاول تاني.");
+  if (!res.ok) throw await readError(res, "تعذّر إرسال رسالة الدخول. حاول تاني.");
   return { ok: true, email: e };
+}
+
+/**
+ * Magic-link return handler. When the user clicks the email link, Supabase verifies
+ * it and redirects back with the session tokens in the URL hash
+ * (#access_token=…&refresh_token=…). Store them as our session, best-effort populate
+ * the user's email, and clean the hash from the URL. Returns the session or null.
+ */
+export async function consumeMagicLinkHash() {
+  if (typeof location === "undefined" || !location.hash) return null;
+  const h = new URLSearchParams(location.hash.slice(1));
+  const access_token = h.get("access_token");
+  const refresh_token = h.get("refresh_token");
+  if (!access_token || !refresh_token) return null;
+  const session = parseSession(
+    { access_token, refresh_token, expires_at: Number(h.get("expires_at")) || 0, expires_in: Number(h.get("expires_in")) || 3600 },
+    nowSec(),
+  );
+  if (!session) return null;
+  try { // best-effort: fetch the user so the dashboard can show the email
+    const r = await fetch(SUPABASE_URL + "/auth/v1/user", { headers: authHeaders(SUPABASE_ANON_KEY, session) });
+    if (r.ok) { const u = await r.json(); session.user = { id: u.id, email: u.email }; }
+  } catch { /* ignore */ }
+  writeStored(session);
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { /* ignore */ }
+  return session;
 }
 
 /** Verify the 6-digit code, persist the session, and return it. */
@@ -188,6 +216,6 @@ export async function getFunnelArtifact(funnelId) {
 }
 
 export default {
-  peekSession, getSession, signInWithOtp, verifyOtp, refresh, signOut,
+  peekSession, getSession, signInWithOtp, consumeMagicLinkHash, verifyOtp, refresh, signOut,
   createFunnel, listFunnels, renameFunnel, deleteFunnel, getFunnelArtifact,
 };
