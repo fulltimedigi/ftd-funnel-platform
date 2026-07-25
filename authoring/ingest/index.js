@@ -15,9 +15,11 @@
 import { createFetcher, DEFAULT_USER_AGENT } from "./fetcher.js";
 import { parseRobots, isAllowed, crawlDelay, sitemaps as robotsSitemaps } from "./robots.js";
 import { productsFromJsonLd } from "./jsonld.js";
-import { productsFromShopifyJson, looksLikeShopify, productsJsonUrl } from "./shopify.js";
+import { productsFromShopifyJson, skusFromShopifyJson, looksLikeShopify, productsJsonUrl } from "./shopify.js";
 import { parseSitemap, looksLikeProductUrl, looksLikeProductSitemap } from "./sitemap.js";
 import { buildCatalog } from "./catalog.js";
+import { buildSkuLedger } from "./skuLedger.js";
+import { loadIngestPolicy } from "./policy.js";
 
 /**
  * @param {string} startUrl - the brand URL to ingest (the client's own site)
@@ -47,8 +49,14 @@ export async function ingestCatalog(startUrl, opts = {}) {
     minDelayMs: opts.minDelayMs, maxPages: opts.maxPages, timeoutMs: opts.timeoutMs,
   });
   const ua = fetcher.userAgent || DEFAULT_USER_AGENT;
-  const maxProductPages = opts.maxProductPages ?? 50;
+  const policy = await loadIngestPolicy(); // tunable limits from config/policy.json (§سادسًا)
+  const maxProductPages = opts.maxProductPages ?? policy.max_product_pages;
   const lists = [];
+  // SKU-Ledger source oracle (decision أ): count active SKUs from the SOURCE itself, so the
+  // accounting compares the ledger against source truth (never a false zero).
+  let sourceActiveSkus = 0;
+  let shopifyPageCapped = false;
+  const shopifyExtract = { families: [], skus: [] }; // full SKU-level extraction (ق2/ق3)
 
   // 1b. Resolve the CANONICAL origin by following the start URL's redirect
   //     (e.g. example.com → www.example.com), and keep the HTML for step 4 so
@@ -76,18 +84,26 @@ export async function ingestCatalog(startUrl, opts = {}) {
 
   // 3. Shopify products.json (paginated, best-first structured source).
   let shopifyGot = 0;
+  const maxShopifyPages = opts.maxShopifyPages ?? policy.max_shopify_pages; // ← read from config/policy.json
   if (allow(productsJsonUrl(origin))) {
-    for (let page = 1; page <= (opts.maxShopifyPages ?? 5); page++) {
+    for (let page = 1; page <= maxShopifyPages; page++) {
       const u = productsJsonUrl(origin, page);
       if (!allow(u)) break;
       const r = await fetcher.get(u);
       if (!r.ok || !looksLikeShopify(r.text)) break;
       const ps = productsFromShopifyJson(r.text, origin, opts.currency || null);
       if (ps.length === 0) break;
+      // SKU-level extraction (ق2/ق3): every variant → an active SKU (the fix for variants[0] loss).
+      // Also carries the source oracle count so accounting compares against source truth.
+      const ext = skusFromShopifyJson(r.text, origin, opts.currency || null);
+      sourceActiveSkus += ext.sourceActiveSkus;
+      shopifyExtract.families.push(...ext.families);
+      shopifyExtract.skus.push(...ext.skus);
       lists.push(ps); shopifyGot += ps.length;
       if (ps.length < 250) break; // reached the last page
+      if (page === maxShopifyPages) shopifyPageCapped = true; // stopped at the cap with a full page → more may exist
     }
-    if (shopifyGot) notes.push(`Shopify products.json: ${shopifyGot} product(s).`);
+    if (shopifyGot) notes.push(`Shopify products.json: ${shopifyGot} product(s), ${sourceActiveSkus} source SKU(s).`);
   }
 
   // 4. JSON-LD on the start page (reuse the fetch from step 1b — no double GET).
@@ -136,5 +152,21 @@ export async function ingestCatalog(startUrl, opts = {}) {
   if (products.length === 0) notes.push("No products extracted — a vertical template fallback is required (no fabrication).");
   else if (report.thin) notes.push(`Thin catalog (${products.length}) — recommend a vertical template fallback.`);
 
-  return { ok: true, brandUrl: startUrl, origin, products, report, notes, startHtml: startRes.text || "" };
+  // 7. SKU Ledger (ق2/ق3). Shopify → full per-variant SKUs (no variant dropped). Non-Shopify
+  //    sources have no variant concept → one SKU per product with extraction_method recorded
+  //    and availability honestly "unknown" (decision د; no fabricated SKUs, ق7). Accounting is
+  //    always compared against the SOURCE oracle count (decision أ).
+  let extracted;
+  if (shopifyExtract.skus.length) {
+    extracted = shopifyExtract;
+  } else {
+    extracted = {
+      families: products.map((p) => ({ family_id: p.url, title: p.name, url: p.url, brand: p.brand, product_type: (p.attributes && p.attributes.type) || null, extraction_method: p.method })),
+      skus: products.map((p) => ({ sku_id: p.url, family_id: p.url, variant_title: null, option_values: {}, price: p.price, currency: p.currency, availability: "unknown", buy_url: p.url, sku_code: p.sku })),
+    };
+    if (!sourceActiveSkus) sourceActiveSkus = products.length; // non-Shopify oracle = product count
+  }
+  const ledger = buildSkuLedger(extracted, { sourceActiveSkus, pageCapped: shopifyPageCapped, method: shopifyGot ? "shopify" : "other" });
+
+  return { ok: true, brandUrl: startUrl, origin, products, report, ledger, notes, startHtml: startRes.text || "" };
 }

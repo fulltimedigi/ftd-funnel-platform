@@ -64,3 +64,55 @@ export function productsFromShopifyJson(jsonText, origin, currency = null) {
   }
   return out;
 }
+
+/**
+ * SKU-level extraction (Part 1, ق2/ق3): every Shopify VARIANT becomes an active SKU under its
+ * product FAMILY — no variant is dropped (the fix for the shopify.js:variants[0] loss). Captures
+ * option_values (by option NAME), availability, per-variant buy URL, and the source SKU count.
+ * Does NOT classify option meaning (decision ي — that is Part 2). Pure; does not touch
+ * productsFromShopifyJson (backward compatible).
+ * @returns {{families:Array, skus:Array, sourceActiveSkus:number}}
+ */
+export function skusFromShopifyJson(jsonText, origin, currency = null) {
+  let data;
+  try { data = JSON.parse(jsonText); } catch { return { families: [], skus: [], sourceActiveSkus: 0 }; }
+  if (!data || !Array.isArray(data.products)) return { families: [], skus: [], sourceActiveSkus: 0 };
+
+  const base = String(origin || "").replace(/\/+$/, "");
+  const families = [];
+  const skus = [];
+  let sourceActiveSkus = 0;
+
+  for (const p of data.products) {
+    if (!p || !p.handle) continue;
+    const url = `${base}/products/${p.handle}`;
+    families.push({
+      family_id: p.handle, title: p.title || "", url,
+      brand: p.vendor || null, product_type: p.product_type || null, extraction_method: "shopify",
+    });
+    // option position → name (Shopify: options:[{name,position}], variant.option1/2/3)
+    const optNames = Array.isArray(p.options) ? p.options.map((o) => o && o.name).filter(Boolean) : [];
+    const variants = Array.isArray(p.variants) ? p.variants : [];
+    sourceActiveSkus += variants.length;
+    variants.forEach((v, i) => {
+      const option_values = {};
+      for (let k = 0; k < 3; k++) {
+        const name = optNames[k];
+        const val = v["option" + (k + 1)];
+        if (name && val != null && String(val).trim() !== "") option_values[name] = String(val).trim();
+      }
+      skus.push({
+        sku_id: `${p.handle}::${v.id != null ? v.id : i}`,
+        family_id: p.handle,
+        variant_title: v.title != null ? String(v.title) : null,
+        option_values, // keyed by option NAME; skuLedger strips the "Default Title" sentinel
+        price: v.price != null ? v.price : null,
+        currency,
+        availability: v.available === true ? "available" : v.available === false ? "out_of_stock" : "unknown",
+        buy_url: v.id != null ? `${url}?variant=${v.id}` : url,
+        sku_code: v.sku || null,
+      });
+    });
+  }
+  return { families, skus, sourceActiveSkus };
+}

@@ -1,0 +1,12 @@
+{
+  "_comment": "Executable ingestion policy (constitution §سادسًا). Tunable limits live HERE (never buried in code); the exit suite reads them from this file, while NON-NEGOTIABLE constants stay literal inside the validator (ق22). Versioned alongside the constitution + exit suite. NOTE: the kernel matching policy is a SEPARATE registry (engine/kernel/policyRegistry.js); unifying the two is a later, explicit decision — not Part 1.",
+  "policy_version": "ingest-1.0.0",
+  "ingestion": {
+    "max_shopify_pages": 5,
+    "max_sitemaps": 10,
+    "max_product_pages": 50,
+    "availability_states": ["available", "out_of_stock", "preorder", "backorder", "unknown"],
+    "sellable_states": ["available"],
+    "shopify_no_option_sentinel": "Default Title"
+  }
+}

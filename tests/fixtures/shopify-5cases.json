@@ -1,0 +1,30 @@
+{
+  "_comment": "Shopify-shaped products.json for the five Part-1 audit cases. Source active_skus = 4+1+1+1+1 = 8. Fed to ingestCatalog via an injected fetcher by tests/ingest.ledger.test.mjs.",
+  "products": [
+    { "id": 1, "handle": "royal-attar", "title": "Royal Attar", "vendor": "FixtureCo", "product_type": "Perfumes",
+      "tags": ["oud"], "body_html": "<p>A deep oud attar.</p>", "images": [{ "src": "https://cdn.test/royal.jpg" }],
+      "options": [{ "name": "Size", "position": 1, "values": ["3ml", "6ml", "12ml", "24ml"] }],
+      "variants": [
+        { "id": 1001, "title": "3ml",  "option1": "3ml",  "price": "12.00", "available": true, "sku": "RA-3" },
+        { "id": 1002, "title": "6ml",  "option1": "6ml",  "price": "20.00", "available": true, "sku": "RA-6" },
+        { "id": 1003, "title": "12ml", "option1": "12ml", "price": "35.00", "available": true, "sku": "RA-12" },
+        { "id": 1004, "title": "24ml", "option1": "24ml", "price": "60.00", "available": true, "sku": "RA-24" }
+      ] },
+    { "id": 2, "handle": "oud-discovery-box", "title": "Oud Discovery Box (5 pieces)", "vendor": "FixtureCo", "product_type": "Perfumes",
+      "tags": ["box", "bundle"], "body_html": "<p>Five 2ml testers.</p>", "images": [{ "src": "https://cdn.test/box.jpg" }],
+      "options": [{ "name": "Title", "position": 1, "values": ["Default Title"] }],
+      "variants": [{ "id": 2001, "title": "Default Title", "option1": "Default Title", "price": "45.00", "available": true, "sku": "BOX-5" }] },
+    { "id": 3, "handle": "limited-musk", "title": "Limited Musk", "vendor": "FixtureCo", "product_type": "Perfumes",
+      "tags": ["musk"], "body_html": "<p>Sold-out edition.</p>", "images": [{ "src": "https://cdn.test/musk.jpg" }],
+      "options": [{ "name": "Size", "position": 1, "values": ["10ml"] }],
+      "variants": [{ "id": 3001, "title": "10ml", "option1": "10ml", "price": "30.00", "available": false, "sku": "LM-10" }] },
+    { "id": 4, "handle": "amber-solo", "title": "Amber Solo", "vendor": "FixtureCo", "product_type": "Perfumes",
+      "tags": ["amber"], "body_html": "<p>Single-size amber.</p>", "images": [{ "src": "https://cdn.test/amber.jpg" }],
+      "options": [{ "name": "Title", "position": 1, "values": ["Default Title"] }],
+      "variants": [{ "id": 4001, "title": "Default Title", "option1": "Default Title", "price": "25.00", "available": true, "sku": "AS-1" }] },
+    { "id": 5, "handle": "basic-oud", "title": "Basic Oud", "vendor": "FixtureCo", "product_type": "Perfumes",
+      "tags": ["oud"], "body_html": "<p>Entry oud.</p>", "images": [{ "src": "https://cdn.test/basic.jpg" }],
+      "options": [{ "name": "Title", "position": 1, "values": ["Default Title"] }],
+      "variants": [{ "id": 5001, "title": "Default Title", "option1": "Default Title", "price": "18.00", "available": true, "sku": "BO-1" }] }
+  ]
+}
