@@ -23,6 +23,7 @@ import { NEVER_RELAX } from "./constraintKernel.js";
 import { compileConstraints, compileUnits, comboAnswers } from "./compile.js";
 import { proveSelection } from "./referenceEvaluator.js";
 import { checkPromiseBinding } from "./promiseBinding.js";
+import { isJunkLabel } from "./labelQuality.js";
 
 /**
  * @param {Object} config   authored funnel config (decisionTable with proofs, constraintPolicy, versions, archetypes)
@@ -137,6 +138,16 @@ export function verifyFunnel(config, catalog, axisSet) {
   if (axisSet) {
     const pb = checkPromiseBinding(axisSet, { products });
     for (const f of pb.findings) findings.push({ rule: `option ${f.axis}=${f.value}`, criterion: 8, msg: `promise-binding witness ${f.witness}: ${f.msg}` });
+  }
+
+  // PUBLISH GATE (P0, FUNNEL-QUALITY-FIX-PLAN): a shopper-facing option LABEL must be a meaningful
+  // decision attribute, never a mined fragment/boilerplate. A junk label FAILS the build, so a
+  // funnel like the "based/de/packages" taste axis can never reach a user (comprehensibility is
+  // part of the Promise, not a luxury).
+  for (const q of config.questions || []) {
+    for (const o of q.options || []) {
+      if (isJunkLabel(o && o.label)) findings.push({ rule: `question ${q.id}`, criterion: 8, msg: `junk option label "${o && o.label}" is not a meaningful choice` });
+    }
   }
 
   return { ok: findings.length === 0, checked, proofCoverage, renderable, findings };

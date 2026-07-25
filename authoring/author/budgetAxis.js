@@ -20,15 +20,30 @@ export function cleanPrice(p) {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-/** Tertile cutpoints from the real prices — [c1, c2] (3 tiers), [c1] (2), or null. */
+/** Round a cutpoint to a human-friendly step so a shopper reads "450" not "459".
+ *  The SAME rounded value drives both the label and tierOf, so text == filter (FIX-4).
+ *  Below 100 we keep the exact value: there a unit or two is meaningful (a 48 vs 50 coffee)
+ *  and coarse rounding could shift which products fall in a tier — cosmetic only where it's safe. */
+export function niceRound(n) {
+  if (!(n >= 100)) return n;
+  const step = n < 1000 ? 50 : n < 10000 ? 100 : 500;
+  return Math.round(n / step) * step;
+}
+
+/** Tertile cutpoints from the real prices, rounded to human steps — [c1, c2] (3 tiers),
+ *  [c1] (2), or null. Rounding is applied to the canonical cuts so labels + predicates match. */
 export function priceCutpoints(products) {
   const prices = (products || []).map(cleanPrice).filter((x) => x != null).sort((a, b) => a - b);
   if (prices.length < 6) return null;
   const at = (f) => prices[Math.min(prices.length - 1, Math.floor(f * prices.length))];
   const c1 = at(1 / 3), c2 = at(2 / 3);
-  if (c1 < c2) return [c1, c2];
+  if (c1 < c2) {
+    const r1 = niceRound(c1), r2 = niceRound(c2);
+    return (r1 > 0 && r1 < r2) ? [r1, r2] : [c1, c2]; // fall back if rounding collapses the order
+  }
   const med = at(1 / 2);
-  return med > prices[0] ? [med] : null;
+  if (med > prices[0]) { const r = niceRound(med); return [r > 0 ? r : med]; }
+  return null;
 }
 
 /**

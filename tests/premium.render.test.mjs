@@ -30,7 +30,7 @@ check("every archetype's primary.image is the matching product's real catalog im
   const axes = [0, 1, 2].map((ax) => {
     const profile = new Map();
     products.forEach((p, i) => profile.set(p.url, combos[i][ax]));
-    return { id: "ax" + ax, label: "م" + ax, question: "س" + ax + "؟", values: [{ value: "0", label: "a" }, { value: "1", label: "b" }], profile };
+    return { id: "ax" + ax, label: "م" + ax, question: "س" + ax + "؟", values: [{ value: "0", label: "خيار أول" }, { value: "1", label: "خيار ثاني" }], profile };
   });
   const r = authorFromAxes({ origin: O, products, brandUrl: O }, axes, { maxQuestions: 3, maxCombos: 64 });
   assert.equal(r.ok, true, r.reason);
@@ -51,7 +51,7 @@ check("nearest ALTERNATES also carry their real image (or '' → placeholder)", 
   const axes = [0, 1, 2].map((ax) => {
     const profile = new Map();
     products.forEach((p, i) => profile.set(p.url, combos[i % 4][ax])); // collisions → alternates
-    return { id: "ax" + ax, label: "م" + ax, question: "س" + ax + "؟", values: [{ value: "0", label: "a" }, { value: "1", label: "b" }], profile };
+    return { id: "ax" + ax, label: "م" + ax, question: "س" + ax + "؟", values: [{ value: "0", label: "خيار أول" }, { value: "1", label: "خيار ثاني" }], profile };
   });
   const r = authorFromAxes({ origin: O, products, brandUrl: O }, axes, { maxQuestions: 3, maxCombos: 64 });
   const alts = r.config.archetypes.flatMap((a) => a.recommendations.contextual || []);

@@ -24,6 +24,7 @@ import { deriveFormatAxis, looksLikeFormatAxis } from "./formatAxis.js";
 import { deriveBudgetAxis, looksLikeBudgetAxis } from "./budgetAxis.js";
 import { select as kernelSelect, EXACT, NO_MATCH } from "../../engine/kernel/constraintKernel.js";
 import { compileConstraints, compileUnits, comboAnswers, excludedSkuReport } from "../../engine/kernel/compile.js";
+import { meaningfulOptions } from "../../engine/kernel/labelQuality.js";
 import { catalogVersion, policyVersion, answerContractVersion, localeBundleVersion, configHash } from "../../engine/kernel/version.js";
 import { verifyFunnel } from "../../engine/kernel/verifyFunnel.js";
 import { isSafetyAxis } from "../../engine/kernel/safety.js";
@@ -141,8 +142,14 @@ export function buildFactAxes(products) {
 
   // name-mined mutually-exclusive facet axes (form / origin / size), clustered by
   // co-occurrence in axes.js — each already carries a url→value profile.
+  // P0 (FUNNEL-QUALITY-FIX-PLAN): a mined token is used as the RAW label here, so junk like
+  // "de" / "based" / "packages" must never reach a shopper. Drop junk-labelled options; if a
+  // taste axis has <2 meaningful options left, drop the whole axis — the funnel gets shorter
+  // (honesty > depth). Proper naming/translation of these axes is P1 (LLM-designed).
   for (const fa of d.axes.filter((a) => String(a.id).startsWith("facet"))) {
-    axes.push({ id: fa.id, label: "الطابع", question: _FACET_Q[axes.length % _FACET_Q.length], values: fa.values.map((v) => ({ value: v.value, label: v.value })), profile: fa.profile });
+    const values = meaningfulOptions(fa.values.map((v) => ({ value: v.value, label: v.value })));
+    if (values.length < 2) continue;
+    axes.push({ id: fa.id, label: "الطابع", question: _FACET_Q[axes.length % _FACET_Q.length], values, profile: fa.profile });
   }
 
   const type = d.axes.find((a) => a.id === "type");
