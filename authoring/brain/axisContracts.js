@@ -78,17 +78,23 @@ export function discoverAxisContracts(familyMatrix = [], skuMatrix = [], opts = 
     if (values.length) candidates.push({ axis_key: "type", source: "structured", grade: "A", scope: "catalog", values });
   }
 
-  // B) price ordinal axis (catalog-wide; discovered bands, not pre-named budget; grade A)
+  // B) price ordinal axis — a DECISION axis (budget_ceiling), so derived from the FAMILY matrix, NOT the
+  //    SKU matrix (Step-1 two-matrix separation: decision axes ← family matrix; offer attrs ← SKU matrix).
+  //    Family representative = its STARTING price (cheapest variant): budget_ceiling asks "can I get INTO
+  //    this product for ≤ X?", so the minimum is the correct representative — all-SKU tertiles are skewed
+  //    by larger, pricier SIZE variants of the same product (that skew was the defect: low ceiling 458.5→686).
   {
-    const prices = skuMatrix.map((s) => s.price).filter((n) => typeof n === "number").sort((a, b) => a - b);
-    if (prices.length >= 3) {
-      const t1 = prices[Math.floor(prices.length / 3)], t2 = prices[Math.floor(2 * prices.length / 3)];
-      const bandOf = (p) => (p <= t1 ? "low" : p >= t2 ? "high" : "mid");
+    const famRep = new Map();
+    for (const f of familyMatrix) { const ps = (f.prices || []).filter((n) => typeof n === "number"); if (ps.length) famRep.set(f.family_id, Math.min(...ps)); }
+    const reps = [...famRep.values()].sort((a, b) => a - b);
+    if (reps.length >= 3) {
+      const t1 = reps[Math.floor(reps.length / 3)], t2 = reps[Math.floor(2 * reps.length / 3)];
+      const bandOf = (p) => (p <= t1 ? "low" : p <= t2 ? "mid" : "high"); // inclusive upper bounds
       const map = new Map([["low", []], ["mid", []], ["high", []]]);
-      for (const f of familyMatrix) { const p = (f.prices || [])[0]; if (p == null) continue; map.get(bandOf(p)).push(f.family_id); }
-      const label = { low: `price ≤ ${t1}`, mid: `price ${t1}–${t2}`, high: `price ≥ ${t2}` };
-      const values = [...map.entries()].filter(([, fams]) => fams.length).map(([value, fams]) => ({ value, families: fams, evidence: [`${label[value]} (${fams.length} families)`] }));
-      if (values.length >= 2) candidates.push({ axis_key: "price", source: "structured", grade: "A", scope: "catalog", ordinal: true, values });
+      for (const [fid, p] of famRep) map.get(bandOf(p)).push(fid);
+      const label = { low: `≤ ${t1}`, mid: `${t1}–${t2}`, high: `> ${t2}` };
+      const values = [...map.entries()].filter(([, fams]) => fams.length).map(([value, fams]) => ({ value, families: fams, evidence: [`family start price ${label[value]} (${fams.length} families)`] }));
+      if (values.length >= 2) candidates.push({ axis_key: "price", source: "family", grade: "A", scope: "catalog", ordinal: true, boundaries: { t1, t2, ceilings: [t1, t2, Infinity] }, values });
     }
   }
 
@@ -137,6 +143,7 @@ export function discoverAxisContracts(familyMatrix = [], skuMatrix = [], opts = 
       const maxShare = Math.max(...vals.map((v) => v.families.length)) / N;
       if (maxShare >= 0.95) { rejected.push({ axis_key: c.axis_key, reason: `no distinction (one value ${(maxShare * 100).toFixed(0)}%)` }); continue; }
       published.push({ axis_key: c.axis_key, source: c.source, grade: c.grade, scope: c.scope, ordinal: !!c.ordinal, values: vals,
+        ...(c.boundaries ? { boundaries: c.boundaries } : {}),
         applicability: { kind: "catalog", branches: [...branchFamilies.keys()], supported_families: [...supported] } });
       continue;
     }

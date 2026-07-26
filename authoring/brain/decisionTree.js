@@ -27,15 +27,20 @@ export function buildDecisionTree(axes = [], familyMatrix = [], skuMatrix = [], 
   const priceAxis = axes.find((a) => a.axis_key === "price");
   const originAxis = axes.find((a) => a.axis_key === "origin");
   const bandIdx = (v) => BANDS.indexOf(v);
+  const ceilings = (priceAxis && priceAxis.boundaries && priceAxis.boundaries.ceilings) || [Infinity, Infinity, Infinity];
 
   const skusByFam = new Map();
   for (const s of skuMatrix) { if (!skusByFam.has(s.family_id)) skusByFam.set(s.family_id, []); skusByFam.get(s.family_id).push(s); }
-  const famType = new Map(), famBand = new Map(), famOrigin = new Map(), famNotes = new Map(), famMinPrice = new Map();
+  const famType = new Map(), famBand = new Map(), famOrigin = new Map(), famNotes = new Map(), famMinPrice = new Map(), famOfferSku = new Map();
   for (const f of familyMatrix) {
     famType.set(f.family_id, (f.structured && f.structured.product_type) || "(none)");
     famNotes.set(f.family_id, scentNotes((f.text && f.text.description) || ""));
-    const ps = (skusByFam.get(f.family_id) || []).map((s) => s.price).filter((n) => n != null);
-    famMinPrice.set(f.family_id, ps.length ? Math.min(...ps) : null);
+    const skus = (skusByFam.get(f.family_id) || []).filter((s) => s.price != null);
+    // budget matching is VARIANT-level (defect #6 guard): the OFFERED variant is the cheapest purchasable
+    // one — a family qualifies for a budget band by this variant, and the leaf shows THIS variant, not the family.
+    const cheapest = skus.slice().sort((a, b) => a.price - b.price)[0] || null;
+    famMinPrice.set(f.family_id, cheapest ? cheapest.price : null);
+    famOfferSku.set(f.family_id, cheapest ? cheapest.sku_id : null);
   }
   if (priceAxis) for (const v of priceAxis.values) for (const fid of v.families) famBand.set(fid, v.value);
   if (originAxis) for (const v of originAxis.values) for (const fid of v.families) famOrigin.set(fid, v.value);
@@ -48,10 +53,11 @@ export function buildDecisionTree(axes = [], familyMatrix = [], skuMatrix = [], 
     const oversized = ranked.length > leafCap;
     return {
       kind: "leaf", path, count: ranked.length, oversized,
+      ceiling_price: path.ceiling != null ? ceilings[path.ceiling] : Infinity,
       display: oversized ? "comparison_grid" : (ranked.length > primaryCap ? "primary_plus_alternatives" : "decisive"),
       primary: ranked.slice(0, primaryCap),
       items: ranked.map((fid) => ({
-        family: fid, price: famMinPrice.get(fid), notes: famNotes.get(fid) || [],
+        family: fid, price: famMinPrice.get(fid), offered_variant: { sku_id: famOfferSku.get(fid), price: famMinPrice.get(fid) }, notes: famNotes.get(fid) || [],
         tie_break_reason: `price ${famMinPrice.get(fid)} AED · character: ${(famNotes.get(fid) || []).slice(0, 3).join("/") || "—"}`,
       })),
       note: oversized ? "هذه كلها تحقق اختيارك؛ الفرق بينها في الطابع" : null,

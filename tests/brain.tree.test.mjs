@@ -65,6 +65,13 @@ for (const l of leaves) {
   }
 }
 
+// 3b) DEFECT #6 GUARD — budget matching is VARIANT-level: the OFFERED variant price ≤ the path band ceiling.
+// A family entering a band by its start price must still SHOW a purchasable variant ≤ ceiling (not a pricier one).
+for (const l of leaves) if (l.path.ceiling != null) for (const it of l.items) {
+  assert.ok(it.offered_variant && it.offered_variant.sku_id, `leaf item ${it.family} offers a concrete variant`);
+  assert.ok(it.offered_variant.price <= l.ceiling_price, `offered variant ${it.offered_variant.sku_id} (${it.offered_variant.price}) ≤ path ceiling ${l.ceiling_price} (defect #6 guard)`);
+}
+
 // 4) every non-excluded SKU appears in ≥1 leaf
 const allSkus = new Set(skuMatrix.map((s) => s.sku_id));
 const leafSkus = new Set(leaves.flatMap((l) => l.skus));
