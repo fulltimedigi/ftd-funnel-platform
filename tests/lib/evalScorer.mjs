@@ -27,8 +27,9 @@ export function scoreAgainstGold(gold, recommend) {
     const accepted = new Set(it.accepted_skus || []);
     const rec = recommend(c) || { no_match: true };
     let cat;
+    const exp = Array.isArray(it.expected) ? it.expected : [it.expected]; // expected is a SET (closure #6)
     if (rec.no_match || !rec.family) {
-      cat = it.expected === "HONEST_NO_MATCH" ? "honest_no_match" : "false_no_match";
+      cat = exp.includes("HONEST_NO_MATCH") ? "honest_no_match" : "false_no_match";
     } else {
       const fam = ft.get(rec.family) || {};
       const offeredSku = (skusByFamily.get(rec.family) || [])[0]; // old brain offers variant[0]

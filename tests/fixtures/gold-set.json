@@ -1,6 +1,6 @@
 {
   "_comment": "FROZEN human-review gold set v0.2 (closures 1-6). TWO-LEVEL truth: family_decision_truth (format/origin/bundle — needs human sign-off) + sku_offer_truth (price/availability/buy_url — AUTOMATIC from the Part-1 Ledger, mechanical, not reviewed). accepted_skus are VARIANT-level SKU ids (defect #6: budget measured per actual offered variant, not cheapest). Origin requires description/structured evidence; name_token alone => unknown. All Packages are set-valued bundles => out of single-format paths (support deferred, ق4). Do NOT regenerate intents from tree paths (closure #3).",
-  "gold_version": "gold-0.2.0-proposal",
+  "gold_version": "gold-0.3.0-proposal",
   "catalog_version": "oudfactory products.json (page1, 51 products / 85 SKU)",
   "captured_at": "2026-07-25",
   "currency": "AED",
@@ -39,9 +39,9 @@
     {
       "family": "5-tola-wood-box",
       "format": "bundle",
-      "origin": "malaysian",
-      "origin_basis": "description",
-      "origin_evidence": "tan Wood Box 5 - 5 tola (60 gram) Hindi Malaysian Wood Box 6 - 5 tola (60 gram)",
+      "origin": "unknown",
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "wood",
       "needs_review": true,
@@ -208,10 +208,10 @@
       "family": "majlis-box",
       "format": "bundle",
       "origin": "unknown",
-      "origin_basis": "none",
-      "origin_evidence": null,
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
-      "bundle_content": "wood",
+      "bundle_content": "mixed(oil+wood)",
       "needs_review": true,
       "name": "Majlis Box",
       "duplicate_suspect": false
@@ -219,9 +219,9 @@
     {
       "family": "2-oil-1-tola-box",
       "format": "bundle",
-      "origin": "hindi",
-      "origin_basis": "description",
-      "origin_evidence": "Rosa Escura + 3ml Il Mio Cuore + 12 gr Hindi wood Box 2 - 3ml Tabaco Cubano + 3",
+      "origin": "unknown",
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "mixed(oil+wood)",
       "needs_review": true,
@@ -231,9 +231,9 @@
     {
       "family": "3-oil-2-tola-box",
       "format": "bundle",
-      "origin": "hindi",
-      "origin_basis": "description",
-      "origin_evidence": "3ml Flamme Rouge + 3ml Katana &amp; 24g Hindi wood Box 2 - 3ml Katana + 3ml Senc",
+      "origin": "unknown",
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "mixed(oil+wood)",
       "needs_review": true,
@@ -244,8 +244,8 @@
       "family": "6-oud-oil-box",
       "format": "bundle",
       "origin": "unknown",
-      "origin_basis": "none",
-      "origin_evidence": null,
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "oils",
       "needs_review": true,
@@ -256,8 +256,8 @@
       "family": "2-oud-oil-box",
       "format": "bundle",
       "origin": "unknown",
-      "origin_basis": "none",
-      "origin_evidence": null,
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "oils",
       "needs_review": true,
@@ -268,8 +268,8 @@
       "family": "3-oud-oil-set",
       "format": "bundle",
       "origin": "unknown",
-      "origin_basis": "none",
-      "origin_evidence": null,
+      "origin_basis": "variant_specific",
+      "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "oils",
       "needs_review": true,
@@ -1356,7 +1356,11 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH"
+      ],
+      "unsatisfiable_constraint": "budget",
+      "constraint_role": "budget_ceiling_NEVER_RELAX",
       "reviewed_by": null
     },
     {
@@ -1367,7 +1371,11 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH"
+      ],
+      "unsatisfiable_constraint": "budget",
+      "constraint_role": "budget_ceiling_NEVER_RELAX",
       "reviewed_by": null
     },
     {
@@ -1378,7 +1386,11 @@
         "origin": "any"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH"
+      ],
+      "unsatisfiable_constraint": "budget",
+      "constraint_role": "budget_ceiling_NEVER_RELAX",
       "reviewed_by": null
     },
     {
@@ -1389,7 +1401,12 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1400,7 +1417,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1423,7 +1445,11 @@
         "tobaco-cubano-parfum::45297198498107",
         "il-mio-cuore-parfum::45297184473403"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1434,7 +1460,12 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1445,7 +1476,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1478,7 +1514,11 @@
         "flamme-rouge-extrait-de-parfum::45297192272187",
         "il-mio-cuore-parfum::45297184473403"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1491,7 +1531,11 @@
       "accepted_skus": [
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1502,7 +1546,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1527,7 +1576,11 @@
         "seufi-oud-oil::45297059529019",
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1540,7 +1593,11 @@
       "accepted_skus": [
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1551,7 +1608,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1581,7 +1643,11 @@
         "wild-borneo-oud-oil::45297001857339",
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1594,7 +1660,11 @@
       "accepted_skus": [
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1605,7 +1675,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1635,7 +1710,11 @@
         "wild-borneo-oud-oil::45297001857339",
         "indian-oud-oil::45322360160571"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1646,7 +1725,12 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1657,7 +1741,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1673,7 +1762,11 @@
         "indian-mouri-agarwood::45297010540859",
         "indian-agarwood::45297036230971"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1684,7 +1777,12 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1695,7 +1793,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1713,7 +1816,11 @@
         "indian-agarwood::45297036230971",
         "indian-agarwood::45297036263739"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     },
     {
@@ -1724,7 +1831,12 @@
         "origin": "indian"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1735,7 +1847,12 @@
         "origin": "cambodi"
       },
       "accepted_skus": [],
-      "expected": "HONEST_NO_MATCH",
+      "expected": [
+        "HONEST_NO_MATCH",
+        "DISCLOSED_COMPROMISE"
+      ],
+      "unsatisfiable_constraint": "origin",
+      "constraint_role": "fit_soft",
       "reviewed_by": null
     },
     {
@@ -1763,7 +1880,11 @@
         "indian-agarwood::45297036296507",
         "indian-agarwood::45297036329275"
       ],
-      "expected": "EXACT",
+      "expected": [
+        "EXACT"
+      ],
+      "unsatisfiable_constraint": null,
+      "constraint_role": null,
       "reviewed_by": null
     }
   ],
@@ -1776,7 +1897,7 @@
       },
       {
         "name": "Majlis Box",
-        "content": "wood"
+        "content": "mixed(oil+wood)"
       },
       {
         "name": "2 Oil 1 Tola Box",
@@ -1808,9 +1929,9 @@
       },
       {
         "name": "5 Tola Wood Box",
-        "origin": "malaysian",
-        "basis": "description",
-        "evidence": "tan Wood Box 5 - 5 tola (60 gram) Hindi Malaysian Wood Box 6 - 5 tola (60 gram)"
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
       },
       {
         "name": "Kalimantan Agarwood",
@@ -1861,16 +1982,40 @@
         "evidence": "Is a perfect balance between strength and vulnerability, a cloud of fragrant sweet smoke, "
       },
       {
+        "name": "Majlis Box",
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
+      },
+      {
         "name": "2 Oil 1 Tola Box",
-        "origin": "hindi",
-        "basis": "description",
-        "evidence": "Rosa Escura + 3ml Il Mio Cuore + 12 gr Hindi wood Box 2 - 3ml Tabaco Cubano + 3"
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
       },
       {
         "name": "3 Oil 2 Tola Box",
-        "origin": "hindi",
-        "basis": "description",
-        "evidence": "3ml Flamme Rouge + 3ml Katana &amp; 24g Hindi wood Box 2 - 3ml Katana + 3ml Senc"
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
+      },
+      {
+        "name": "6 Oud Oil Box",
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
+      },
+      {
+        "name": "2 Oud Oil Box",
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
+      },
+      {
+        "name": "3 Oud Oil Set",
+        "origin": "unknown",
+        "basis": "variant_specific",
+        "evidence": "multi-variant bundle — origin is per-box, not family-level"
       },
       {
         "name": "Fiamma Nera",
