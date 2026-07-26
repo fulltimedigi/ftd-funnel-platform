@@ -1,0 +1,1010 @@
+{
+  "_comment": "FROZEN human-review gold set for the Part-2 brain (closure #5). PROPOSAL ONLY — every catalog_attributes row and intent needs human review (reviewed_by / reviewed). The scorer compares brain output to accepted_skus + catalog_attributes here; it does NOT re-infer semantics (ق22). Do NOT regenerate intents from new tree paths (closure #3) — 27 intents are frozen; an unsupported intent must return HONEST_NO_MATCH, never disappear.",
+  "gold_version": "gold-0.1.0-proposal",
+  "catalog": "oudfactory.com",
+  "reviewed": false,
+  "price_tertiles": {
+    "t1": 458.5,
+    "t2": 945
+  },
+  "origin_tokens": [
+    "indian",
+    "cambodi",
+    "malaysian",
+    "borneo",
+    "kalimantan",
+    "hindi",
+    "thai"
+  ],
+  "catalog_attributes": [
+    {
+      "sku": "https://oudfactory.com/products/patchouli-picante",
+      "name": "Patchouli Picante",
+      "price": 686,
+      "format": "unknown",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/5-tola-wood-box",
+      "name": "5 Tola Wood Box",
+      "price": 1575,
+      "format": "raw",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/katana-imperium-oil",
+      "name": "Katana Imperium Oil",
+      "price": 595,
+      "format": "oil",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/kalimantan-agarwood-copy",
+      "name": "Kalimantan Agarwood",
+      "price": 416.5,
+      "format": "raw",
+      "band": 0,
+      "origin_tokens": [
+        "kalimantan"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/obsidian-bloom-parfum",
+      "name": "Obsidian Bloom Extrait De Parfum",
+      "price": 1071,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/malaysian-oud",
+      "name": "Malaysian Agarwood",
+      "price": 441,
+      "format": "raw",
+      "band": 0,
+      "origin_tokens": [
+        "malaysian"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/obsidian-bloom",
+      "name": "Obsidian Bloom Oil",
+      "price": 385,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/ebony-euphoia",
+      "name": "Ebony Euphoria Oil",
+      "price": 385,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/indian-mouri-agarwood",
+      "name": "Indian Mouri Agarwood",
+      "price": 332.5,
+      "format": "raw",
+      "band": 0,
+      "origin_tokens": [
+        "indian"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/dokutsu-kanam-oil",
+      "name": "Dōkutsu Kanam Oil",
+      "price": 458.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/hotondo-cambodi",
+      "name": "Hotondo Cambodi Oud Oil",
+      "price": 455,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [
+        "cambodi"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/harukaze-parfum",
+      "name": "Harukaze Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/encens-noir-parfum",
+      "name": "Encens Noir Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/amour-mysterirux-parfum",
+      "name": "Amour Mysterieux Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/akai-kemuri",
+      "name": "Akai Kemuri Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/majlis-box",
+      "name": "Majlis Box",
+      "price": 4087.5,
+      "format": "unknown",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/2-oil-1-tola-box",
+      "name": "2 Oil 1 Tola Box",
+      "price": 1008,
+      "format": "oil",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/3-oil-2-tola-box",
+      "name": "3 Oil 2 Tola Box",
+      "price": 2040.5,
+      "format": "oil",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/6-oud-oil-box",
+      "name": "6 Oud Oil Box",
+      "price": 2375.5,
+      "format": "oil",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/2-oud-oil-box",
+      "name": "2 Oud Oil Box",
+      "price": 693,
+      "format": "oil",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/3-oud-oil-set",
+      "name": "3 Oud Oil Set",
+      "price": 1276.5,
+      "format": "oil",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": true,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/fiamma-nera",
+      "name": "Fiamma Nera",
+      "price": 1813,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/ryu-senshi",
+      "name": "Ryu Senshi",
+      "price": 2023,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/rose-mystere",
+      "name": "Rose Mystère",
+      "price": 1463,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/cuban-smoke",
+      "name": "Cuban Smoke",
+      "price": 1393,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/oud-tabaco",
+      "name": "Oud Tabaco Extrait De Parfum",
+      "price": 1071,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/katana-perfume",
+      "name": "Katana Extrait De Parfum",
+      "price": 1141,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/flor-del-mati",
+      "name": "Flor Del Mati Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/sabaku-nomad-parfum",
+      "name": "Sabaku Nomad Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/dokutsu-kanam-extrait-de-parfum",
+      "name": "Dōkutsu Kanam Extrait De Parfum",
+      "price": 1001,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/moya-kvitka-eau-de-parfum",
+      "name": "Moya Kvitka Eau De Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/coracao-de-rosas-parfum",
+      "name": "Coração De Rosas Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/tobaco-cubano-parfum",
+      "name": "Tobaco Cubano Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/fumo-dolce-extrait-de-parfum",
+      "name": "Fumo Dolce Extrait De Parfum",
+      "price": 1001,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/flamme-rouge-extrait-de-parfum",
+      "name": "Flamme Rouge Extrait De Parfum",
+      "price": 1001,
+      "format": "perfume",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/il-mio-cuore-parfum",
+      "name": "IL Mio Cuore Parfum",
+      "price": 686,
+      "format": "perfume",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/kodokuna-heishi-v2",
+      "name": "Kodokuna Heishi v2 Oud Oil",
+      "price": 945,
+      "format": "oil",
+      "band": 2,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/black-dragon-oil",
+      "name": "Black Dragon Oil",
+      "price": 416.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/il-mio-cuore-oil",
+      "name": "IL Mio Cuore Oil",
+      "price": 346.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/flamme-rouge-oil",
+      "name": "Flamme Rouge Oil",
+      "price": 458.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/fumo-dolce-oil",
+      "name": "Fumo Dolce Oil",
+      "price": 458.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/senshi-oil",
+      "name": "Senshi Oud Oil",
+      "price": 553,
+      "format": "oil",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/katana-oil",
+      "name": "Katana Oil",
+      "price": 493.5,
+      "format": "oil",
+      "band": 1,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/deer-musk-oil",
+      "name": "Deer Musk Oil",
+      "price": 416.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/tabaco-cubano-oil",
+      "name": "Tabaco Cubano Oil",
+      "price": 385,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/rosa-escura-oil",
+      "name": "Rosa Escura Oil",
+      "price": 346.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/seufi-oud-oil",
+      "name": "Seufi Oud Oil",
+      "price": 406,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/indian-agarwood",
+      "name": "Indian Agarwood",
+      "price": 315,
+      "format": "raw",
+      "band": 0,
+      "origin_tokens": [
+        "indian"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/wild-borneo-oud-oil",
+      "name": "Wild Borneo Oud Oil",
+      "price": 913.5,
+      "format": "oil",
+      "band": 1,
+      "origin_tokens": [
+        "borneo"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    },
+    {
+      "sku": "https://oudfactory.com/products/indian-oud-oil",
+      "name": "Indian Oud Oil",
+      "price": 416.5,
+      "format": "oil",
+      "band": 0,
+      "origin_tokens": [
+        "indian"
+      ],
+      "is_bundle": false,
+      "_source": "heuristic-proposal",
+      "reviewed": false
+    }
+  ],
+  "intents": [
+    {
+      "id": "perfume|budget<=0|indian",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 0,
+        "origin": "indian"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=0|cambodi",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 0,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=0|any",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 0,
+        "origin": "any"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=1|indian",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 1,
+        "origin": "indian"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=1|cambodi",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 1,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=1|any",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 1,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/harukaze-parfum",
+        "https://oudfactory.com/products/encens-noir-parfum",
+        "https://oudfactory.com/products/amour-mysterirux-parfum",
+        "https://oudfactory.com/products/akai-kemuri",
+        "https://oudfactory.com/products/flor-del-mati",
+        "https://oudfactory.com/products/sabaku-nomad-parfum",
+        "https://oudfactory.com/products/moya-kvitka-eau-de-parfum",
+        "https://oudfactory.com/products/coracao-de-rosas-parfum",
+        "https://oudfactory.com/products/tobaco-cubano-parfum",
+        "https://oudfactory.com/products/il-mio-cuore-parfum"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=2|indian",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 2,
+        "origin": "indian"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=2|cambodi",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 2,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "perfume|budget<=2|any",
+      "constraints": {
+        "format": "perfume",
+        "budget_ceiling": 2,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/obsidian-bloom-parfum",
+        "https://oudfactory.com/products/harukaze-parfum",
+        "https://oudfactory.com/products/encens-noir-parfum",
+        "https://oudfactory.com/products/amour-mysterirux-parfum",
+        "https://oudfactory.com/products/akai-kemuri",
+        "https://oudfactory.com/products/fiamma-nera",
+        "https://oudfactory.com/products/ryu-senshi",
+        "https://oudfactory.com/products/rose-mystere",
+        "https://oudfactory.com/products/cuban-smoke",
+        "https://oudfactory.com/products/oud-tabaco",
+        "https://oudfactory.com/products/katana-perfume",
+        "https://oudfactory.com/products/flor-del-mati",
+        "https://oudfactory.com/products/sabaku-nomad-parfum",
+        "https://oudfactory.com/products/dokutsu-kanam-extrait-de-parfum",
+        "https://oudfactory.com/products/moya-kvitka-eau-de-parfum",
+        "https://oudfactory.com/products/coracao-de-rosas-parfum",
+        "https://oudfactory.com/products/tobaco-cubano-parfum",
+        "https://oudfactory.com/products/fumo-dolce-extrait-de-parfum",
+        "https://oudfactory.com/products/flamme-rouge-extrait-de-parfum",
+        "https://oudfactory.com/products/il-mio-cuore-parfum"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=0|indian",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 0,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=0|cambodi",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 0,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/hotondo-cambodi"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=0|any",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 0,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/obsidian-bloom",
+        "https://oudfactory.com/products/ebony-euphoia",
+        "https://oudfactory.com/products/dokutsu-kanam-oil",
+        "https://oudfactory.com/products/hotondo-cambodi",
+        "https://oudfactory.com/products/black-dragon-oil",
+        "https://oudfactory.com/products/il-mio-cuore-oil",
+        "https://oudfactory.com/products/flamme-rouge-oil",
+        "https://oudfactory.com/products/fumo-dolce-oil",
+        "https://oudfactory.com/products/deer-musk-oil",
+        "https://oudfactory.com/products/tabaco-cubano-oil",
+        "https://oudfactory.com/products/rosa-escura-oil",
+        "https://oudfactory.com/products/seufi-oud-oil",
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=1|indian",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 1,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=1|cambodi",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 1,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/hotondo-cambodi"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=1|any",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 1,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/katana-imperium-oil",
+        "https://oudfactory.com/products/obsidian-bloom",
+        "https://oudfactory.com/products/ebony-euphoia",
+        "https://oudfactory.com/products/dokutsu-kanam-oil",
+        "https://oudfactory.com/products/hotondo-cambodi",
+        "https://oudfactory.com/products/2-oud-oil-box",
+        "https://oudfactory.com/products/black-dragon-oil",
+        "https://oudfactory.com/products/il-mio-cuore-oil",
+        "https://oudfactory.com/products/flamme-rouge-oil",
+        "https://oudfactory.com/products/fumo-dolce-oil",
+        "https://oudfactory.com/products/senshi-oil",
+        "https://oudfactory.com/products/katana-oil",
+        "https://oudfactory.com/products/deer-musk-oil",
+        "https://oudfactory.com/products/tabaco-cubano-oil",
+        "https://oudfactory.com/products/rosa-escura-oil",
+        "https://oudfactory.com/products/seufi-oud-oil",
+        "https://oudfactory.com/products/wild-borneo-oud-oil",
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=2|indian",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 2,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=2|cambodi",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 2,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/hotondo-cambodi"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "oil|budget<=2|any",
+      "constraints": {
+        "format": "oil",
+        "budget_ceiling": 2,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/katana-imperium-oil",
+        "https://oudfactory.com/products/obsidian-bloom",
+        "https://oudfactory.com/products/ebony-euphoia",
+        "https://oudfactory.com/products/dokutsu-kanam-oil",
+        "https://oudfactory.com/products/hotondo-cambodi",
+        "https://oudfactory.com/products/2-oil-1-tola-box",
+        "https://oudfactory.com/products/3-oil-2-tola-box",
+        "https://oudfactory.com/products/6-oud-oil-box",
+        "https://oudfactory.com/products/2-oud-oil-box",
+        "https://oudfactory.com/products/3-oud-oil-set",
+        "https://oudfactory.com/products/kodokuna-heishi-v2",
+        "https://oudfactory.com/products/black-dragon-oil",
+        "https://oudfactory.com/products/il-mio-cuore-oil",
+        "https://oudfactory.com/products/flamme-rouge-oil",
+        "https://oudfactory.com/products/fumo-dolce-oil",
+        "https://oudfactory.com/products/senshi-oil",
+        "https://oudfactory.com/products/katana-oil",
+        "https://oudfactory.com/products/deer-musk-oil",
+        "https://oudfactory.com/products/tabaco-cubano-oil",
+        "https://oudfactory.com/products/rosa-escura-oil",
+        "https://oudfactory.com/products/seufi-oud-oil",
+        "https://oudfactory.com/products/wild-borneo-oud-oil",
+        "https://oudfactory.com/products/indian-oud-oil"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=0|indian",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 0,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=0|cambodi",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 0,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=0|any",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 0,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/kalimantan-agarwood-copy",
+        "https://oudfactory.com/products/malaysian-oud",
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=1|indian",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 1,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=1|cambodi",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 1,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=1|any",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 1,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/kalimantan-agarwood-copy",
+        "https://oudfactory.com/products/malaysian-oud",
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=2|indian",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 2,
+        "origin": "indian"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=2|cambodi",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 2,
+        "origin": "cambodi"
+      },
+      "accepted_skus": [],
+      "expected": "HONEST_NO_MATCH",
+      "reviewed_by": null
+    },
+    {
+      "id": "raw|budget<=2|any",
+      "constraints": {
+        "format": "raw",
+        "budget_ceiling": 2,
+        "origin": "any"
+      },
+      "accepted_skus": [
+        "https://oudfactory.com/products/5-tola-wood-box",
+        "https://oudfactory.com/products/kalimantan-agarwood-copy",
+        "https://oudfactory.com/products/malaysian-oud",
+        "https://oudfactory.com/products/indian-mouri-agarwood",
+        "https://oudfactory.com/products/indian-agarwood"
+      ],
+      "expected": "EXACT",
+      "reviewed_by": null
+    }
+  ]
+}

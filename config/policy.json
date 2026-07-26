@@ -7,6 +7,13 @@
     "max_product_pages": 50,
     "availability_states": ["available", "out_of_stock", "preorder", "backorder", "unknown"],
     "sellable_states": ["available"],
-    "shopify_no_option_sentinel": "Default Title"
+    "shopify_no_option_sentinel": "Default Title",
+    "auto_exclude_categories": [
+      { "key": "gift_card", "pattern": "gift\\s*-?\\s*card|e-?\\s*gift|\\bvoucher\\b" },
+      { "key": "shipping", "pattern": "\\bshipping\\b|\\bdelivery fee\\b" },
+      { "key": "warranty", "pattern": "\\bwarranty\\b|\\bprotection plan\\b" },
+      { "key": "subscription", "pattern": "\\bsubscription\\b" }
+    ],
+    "_exclusion_note": "ONLY these explicit policy categories may auto-grant signed_exclusion (path ب, still reviewable). Deliberately NO set/gift/box/pack/sample/tester patterns — those risk excluding a real sellable bundle (ق4: bundles are independent results). Any ambiguity -> merchant review queue (ق19, path أ), never auto-exclude."
   }
 }

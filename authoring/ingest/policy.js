@@ -15,6 +15,12 @@ const DEFAULTS = Object.freeze({
   availability_states: ["available", "out_of_stock", "preorder", "backorder", "unknown"],
   sellable_states: ["available"],
   shopify_no_option_sentinel: "Default Title",
+  auto_exclude_categories: [
+    { key: "gift_card", pattern: "gift\\s*-?\\s*card|e-?\\s*gift|\\bvoucher\\b" },
+    { key: "shipping", pattern: "\\bshipping\\b|\\bdelivery fee\\b" },
+    { key: "warranty", pattern: "\\bwarranty\\b|\\bprotection plan\\b" },
+    { key: "subscription", pattern: "\\bsubscription\\b" },
+  ],
 });
 
 let _cache = null;

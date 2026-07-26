@@ -14,10 +14,21 @@
 const AVAIL_ENUM = new Set(["available", "out_of_stock", "preorder", "backorder", "unknown"]);
 const NO_OPTION_SENTINEL = "default title"; // Shopify's no-options variant name
 
-/** Non-products (gift cards / samples / shipping / warranty / subscriptions) — signed out of the
- *  buyable set (ق2). Literal here in the ingest/ledger layer (mirrors the brain's cleanCatalog;
- *  the ledger OWNS exclusion-signing so a dropped SKU is accounted-for, not silently lost). */
-const NON_PRODUCT = /gift\s*-?\s*card|e-?\s*gift|\bvoucher\b|\bsample\b|\btester\b|\bshipping\b|\bwarranty\b|\bsubscription\b/i;
+/**
+ * Exclusion authority (ق2/ق4/ق19 — closure #1). A SKU becomes `excluded` with a real
+ * `signed_exclusion` ONLY via: (أ) merchant confirmation (path M, review queue — not built here),
+ * or (ب) an EXPLICIT policy category (config.policy auto_exclude_categories) — reviewable.
+ * An automatic guess NOT backed by policy is a `system_exclusion_proposal`: the SKU stays
+ * `discovered` (accounted, buyable) pending merchant review — NEVER silently excluded. There are
+ * deliberately NO set/gift/box/pack/sample/tester patterns — they risk excluding a real bundle (ق4).
+ */
+function matchCategory(fam, categories) {
+  const hay = `${(fam && fam.title) || ""} ${(fam && fam.product_type) || ""}`;
+  for (const c of categories || []) {
+    try { if (new RegExp(c.pattern, "i").test(hay)) return c.key; } catch { /* bad pattern → skip */ }
+  }
+  return null;
+}
 
 /** Coerce any availability signal into the 5-state enum (unknown when unsure — never guessed). */
 function coerceAvailability(a) {
@@ -42,6 +53,7 @@ function cleanOptionValues(ov) {
  * @returns {object} the SKU Ledger
  */
 export function buildSkuLedger(extracted = {}, source = {}) {
+  const autoExcludeCategories = source.autoExcludeCategories || []; // explicit policy categories (path ب)
   const famMap = new Map();
   for (const f of extracted.families || []) if (f && f.family_id && !famMap.has(f.family_id)) famMap.set(f.family_id, f);
 
@@ -51,11 +63,11 @@ export function buildSkuLedger(extracted = {}, source = {}) {
     const option_values = cleanOptionValues(raw.option_values);
     const availability = coerceAvailability(raw.availability);
     const fold_basis = Object.keys(option_values).length ? Object.keys(option_values).map((k) => k.toLowerCase()) : null;
-    // signed exclusion for non-products (ق2): a dropped SKU is ACCOUNTED-FOR via a signed record,
-    // never silently absent. Basis = the family's title + product_type (the same signal cleanCatalog uses).
+    // Exclusion (closure #1): ONLY an explicit policy category grants a signed_exclusion (path ب,
+    // reviewable). No policy match ⇒ discovered (buyable), never auto-excluded.
     const fam = famMap.get(raw.family_id) || {};
-    const nonProduct = NON_PRODUCT.test(`${fam.title || ""} ${fam.product_type || ""}`);
-    const excluded = nonProduct;
+    const category = matchCategory(fam, autoExcludeCategories);
+    const excluded = !!category;
     skuMap.set(raw.sku_id, {
       sku_id: raw.sku_id,
       family_id: raw.family_id || null,
@@ -71,7 +83,9 @@ export function buildSkuLedger(extracted = {}, source = {}) {
       roles: [],
       fold_basis,
       bundle_class: "pending",           // (ي) — semantic classification deferred to Part 2
-      signed_exclusion: excluded ? { reason: "non-product (gift-card/sample/shipping/warranty/subscription)", by: "ingest:skuLedger", basis: "NON_PRODUCT" } : null,
+      // path ب: policy-authorized + reviewable. Path أ (merchant M) attaches later via the review queue.
+      signed_exclusion: excluded ? { reason: `policy auto-exclude category: ${category}`, by: "policy:auto_exclude_categories", basis: "policy", category, reviewable: true } : null,
+      system_exclusion_proposal: null,   // set only by non-policy heuristics (none active) → stays discovered pending merchant
       path_witness: null,                // (هـ) — generated compile-time (Part 3)
     });
   }

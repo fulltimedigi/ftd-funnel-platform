@@ -166,7 +166,7 @@ export async function ingestCatalog(startUrl, opts = {}) {
     };
     if (!sourceActiveSkus) sourceActiveSkus = products.length; // non-Shopify oracle = product count
   }
-  const ledger = buildSkuLedger(extracted, { sourceActiveSkus, pageCapped: shopifyPageCapped, method: shopifyGot ? "shopify" : "other" });
+  const ledger = buildSkuLedger(extracted, { sourceActiveSkus, pageCapped: shopifyPageCapped, method: shopifyGot ? "shopify" : "other", autoExcludeCategories: policy.auto_exclude_categories || [] });
 
   return { ok: true, brandUrl: startUrl, origin, products, report, ledger, notes, startHtml: startRes.text || "" };
 }
