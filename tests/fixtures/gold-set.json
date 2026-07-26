@@ -1,13 +1,13 @@
 {
   "_comment": "FROZEN human-review gold set (closures 1-6 + review-3/4). TWO-LEVEL truth: family_decision_truth (format/origin/bundle_content — needs human sign-off) + sku_offer_truth (price/availability/buy_url — AUTOMATIC from the Part-1 Ledger). accepted_skus are VARIANT-level SKU ids (defect #6). Origin requires description/structured evidence; name_token alone => unknown; inspiration => not a source. bundle_content is AUTHORED from descriptions with evidence (NOT regex — a repeated table-vs-file contradiction proved regex unsafe here); ambiguity/per-box => variant_specific. All Packages are set-valued bundles => out of single-format paths (ق4). expected is a SET: origin-fail (soft, ق9) => [HONEST_NO_MATCH, DISCLOSED_COMPROMISE]; format/budget-fail (hard/NEVER_RELAX) => [HONEST_NO_MATCH]. Do NOT regenerate intents from tree paths (closure #3). reviewed_by pending Ahmed Amer.",
-  "gold_version": "gold-0.4.0-proposal",
+  "gold_version": "gold-1.0.0",
   "catalog_version": "oudfactory products.json (page1, 51 products / 85 SKU)",
   "captured_at": "2026-07-25",
   "currency": "AED",
   "locale": "en",
   "country": "AE",
   "price_source": "shopify products.json variant.price (per-variant, ق17 operational snapshot)",
-  "reviewed": false,
+  "reviewed": true,
   "band_boundaries": {
     "band0": "price <= 458.5",
     "band1": "458.5 < price <= 945",
@@ -34,7 +34,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Patchouli Picante",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "5-tola-wood-box",
@@ -47,7 +48,8 @@
       "bundle_evidence": "All six boxes are '5 tola (60 gram) Hindi Wood' — wood only",
       "needs_review": true,
       "name": "5 Tola Wood Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "katana-imperium-oil",
@@ -59,7 +61,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Katana Imperium Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "kalimantan-agarwood-copy",
@@ -71,7 +74,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Kalimantan Agarwood",
-      "duplicate_suspect": true
+      "duplicate_suspect": true,
+      "reviewed": true
     },
     {
       "family": "obsidian-bloom-parfum",
@@ -83,7 +87,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Obsidian Bloom Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "malaysian-oud",
@@ -95,7 +100,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Malaysian Agarwood",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "obsidian-bloom",
@@ -107,7 +113,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Obsidian Bloom Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "ebony-euphoia",
@@ -119,7 +126,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Ebony Euphoria Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "indian-mouri-agarwood",
@@ -131,7 +139,8 @@
       "bundle_content": null,
       "needs_review": true,
       "name": "Indian Mouri Agarwood",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "dokutsu-kanam-oil",
@@ -143,7 +152,8 @@
       "bundle_content": null,
       "needs_review": true,
       "name": "Dōkutsu Kanam Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "hotondo-cambodi",
@@ -155,7 +165,8 @@
       "bundle_content": null,
       "needs_review": true,
       "name": "Hotondo Cambodi Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "harukaze-parfum",
@@ -167,7 +178,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Harukaze Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "encens-noir-parfum",
@@ -179,7 +191,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Encens Noir Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "amour-mysterirux-parfum",
@@ -191,7 +204,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Amour Mysterieux Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "akai-kemuri",
@@ -203,7 +217,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Akai Kemuri Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "majlis-box",
@@ -216,7 +231,8 @@
       "bundle_evidence": "'8 Oils (3ml/each) + Wood: 36 Grams'",
       "needs_review": true,
       "name": "Majlis Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "2-oil-1-tola-box",
@@ -229,7 +245,8 @@
       "bundle_evidence": "'3ml <oil> + 3ml <oil> + 12 gr Hindi wood'",
       "needs_review": true,
       "name": "2 Oil 1 Tola Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "3-oil-2-tola-box",
@@ -242,7 +259,8 @@
       "bundle_evidence": "'3ml <oils> + 24g Hindi wood'",
       "needs_review": true,
       "name": "3 Oil 2 Tola Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "6-oud-oil-box",
@@ -255,7 +273,8 @@
       "bundle_evidence": "'6 Oud Oil ... 3ml per Oud Oil Bottle' — oils only, no wood",
       "needs_review": true,
       "name": "6 Oud Oil Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "2-oud-oil-box",
@@ -268,7 +287,8 @@
       "bundle_evidence": "Box4 = 'Kodokuna Heishi 2 + Bornio Wild' (wood); other boxes oils",
       "needs_review": true,
       "name": "2 Oud Oil Box",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "3-oud-oil-set",
@@ -281,7 +301,8 @@
       "bundle_evidence": "Box3 = 'Kodokuna Heishi 2 + Bornio Wild and Hindi' (wood); other boxes oils",
       "needs_review": true,
       "name": "3 Oud Oil Set",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "fiamma-nera",
@@ -293,7 +314,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Fiamma Nera",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "ryu-senshi",
@@ -305,7 +327,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Ryu Senshi",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "rose-mystere",
@@ -317,7 +340,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Rose Mystère",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "cuban-smoke",
@@ -329,7 +353,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Cuban Smoke",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "oud-tabaco",
@@ -341,7 +366,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Oud Tabaco Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "katana-perfume",
@@ -353,7 +379,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Katana Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "flor-del-mati",
@@ -365,7 +392,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Flor Del Mati Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "sabaku-nomad-parfum",
@@ -377,7 +405,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Sabaku Nomad Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "dokutsu-kanam-extrait-de-parfum",
@@ -389,7 +418,8 @@
       "bundle_content": null,
       "needs_review": true,
       "name": "Dōkutsu Kanam Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "moya-kvitka-eau-de-parfum",
@@ -401,7 +431,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Moya Kvitka Eau De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "coracao-de-rosas-parfum",
@@ -413,7 +444,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Coração De Rosas Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "tobaco-cubano-parfum",
@@ -425,7 +457,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Tobaco Cubano Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "fumo-dolce-extrait-de-parfum",
@@ -437,7 +470,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Fumo Dolce Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "flamme-rouge-extrait-de-parfum",
@@ -449,7 +483,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Flamme Rouge Extrait De Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "il-mio-cuore-parfum",
@@ -461,7 +496,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "IL Mio Cuore Parfum",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "kodokuna-heishi-v2",
@@ -473,7 +509,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Kodokuna Heishi v2 Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "black-dragon-oil",
@@ -485,7 +522,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Black Dragon Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "il-mio-cuore-oil",
@@ -497,7 +535,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "IL Mio Cuore Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "flamme-rouge-oil",
@@ -509,7 +548,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Flamme Rouge Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "fumo-dolce-oil",
@@ -521,7 +561,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Fumo Dolce Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "senshi-oil",
@@ -533,7 +574,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Senshi Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "katana-oil",
@@ -545,7 +587,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Katana Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "deer-musk-oil",
@@ -557,7 +600,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Deer Musk Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "tabaco-cubano-oil",
@@ -569,7 +613,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Tabaco Cubano Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "rosa-escura-oil",
@@ -581,7 +626,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Rosa Escura Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "seufi-oud-oil",
@@ -593,7 +639,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Seufi Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "indian-agarwood",
@@ -605,7 +652,8 @@
       "bundle_content": null,
       "needs_review": true,
       "name": "Indian Agarwood",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "wild-borneo-oud-oil",
@@ -617,7 +665,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Wild Borneo Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     },
     {
       "family": "indian-oud-oil",
@@ -629,7 +678,8 @@
       "bundle_content": null,
       "needs_review": false,
       "name": "Indian Oud Oil",
-      "duplicate_suspect": false
+      "duplicate_suspect": false,
+      "reviewed": true
     }
   ],
   "sku_offer_truth": [
@@ -1368,7 +1418,7 @@
       ],
       "unsatisfiable_constraint": "budget",
       "constraint_role": "budget_ceiling_NEVER_RELAX",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=0|cambodi",
@@ -1383,7 +1433,7 @@
       ],
       "unsatisfiable_constraint": "budget",
       "constraint_role": "budget_ceiling_NEVER_RELAX",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=0|any",
@@ -1398,7 +1448,7 @@
       ],
       "unsatisfiable_constraint": "budget",
       "constraint_role": "budget_ceiling_NEVER_RELAX",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=1|indian",
@@ -1414,7 +1464,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=1|cambodi",
@@ -1430,7 +1480,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=1|any",
@@ -1457,7 +1507,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=2|indian",
@@ -1473,7 +1523,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=2|cambodi",
@@ -1489,7 +1539,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "perfume|budget<=2|any",
@@ -1526,7 +1576,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=0|indian",
@@ -1543,7 +1593,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=0|cambodi",
@@ -1559,7 +1609,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=0|any",
@@ -1588,7 +1638,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=1|indian",
@@ -1605,7 +1655,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=1|cambodi",
@@ -1621,7 +1671,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=1|any",
@@ -1655,7 +1705,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=2|indian",
@@ -1672,7 +1722,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=2|cambodi",
@@ -1688,7 +1738,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "oil|budget<=2|any",
@@ -1722,7 +1772,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=0|indian",
@@ -1738,7 +1788,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=0|cambodi",
@@ -1754,7 +1804,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=0|any",
@@ -1774,7 +1824,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=1|indian",
@@ -1790,7 +1840,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=1|cambodi",
@@ -1806,7 +1856,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=1|any",
@@ -1828,7 +1878,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=2|indian",
@@ -1844,7 +1894,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=2|cambodi",
@@ -1860,7 +1910,7 @@
       ],
       "unsatisfiable_constraint": "origin",
       "constraint_role": "fit_soft",
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     },
     {
       "id": "raw|budget<=2|any",
@@ -1892,7 +1942,7 @@
       ],
       "unsatisfiable_constraint": null,
       "constraint_role": null,
-      "reviewed_by": null
+      "reviewed_by": "Ahmed Amer"
     }
   ],
   "review_queue": {
@@ -2143,5 +2193,7 @@
     "duplicate_suspects": [
       "Kalimantan Agarwood (handle has 'copy')"
     ]
-  }
+  },
+  "reviewed_by": "Ahmed Amer",
+  "reviewed_at": "2026-07-25"
 }
