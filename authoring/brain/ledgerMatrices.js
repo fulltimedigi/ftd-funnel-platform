@@ -30,8 +30,14 @@ export function buildLedgerMatrices(ledger, rawProducts = []) {
       url: f.url || null,
       structured: { product_type: f.product_type || raw.product_type || null, brand: f.brand || raw.vendor || null, tags },
       text: { title: f.title || raw.title || "", description: strip(raw.body_html) },
-      // raw price observations across this family's variants (band discovery happens later, not here)
-      prices: skus.filter((s) => s.family_id === fid).map((s) => s.price).filter((n) => n != null),
+      // raw price observations across this family's variants (band discovery happens later, not here).
+      // TYPE CONTRACT (matrix boundary): a present price MUST already be a finite number (normalized at
+      // ingest). A non-numeric price is an EXPLICIT failure here — never a silent filter that would make
+      // the price decision axis vanish. Absent (null) prices are legitimate and simply omitted.
+      prices: skus.filter((s) => s.family_id === fid).map((s) => s.price).filter((n) => n != null).map((n) => {
+        if (typeof n !== "number" || !Number.isFinite(n)) throw new Error(`ledgerMatrices price contract: expected a normalized numeric price, got ${JSON.stringify(n)} for family ${fid} — normalize at the ingest boundary (silent drop forbidden)`);
+        return n;
+      }),
     };
   });
 

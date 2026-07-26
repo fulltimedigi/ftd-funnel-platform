@@ -9,7 +9,7 @@
 const P = (handle, title, product_type, tags, variants, body = "") => ({
   handle, title, body_html: body, vendor: "Acme", product_type, tags,
   options: [{ name: "Variant" }],
-  variants: variants.map((v, i) => ({ id: `${handle}-${i}`, title: v.t, price: String(v.p), available: v.a !== false, option1: v.t })),
+  variants: variants.map((v, i) => ({ id: `${handle}-${i}`, title: v.t, price: v.p == null ? "" : String(v.p), available: v.a !== false, option1: v.t })),
 });
 
 // C1 — ELECTRONICS (rich structured): distinct product_type categories + a REAL hard constraint (OS) that

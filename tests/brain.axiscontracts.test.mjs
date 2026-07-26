@@ -8,16 +8,17 @@
  */
 import assert from "node:assert";
 import { discoverAxisContracts } from "../authoring/brain/axisContracts.js";
+import { craft } from "./lib/realCatalog.mjs";
 
-// crafted familyMatrix (mirrors oudfactory: real structured type + description origin spans + junk title tokens)
-const familyMatrix = [
-  { family_id: "indian-oud-oil", structured: { product_type: "Oud Based Oil Creations", tags: [] }, text: { title: "Indian Oud Oil", description: "100% Pure Indian agarwood oil, long lasting." }, prices: [416.5] },
-  { family_id: "wild-borneo-oil", structured: { product_type: "Oud Based Oil Creations", tags: [] }, text: { title: "Wild Borneo Oud Oil", description: "100% pure wild Borneo agarwood oil from the region of Sabah." }, prices: [1200] },
-  { family_id: "patchouli", structured: { product_type: "Perfumes", tags: [] }, text: { title: "Patchouli Picante de Parfum", description: "A bright patchouli based composition." }, prices: [686] },
-  { family_id: "encens", structured: { product_type: "Perfumes", tags: [] }, text: { title: "Encens Noir Parfum", description: "Smoky incense based accord." }, prices: [700] },
-  { family_id: "kalimantan-wood", structured: { product_type: "Agarwood", tags: [] }, text: { title: "Kalimantan Agarwood", description: "Kalimantan Wood pieces." }, prices: [315] },
-];
-const skuMatrix = familyMatrix.map((f, i) => ({ sku_id: f.family_id + "::0", family_id: f.family_id, price: f.prices[0], availability: "available", buy_url: "u", option_values: {} }));
+// crafted CATALOG run THROUGH the real ingest (never a hand-built familyMatrix): real structured type +
+// description origin spans + junk title tokens (de/based/parfum). Prices as strings (real Shopify shape).
+const { familyMatrix, skuMatrix } = await craft([
+  { handle: "indian-oud-oil", title: "Indian Oud Oil", type: "Oud Based Oil Creations", desc: "100% Pure Indian agarwood oil, long lasting.", variants: [{ title: "3ml", price: "416.5" }] },
+  { handle: "wild-borneo-oil", title: "Wild Borneo Oud Oil", type: "Oud Based Oil Creations", desc: "100% pure wild Borneo agarwood oil from the region of Sabah.", variants: [{ title: "3ml", price: "1200" }] },
+  { handle: "patchouli", title: "Patchouli Picante de Parfum", type: "Perfumes", desc: "A bright patchouli based composition.", variants: [{ title: "50ml", price: "686" }] },
+  { handle: "encens", title: "Encens Noir Parfum", type: "Perfumes", desc: "Smoky incense based accord.", variants: [{ title: "50ml", price: "700" }] },
+  { handle: "kalimantan-wood", title: "Kalimantan Agarwood", type: "Agarwood", desc: "Kalimantan Wood pieces.", variants: [{ title: "Tola", price: "315" }] },
+]);
 
 const out = discoverAxisContracts(familyMatrix, skuMatrix);
 assert.ok(Array.isArray(out.published) && Array.isArray(out.rejected), "returns published[] + rejected[]");

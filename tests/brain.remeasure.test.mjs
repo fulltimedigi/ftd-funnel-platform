@@ -16,14 +16,14 @@ import { discoverAxisContracts } from "../authoring/brain/axisContracts.js";
 import { assignAxisRoles } from "../authoring/brain/axisRoles.js";
 import { buildDecisionTree, traverse, isElicitable } from "../authoring/brain/decisionTree.js";
 import { scoreAgainstGold } from "./lib/evalScorer.mjs";
+import { oudfactory } from "./lib/realCatalog.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const gold = JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "gold-set.json"), "utf8"));
 const FB = { perfume: "Perfumes", oil: "Oud Based Oil Creations", raw: "Agarwood", bundle: "Packages" };
 const BANDS = ["low", "mid", "high"];
-const sbf = new Map(); for (const s of gold.sku_offer_truth) { if (!sbf.has(s.family)) sbf.set(s.family, []); sbf.get(s.family).push(s.price); }
-const fm = gold.family_decision_truth.map((f) => ({ family_id: f.family, structured: { product_type: FB[f.format] }, text: { title: f.name, description: f.origin_basis === "description" ? String(f.origin_evidence || "") : "" }, prices: (sbf.get(f.family) || []) }));
-const sm = gold.sku_offer_truth.map((s) => ({ sku_id: s.sku, family_id: s.family, price: s.price, availability: s.availability, buy_url: s.buy_url, option_values: {} }));
+// SOURCE = the REAL ingest pipeline; gold is used ONLY for truth (accepted_skus / expected / candidates).
+const { familyMatrix: fm, skuMatrix: sm } = await oudfactory();
 
 const axes = assignAxisRoles(discoverAxisContracts(fm, sm).published, fm);
 const oa = axes.find((a) => a.axis_key === "origin"); const famOrigin = new Map(); if (oa) for (const v of oa.values) for (const fid of v.families) famOrigin.set(fid, v.value);

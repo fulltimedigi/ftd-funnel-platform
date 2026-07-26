@@ -106,7 +106,11 @@ export function skusFromShopifyJson(jsonText, origin, currency = null) {
         family_id: p.handle,
         variant_title: v.title != null ? String(v.title) : null,
         option_values, // keyed by option NAME; skuLedger strips the "Default Title" sentinel
-        price: v.price != null ? v.price : null,
+        // NORMALIZE price to a number at the ingest boundary (one place). Shopify products.json returns
+        // string prices ("686.00"); leaving them as strings let a downstream typeof-number filter drop
+        // the whole price axis SILENTLY. A non-numeric price becomes NaN and fails loudly at the matrix
+        // type-contract (silent data loss is forbidden — same disease as unknown-passes-as-match).
+        price: (v.price != null && String(v.price).trim() !== "") ? Number(v.price) : null,
         currency,
         availability: v.available === true ? "available" : v.available === false ? "out_of_stock" : "unknown",
         buy_url: v.id != null ? `${url}?variant=${v.id}` : url,

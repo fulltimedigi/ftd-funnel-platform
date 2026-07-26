@@ -19,18 +19,10 @@ import path from "node:path";
 import assert from "node:assert";
 import { discoverAxisContracts } from "../authoring/brain/axisContracts.js";
 import { assignAxisRoles } from "../authoring/brain/axisRoles.js";
+import { oudfactory } from "./lib/realCatalog.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const gold = JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "gold-set.json"), "utf8"));
-const FORMAT_BRANCH = { perfume: "Perfumes", oil: "Oud Based Oil Creations", raw: "Agarwood", bundle: "Packages" };
-const priceByFamily = new Map();
-for (const s of gold.sku_offer_truth) if (!priceByFamily.has(s.family)) priceByFamily.set(s.family, s.price);
-const familyMatrix = gold.family_decision_truth.map((f) => ({
-  family_id: f.family, structured: { product_type: FORMAT_BRANCH[f.format] || "(none)", tags: [] },
-  text: { title: f.name || f.family, description: f.origin_basis === "description" ? String(f.origin_evidence || "") : "" },
-  prices: [priceByFamily.get(f.family) ?? null],
-}));
-const skuMatrix = gold.sku_offer_truth.map((s) => ({ sku_id: s.sku, family_id: s.family, price: s.price, currency: s.currency, availability: s.availability, buy_url: s.buy_url, option_values: {} }));
+// SOURCE = the REAL ingest pipeline (no gold-derived matrix).
+const { familyMatrix, skuMatrix } = await oudfactory();
 
 const published = discoverAxisContracts(familyMatrix, skuMatrix).published;
 const roled = assignAxisRoles(published, familyMatrix);

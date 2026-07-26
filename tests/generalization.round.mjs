@@ -14,13 +14,20 @@ const BANDS = ["low", "mid", "high"];
 
 async function run(cat) {
   const origin = `https://${cat.domain}.test`;
-  const ext = skusFromShopifyJson(JSON.stringify({ products: cat.products }), origin, "USD");
-  const ledger = buildSkuLedger(ext, { sourceActiveSkus: ext.sourceActiveSkus, method: "shopify", autoExcludeCategories: pol.auto_exclude_categories });
-  const { familyMatrix, skuMatrix } = buildLedgerMatrices(ledger, cat.products);
-  const disc = discoverAxisContracts(familyMatrix, skuMatrix);
-  const axes = assignAxisRoles(disc.published, familyMatrix);
-  const profiles = buildDecisionProfiles(axes, familyMatrix, skuMatrix);
-  let tree = null, treeErr = null;
+  const c0 = { domain: cat.domain, expectation: cat.expectation, fails: [], notes: [] };
+  let ext, ledger, familyMatrix, skuMatrix, disc, axes, profiles, tree = null, treeErr = null;
+  try {
+    ext = skusFromShopifyJson(JSON.stringify({ products: cat.products }), origin, "USD");
+    ledger = buildSkuLedger(ext, { sourceActiveSkus: ext.sourceActiveSkus, method: "shopify", autoExcludeCategories: pol.auto_exclude_categories });
+    ({ familyMatrix, skuMatrix } = buildLedgerMatrices(ledger, cat.products));
+    disc = discoverAxisContracts(familyMatrix, skuMatrix);
+    axes = assignAxisRoles(disc.published, familyMatrix);
+    profiles = buildDecisionProfiles(axes, familyMatrix, skuMatrix);
+  } catch (e) {
+    c0.published = "(pipeline threw)"; c0.profiles = 0; c0.rootKind = "ERROR";
+    c0.fails.push("pipeline explicit failure: " + e.message.slice(0, 120));
+    return c0;
+  }
   try { tree = buildDecisionTree(axes, familyMatrix, skuMatrix); } catch (e) { treeErr = e.message; }
 
   const famType = new Map(familyMatrix.map((f) => [f.family_id, f.structured.product_type]));

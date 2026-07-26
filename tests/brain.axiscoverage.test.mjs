@@ -14,20 +14,19 @@
  */
 import assert from "node:assert";
 import { discoverAxisContracts } from "../authoring/brain/axisContracts.js";
+import { craft } from "./lib/realCatalog.mjs";
 
-// 8 perfumes (no material origin) + 2 agarwood (both carry a real material-adjacent origin span).
+// 8 perfumes (no material origin) + 2 agarwood (both carry a real material-adjacent origin span) — crafted
+// CATALOG run THROUGH the real ingest (no hand-built familyMatrix).
 // Global origin coverage = 2/10 = 0.20 (< 0.30, old gate REJECTS). Per-branch Agarwood = 2/2 = 1.00.
-const familyMatrix = [
+const { familyMatrix, skuMatrix } = await craft([
   ...Array.from({ length: 8 }, (_, i) => ({
-    family_id: "perfume-" + i, structured: { product_type: "Perfumes", tags: [] },
-    text: { title: "Parfum " + i, description: "A bright floral composition, number " + i + "." }, prices: [600 + i],
+    handle: "perfume-" + i, title: "Parfum " + i, type: "Perfumes",
+    desc: "A bright floral composition, number " + i + ".", variants: [{ title: "50ml", price: String(600 + i) }],
   })),
-  { family_id: "kalimantan-wood", structured: { product_type: "Agarwood", tags: [] },
-    text: { title: "Kalimantan Agarwood", description: "100% pure Kalimantan agarwood wood, aged." }, prices: [315] },
-  { family_id: "malaysian-wood", structured: { product_type: "Agarwood", tags: [] },
-    text: { title: "Malaysian Agarwood", description: "Pure Malaysian agarwood wood from the region." }, prices: [441] },
-];
-const skuMatrix = familyMatrix.map((f) => ({ sku_id: f.family_id + "::0", family_id: f.family_id, price: f.prices[0], availability: "available", buy_url: "u", option_values: {} }));
+  { handle: "kalimantan-wood", title: "Kalimantan Agarwood", type: "Agarwood", desc: "100% pure Kalimantan agarwood wood, aged.", variants: [{ title: "Tola", price: "315" }] },
+  { handle: "malaysian-wood", title: "Malaysian Agarwood", type: "Agarwood", desc: "Pure Malaysian agarwood wood from the region.", variants: [{ title: "Tola", price: "441" }] },
+]);
 
 const out = discoverAxisContracts(familyMatrix, skuMatrix);
 
