@@ -23,7 +23,7 @@ import { structuralViolations } from "./lib/structuralChecks.js";
 // price-axis regression). Structural checks here are corpus-independent — no gold truth needed.
 const { familyMatrix, skuMatrix } = await oudfactory();
 const axes = assignAxisRoles(discoverAxisContracts(familyMatrix, skuMatrix).published, familyMatrix);
-const { tree, leaves, oversized_leaf_count, biggest_leaf, price_unknown } = buildDecisionTree(axes, familyMatrix, skuMatrix);
+const { tree, leaves, oversized_leaf_count, biggest_leaf, price_unknown, accounted_skus } = buildDecisionTree(axes, familyMatrix, skuMatrix);
 
 // per-family truth for path-constraint checks
 const famType = new Map(familyMatrix.map((f) => [f.family_id, f.structured.product_type]));
@@ -35,9 +35,10 @@ const BANDS = ["low", "mid", "high"];
 // questions, empty leaves, exact-support, path violations, silent SKU drops, fuzz) — the fix for the
 // vacuous inline check that let a no-price product's missing leaf pass.
 {
-  const violations = structuralViolations({ tree, familyMatrix, skuMatrix, axes, accountedSkus: price_unknown.skus });
+  const violations = structuralViolations({ tree, familyMatrix, skuMatrix, axes, accountedSkus: accounted_skus });
   assert.strictEqual(violations.length, 0, "shared structural checker: oudfactory tree is clean — " + JSON.stringify(violations));
   assert.strictEqual(price_unknown.skus.length, 0, "oudfactory has no price_unknown SKUs (all priced)");
+  assert.strictEqual(accounted_skus.length, 0, "oudfactory routes every SKU to a leaf (nothing set aside)");
 }
 
 // walk every node collecting questions + options
