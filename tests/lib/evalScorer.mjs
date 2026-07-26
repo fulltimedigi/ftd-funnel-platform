@@ -99,11 +99,15 @@ export function scoreAgainstGold(gold, recommend, opts = {}) {
     no_exact_in_unserved: exactExpectedUnserved === 0,
     // identity over SERVED intents only (not global cats vs servedN)
     identity_served: (servedCats.exact + servedCats.honest + servedCats.disclosed) === servedN,
-    // axis-starvation is BLOCKING: extra unserved beyond baseline needs a G4 record
-    unserved_within_baseline: unserved <= baselineUnserved || droppedAxes.length > 0,
     false_no_match_zero: cats.false_no_match === 0,
+    // NOTE (2026-07-26): the raw `unserved_within_baseline` (unserved ≤ baseline count) gate was REMOVED.
+    // It conflated genuine axis-STARVATION (category a) with legitimate STRUCTURAL narrowness of the
+    // store's stock (category b) → it read red on every honest build and had to be explained each time,
+    // which trains everyone to ignore red. Anti-starvation is now checked PRECISELY as category (a) = 0
+    // (an axis dropped though a real serving candidate exists) in brain.remeasure.test.mjs, which has the
+    // catalog candidate info the scorer lacks. `unserved` remains the reported 6th number.
   };
-  gates.pass = gates.hard_zero && gates.silent_zero && gates.exact_meets_ceiling && gates.no_exact_in_unserved && gates.identity_served && gates.unserved_within_baseline && gates.false_no_match_zero;
+  gates.pass = gates.hard_zero && gates.silent_zero && gates.exact_meets_ceiling && gates.no_exact_in_unserved && gates.identity_served && gates.false_no_match_zero;
   const identityHolds = gates.identity_served && gates.silent_zero && gates.hard_zero && gates.false_no_match_zero;
   return { N, cats, rates, identityHolds, gates, detail, unserved, unservedList };
 }
