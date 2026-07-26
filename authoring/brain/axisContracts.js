@@ -28,7 +28,12 @@
 
 const JUNK = new Set(["de", "based", "packages", "parfum", "perfume", "creations", "experiences",
   "extrait", "eau", "new", "sale", "set", "pack", "box", "kit", "ml", "gm", "gr", "gram", "grams", "tola", "the", "and", "for", "with"]);
+// facet values (title/description fragments) must clear the JUNK filter; a STRUCTURED category name
+// (product_type) is the merchant's authoritative label — never junk-filtered (e.g. "Packages" is a real
+// category, not the fragment 'packages'). So catalog-scope axes get the base check only.
+const clarityBase = (v) => { const s = String(v || "").trim().toLowerCase(); return s.length >= 2 && /[a-z؀-ۿ]/.test(s) && !/^\d+$/.test(s); };
 const clarity = (v) => { const s = String(v || "").trim().toLowerCase(); return s.length >= 3 && !JUNK.has(s) && /[a-z؀-ۿ]/.test(s) && !/^\d+$/.test(s); };
+const clarityFor = (v, scope) => (scope === "catalog" ? clarityBase(v) : clarity(v));
 const INSPIRATION = /(inspired|inspiration|almost|hotondo|homage|reminiscent|deep love|my love|i made|ignited from|creation|interpretation|journey|adventure|hypnotic)/i;
 const MATERIAL = /(agarwood|oud oil|\boud\b|\bwood\b|100%|\bpure\b|from the region)/i;
 const BUNDLE = /\b(box|set|bundle|kit|collection)\b/i; // a curated multi-item family → origin is per-box (variant_specific)
@@ -119,8 +124,8 @@ export function discoverAxisContracts(familyMatrix = [], skuMatrix = [], opts = 
   // ---- gates: value-support, NOT a coverage count ----
   const published = [], rejected = [];
   for (const c of candidates) {
-    const clean = c.values.filter((v) => clarity(v.value));
-    const junkVals = c.values.filter((v) => !clarity(v.value)).map((v) => v.value);
+    const clean = c.values.filter((v) => clarityFor(v.value, c.scope));
+    const junkVals = c.values.filter((v) => !clarityFor(v.value, c.scope)).map((v) => v.value);
     if (clean.length < 2) { rejected.push({ axis_key: c.axis_key, reason: `clarity: <2 meaningful values (raw tokens: ${junkVals.slice(0, 6).join(",") || "n/a"})` }); continue; }
     if (c.grade === "D") { rejected.push({ axis_key: c.axis_key, reason: "evidence grade D (weak token) — review only, not runtime (ق10)" }); continue; }
 
