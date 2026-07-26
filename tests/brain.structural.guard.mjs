@@ -30,6 +30,14 @@ ok("G2 · no deriveFormatAxis/deriveBudgetAxis injection before the discovery gr
 ok("G3 · discovery structure present (candidate matrix / distinction graph)",
   /candidateMatrix|distinctionGraph|axisContract|evidence_span/.test(idx));
 
+// G4 — anti-axis-starvation: an axis with proven decisional relevance (evidence-backed origin in
+// the gold set) may not be silently dropped. If the built brain has no origin question while the
+// gold has ≥1 evidence-backed origin, that drop MUST be recorded in the decision-record (not silent).
+// Documented target for the rebuild; enforced once the new brain emits its published-axes list.
+ok("G4 · evidence-backed decision axis not silently dropped (recorded if dropped)",
+  /publishedAxes|axis_role|rejected_as_question|decision-record/.test(idx),
+  "new brain must expose published/rejected axes so a dropped evidence-backed axis is auditable");
+
 const failed = checks.filter(c => !c.pass);
 console.log("\n=== Part-2 structural guards (RED-FIRST — must go GREEN after the rebuild) ===");
 for (const c of checks) console.log(`  ${c.pass ? "✓" : "✗ FAIL"}  ${c.name}${c.detail ? "  — " + c.detail : ""}`);

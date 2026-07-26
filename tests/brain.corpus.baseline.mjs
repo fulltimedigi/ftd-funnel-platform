@@ -23,11 +23,13 @@ const config = authorFunnel({ products, origin: "https://oudfactory.com", brandU
 const s = scoreAgainstGold(gold, oldBrainAdapter(config, products));
 const pct = (x) => (x * 100).toFixed(0) + "%";
 console.log("================ Part-2 BRAIN — OLD-BRAIN BASELINE vs GOLD SET ================");
-console.log("gold:", gold.gold_version, "| reviewed:", gold.reviewed, "| intents:", s.N, "(PROVISIONAL until human-reviewed)");
+console.log("gold:", gold.gold_version, "| reviewed:", gold.reviewed, "by", gold.reviewed_by || "-", "| intents:", s.N, "(BINDING baseline)");
 console.log("  exact_fulfillment_rate   =", s.cats.exact_fulfillment + "/" + s.N, "=", pct(s.rates.exact_fulfillment_rate));
 console.log("  honest_no_match_rate     =", s.cats.honest_no_match + "/" + s.N, "=", pct(s.rates.honest_no_match_rate));
 console.log("  disclosed_compromise_rate=", s.cats.disclosed_compromise + "/" + s.N, "=", pct(s.rates.disclosed_compromise_rate));
 console.log("  silent_compromise_rate   =", s.cats.silent_compromise + "/" + s.N, "=", pct(s.rates.silent_compromise_rate), " ← must be 0 (ق9)");
 console.log("  hard_violation_rate      =", s.cats.hard_violation + "/" + s.N, "=", pct(s.rates.hard_violation_rate), " ← must be 0 (ق8)");
 console.log("  false_no_match (diag)    =", s.cats.false_no_match + "/" + s.N, "=", pct(s.rates.false_no_match_rate));
+console.log("  unserved_intent_rate (6) =", s.unserved + "/" + s.N, "=", pct(s.rates.unserved_intent_rate), " ← axis-starvation overlay (report, not gate)");
+console.log("     unserved intents:", s.unservedList.map(u => u.id + "[" + u.missing_axis + "]").join(", ") || "none");
 console.log("  identity (exact+honest+disclosed=100 ∧ silent=hard=0):", s.identityHolds ? "HOLDS ✅" : "FAILS ❌ (baseline is invalid — the disaster)");

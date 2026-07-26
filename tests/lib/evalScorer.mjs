@@ -20,12 +20,17 @@ export function scoreAgainstGold(gold, recommend) {
     priceBy.set(s.sku, s.price);
   }
   const ceiling = (gold.band_boundaries && gold.band_boundaries.ceiling_price) || { 0: 458.5, 1: 945, 2: Infinity };
+  const canElicit = typeof recommend.canElicit === "function" ? recommend.canElicit : () => true;
   const cats = { exact_fulfillment: 0, honest_no_match: 0, disclosed_compromise: 0, silent_compromise: 0, hard_violation: 0, false_no_match: 0 };
+  let unserved = 0; const unservedList = [];
   const detail = [];
   for (const it of gold.intents || []) {
     const c = it.constraints;
     const accepted = new Set(it.accepted_skus || []);
     const rec = recommend(c) || { no_match: true };
+    // anti-axis-starvation guard: can the funnel even ELICIT this intent's constraints?
+    const served = canElicit(c);
+    if (!served) { const missing = canElicit({ ...c, origin: "any" }) ? "origin" : "format/budget"; unserved++; unservedList.push({ id: it.id, missing_axis: missing }); }
     let cat;
     const exp = Array.isArray(it.expected) ? it.expected : [it.expected]; // expected is a SET (closure #6)
     if (rec.no_match || !rec.family) {
@@ -50,8 +55,11 @@ export function scoreAgainstGold(gold, recommend) {
         cat = (soft && structured && confined) ? "disclosed_compromise" : "silent_compromise";
       }
     }
+    // an UNSERVED intent can never be credited as exact_fulfillment (the funnel didn't elicit the
+    // constraint — any match is luck, not fulfillment). Downgrade to silent_compromise.
+    if (!served && cat === "exact_fulfillment") cat = "silent_compromise";
     cats[cat]++;
-    detail.push({ id: it.id, expected: it.expected, family: rec.family || null, cat });
+    detail.push({ id: it.id, expected: it.expected, family: rec.family || null, cat, served });
   }
   const N = (gold.intents || []).length;
   const r = (n) => (N ? n / N : 0);
@@ -62,18 +70,20 @@ export function scoreAgainstGold(gold, recommend) {
     silent_compromise_rate: r(cats.silent_compromise),
     hard_violation_rate: r(cats.hard_violation),
     false_no_match_rate: r(cats.false_no_match),
+    unserved_intent_rate: r(unserved), // 6th REPORTED number (not a gate) — anti-axis-starvation
   };
   const identityHolds = (cats.exact_fulfillment + cats.honest_no_match + cats.disclosed_compromise) === N
     && cats.silent_compromise === 0 && cats.hard_violation === 0 && cats.false_no_match === 0;
-  return { N, cats, rates, identityHolds, detail };
+  return { N, cats, rates, identityHolds, detail, unserved, unservedList };
 }
 
-/** OLD-brain adapter: intent constraints -> {family, relaxedAxes} via the current authorFunnel table. */
+/** OLD-brain adapter: intent constraints -> {family, relaxedAxes} via the current authorFunnel table.
+ *  Carries `.canElicit` so the scorer can flag intents whose constraint the funnel can't even ask. */
 export function oldBrainAdapter(config, products) {
   const familyOfUrl = (u) => String(u || "").split("/products/")[1] || u;
   const archFamily = new Map((config.archetypes || []).map(a => [a.id, familyOfUrl(a.recommendations && a.recommendations.primary && a.recommendations.primary.url)]));
   const facetDomain = new Set((config.decisionTable || []).map(r => r.when && r.when.D_facet5).filter(Boolean));
-  return (c) => {
+  const rec = (c) => {
     const facet = facetDomain.has(c.origin) ? c.origin : [...facetDomain][0]; // unexpressible origin → brain can't ask
     const rule = (config.decisionTable || []).find(r => r.when && r.when.D_format === c.format && String(r.when.D_budget) === String(c.budget_ceiling) && r.when.D_facet5 === facet);
     if (!rule || rule.kind === "TERMINAL") return { no_match: true };
@@ -81,4 +91,7 @@ export function oldBrainAdapter(config, products) {
     if (!fam) return { no_match: true };
     return { family: fam, relaxedAxes: (rule.relaxed || []).map((x) => x.axis) };
   };
+  // format + budget are always askable; origin is elicitable ONLY for values in the funnel's taste axis.
+  rec.canElicit = (c) => c.origin === "any" || facetDomain.has(c.origin);
+  return rec;
 }
