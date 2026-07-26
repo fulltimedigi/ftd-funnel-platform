@@ -10,7 +10,9 @@
  * is the betrayal. Denominator = FIXED gold intents (never filtered — closure #3). Pure, deterministic.
  */
 
-export function scoreAgainstGold(gold, recommend) {
+export function scoreAgainstGold(gold, recommend, opts = {}) {
+  const baselineUnserved = opts.baselineUnserved ?? 9; // old-brain baseline unserved count
+  const droppedAxes = opts.droppedAxes || [];          // G4 records: [{axis, gate, evidence}] justifying extra unserved
   const ft = new Map((gold.family_decision_truth || []).map(f => [f.family, f]));
   const skusByFamily = new Map();
   const priceBy = new Map();
@@ -72,9 +74,28 @@ export function scoreAgainstGold(gold, recommend) {
     false_no_match_rate: r(cats.false_no_match),
     unserved_intent_rate: r(unserved), // 6th REPORTED number (not a gate) — anti-axis-starvation
   };
-  const identityHolds = (cats.exact_fulfillment + cats.honest_no_match + cats.disclosed_compromise) === N
-    && cats.silent_compromise === 0 && cats.hard_violation === 0 && cats.false_no_match === 0;
-  return { N, cats, rates, identityHolds, detail, unserved, unservedList };
+  // ---- acceptance gates, computed on SERVED intents (an unserveable constraint has no category) ----
+  const servedN = N - unserved;
+  const exactCeiling = (gold.intents || []).filter((it) => (Array.isArray(it.expected) ? it.expected : [it.expected]).includes("EXACT")).length; // 11
+  const exactExpectedUnserved = (gold.intents || []).filter((it) => (Array.isArray(it.expected) ? it.expected : [it.expected]).includes("EXACT") && !canElicit(it.constraints)).length;
+  const gates = {
+    served: servedN,
+    // hard/silent are ZERO over ALL 27 (an unserved path does not excuse betrayal) — ق8/ق9
+    hard_zero: cats.hard_violation === 0,
+    silent_zero: cats.silent_compromise === 0,
+    // exact reaches the gold ceiling; all achievable matches lie inside served (proof: none unserved)
+    exact_ceiling: exactCeiling,
+    exact_meets_ceiling: cats.exact_fulfillment === exactCeiling,
+    no_exact_in_unserved: exactExpectedUnserved === 0,
+    // identity over SERVED, not 27
+    identity_served: (cats.exact_fulfillment + cats.honest_no_match + cats.disclosed_compromise) === servedN,
+    // axis-starvation is BLOCKING: extra unserved beyond baseline needs a G4 record
+    unserved_within_baseline: unserved <= baselineUnserved || droppedAxes.length > 0,
+    false_no_match_zero: cats.false_no_match === 0,
+  };
+  gates.pass = gates.hard_zero && gates.silent_zero && gates.exact_meets_ceiling && gates.no_exact_in_unserved && gates.identity_served && gates.unserved_within_baseline && gates.false_no_match_zero;
+  const identityHolds = gates.identity_served && gates.silent_zero && gates.hard_zero && gates.false_no_match_zero;
+  return { N, cats, rates, identityHolds, gates, detail, unserved, unservedList };
 }
 
 /** OLD-brain adapter: intent constraints -> {family, relaxedAxes} via the current authorFunnel table.

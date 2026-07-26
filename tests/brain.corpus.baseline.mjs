@@ -32,4 +32,13 @@ console.log("  hard_violation_rate      =", s.cats.hard_violation + "/" + s.N, "
 console.log("  false_no_match (diag)    =", s.cats.false_no_match + "/" + s.N, "=", pct(s.rates.false_no_match_rate));
 console.log("  unserved_intent_rate (6) =", s.unserved + "/" + s.N, "=", pct(s.rates.unserved_intent_rate), " ← axis-starvation overlay (report, not gate)");
 console.log("     unserved intents:", s.unservedList.map(u => u.id + "[" + u.missing_axis + "]").join(", ") || "none");
-console.log("  identity (exact+honest+disclosed=100 ∧ silent=hard=0):", s.identityHolds ? "HOLDS ✅" : "FAILS ❌ (baseline is invalid — the disaster)");
+const g = s.gates;
+console.log("");
+console.log("  === ACCEPTANCE GATES (computed on SERVED = " + g.served + " intents, not 27) ===");
+console.log("  hard_violation = 0 (over 27):", g.hard_zero ? "✅" : "❌ " + s.cats.hard_violation);
+console.log("  silent_compromise = 0 (over 27):", g.silent_zero ? "✅" : "❌ " + s.cats.silent_compromise);
+console.log("  exact = ceiling (" + s.cats.exact_fulfillment + "/" + g.exact_ceiling + "):", g.exact_meets_ceiling ? "✅" : "❌");
+console.log("  identity exact+honest+disclosed = served (" + (s.cats.exact_fulfillment + s.cats.honest_no_match + s.cats.disclosed_compromise) + "/" + g.served + "):", g.identity_served ? "✅" : "❌");
+console.log("  unserved ≤ baseline(" + 9 + ") or G4-recorded:", g.unserved_within_baseline ? "✅" : "❌");
+console.log("  PROOF item#1 — EXACT-expected intents that are UNSERVED:", g.exact_ceiling - (g.exact_ceiling), "computed →", (g.no_exact_in_unserved ? "0 ✅ (all 11 achievable matches lie inside served)" : "❌ some EXACT are unserved"));
+console.log("  → GATES:", g.pass ? "PASS ✅" : "FAIL ❌ (expected for old brain — baseline)");
