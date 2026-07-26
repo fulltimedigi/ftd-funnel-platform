@@ -17,6 +17,7 @@ import { discoverAxisContracts } from "../authoring/brain/axisContracts.js";
 import { assignAxisRoles } from "../authoring/brain/axisRoles.js";
 import { buildDecisionTree, traverse } from "../authoring/brain/decisionTree.js";
 import { oudfactory } from "./lib/realCatalog.mjs";
+import { structuralViolations } from "./lib/structuralChecks.js";
 
 // SOURCE = the REAL ingest pipeline (string prices), never gold-derived matrices (numeric prices hid the
 // price-axis regression). Structural checks here are corpus-independent — no gold truth needed.
@@ -29,6 +30,14 @@ const famType = new Map(familyMatrix.map((f) => [f.family_id, f.structured.produ
 const famBand = new Map(); { const pa = axes.find((a) => a.axis_key === "price"); for (const v of pa.values) for (const fid of v.families) famBand.set(fid, v.value); }
 const famOrigin = new Map(); { const oa = axes.find((a) => a.axis_key === "origin"); if (oa) for (const v of oa.values) for (const fid of v.families) famOrigin.set(fid, v.value); }
 const BANDS = ["low", "mid", "high"];
+
+// AUTHORITATIVE structural check via the shared, poison-canary-verified checker (catches degenerate
+// questions, empty leaves, exact-support, path violations, silent SKU drops, fuzz) — the fix for the
+// vacuous inline check that let a no-price product's missing leaf pass.
+{
+  const violations = structuralViolations({ tree, familyMatrix, skuMatrix, axes });
+  assert.strictEqual(violations.length, 0, "shared structural checker: oudfactory tree is clean — " + JSON.stringify(violations));
+}
 
 // walk every node collecting questions + options
 const questions = []; (function walk(n) { if (n.kind === "question") { questions.push(n); n.options.forEach((o) => walk(o.child)); } })(tree);
