@@ -1,6 +1,6 @@
 {
-  "_comment": "FROZEN human-review gold set v0.2 (closures 1-6). TWO-LEVEL truth: family_decision_truth (format/origin/bundle — needs human sign-off) + sku_offer_truth (price/availability/buy_url — AUTOMATIC from the Part-1 Ledger, mechanical, not reviewed). accepted_skus are VARIANT-level SKU ids (defect #6: budget measured per actual offered variant, not cheapest). Origin requires description/structured evidence; name_token alone => unknown. All Packages are set-valued bundles => out of single-format paths (support deferred, ق4). Do NOT regenerate intents from tree paths (closure #3).",
-  "gold_version": "gold-0.3.0-proposal",
+  "_comment": "FROZEN human-review gold set (closures 1-6 + review-3/4). TWO-LEVEL truth: family_decision_truth (format/origin/bundle_content — needs human sign-off) + sku_offer_truth (price/availability/buy_url — AUTOMATIC from the Part-1 Ledger). accepted_skus are VARIANT-level SKU ids (defect #6). Origin requires description/structured evidence; name_token alone => unknown; inspiration => not a source. bundle_content is AUTHORED from descriptions with evidence (NOT regex — a repeated table-vs-file contradiction proved regex unsafe here); ambiguity/per-box => variant_specific. All Packages are set-valued bundles => out of single-format paths (ق4). expected is a SET: origin-fail (soft, ق9) => [HONEST_NO_MATCH, DISCLOSED_COMPROMISE]; format/budget-fail (hard/NEVER_RELAX) => [HONEST_NO_MATCH]. Do NOT regenerate intents from tree paths (closure #3). reviewed_by pending Ahmed Amer.",
+  "gold_version": "gold-0.4.0-proposal",
   "catalog_version": "oudfactory products.json (page1, 51 products / 85 SKU)",
   "captured_at": "2026-07-25",
   "currency": "AED",
@@ -44,6 +44,7 @@
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "wood",
+      "bundle_evidence": "All six boxes are '5 tola (60 gram) Hindi Wood' — wood only",
       "needs_review": true,
       "name": "5 Tola Wood Box",
       "duplicate_suspect": false
@@ -212,6 +213,7 @@
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "mixed(oil+wood)",
+      "bundle_evidence": "'8 Oils (3ml/each) + Wood: 36 Grams'",
       "needs_review": true,
       "name": "Majlis Box",
       "duplicate_suspect": false
@@ -224,6 +226,7 @@
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "mixed(oil+wood)",
+      "bundle_evidence": "'3ml <oil> + 3ml <oil> + 12 gr Hindi wood'",
       "needs_review": true,
       "name": "2 Oil 1 Tola Box",
       "duplicate_suspect": false
@@ -236,6 +239,7 @@
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "mixed(oil+wood)",
+      "bundle_evidence": "'3ml <oils> + 24g Hindi wood'",
       "needs_review": true,
       "name": "3 Oil 2 Tola Box",
       "duplicate_suspect": false
@@ -248,6 +252,7 @@
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
       "bundle_content": "oils",
+      "bundle_evidence": "'6 Oud Oil ... 3ml per Oud Oil Bottle' — oils only, no wood",
       "needs_review": true,
       "name": "6 Oud Oil Box",
       "duplicate_suspect": false
@@ -259,7 +264,8 @@
       "origin_basis": "variant_specific",
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
-      "bundle_content": "oils",
+      "bundle_content": "variant_specific(oil±wood)",
+      "bundle_evidence": "Box4 = 'Kodokuna Heishi 2 + Bornio Wild' (wood); other boxes oils",
       "needs_review": true,
       "name": "2 Oud Oil Box",
       "duplicate_suspect": false
@@ -271,7 +277,8 @@
       "origin_basis": "variant_specific",
       "origin_evidence": "multi-variant bundle — origin is per-box, not family-level",
       "is_bundle": true,
-      "bundle_content": "oils",
+      "bundle_content": "variant_specific(oil±wood)",
+      "bundle_evidence": "Box3 = 'Kodokuna Heishi 2 + Bornio Wild and Hindi' (wood); other boxes oils",
       "needs_review": true,
       "name": "3 Oud Oil Set",
       "duplicate_suspect": false
@@ -1893,31 +1900,38 @@
     "bundles": [
       {
         "name": "5 Tola Wood Box",
-        "content": "wood"
+        "content": "wood",
+        "evidence": "All six boxes are '5 tola (60 gram) Hindi Wood' — wood only"
       },
       {
         "name": "Majlis Box",
-        "content": "mixed(oil+wood)"
+        "content": "mixed(oil+wood)",
+        "evidence": "'8 Oils (3ml/each) + Wood: 36 Grams'"
       },
       {
         "name": "2 Oil 1 Tola Box",
-        "content": "mixed(oil+wood)"
+        "content": "mixed(oil+wood)",
+        "evidence": "'3ml <oil> + 3ml <oil> + 12 gr Hindi wood'"
       },
       {
         "name": "3 Oil 2 Tola Box",
-        "content": "mixed(oil+wood)"
+        "content": "mixed(oil+wood)",
+        "evidence": "'3ml <oils> + 24g Hindi wood'"
       },
       {
         "name": "6 Oud Oil Box",
-        "content": "oils"
+        "content": "oils",
+        "evidence": "'6 Oud Oil ... 3ml per Oud Oil Bottle' — oils only, no wood"
       },
       {
         "name": "2 Oud Oil Box",
-        "content": "oils"
+        "content": "variant_specific(oil±wood)",
+        "evidence": "Box4 = 'Kodokuna Heishi 2 + Bornio Wild' (wood); other boxes oils"
       },
       {
         "name": "3 Oud Oil Set",
-        "content": "oils"
+        "content": "variant_specific(oil±wood)",
+        "evidence": "Box3 = 'Kodokuna Heishi 2 + Bornio Wild and Hindi' (wood); other boxes oils"
       }
     ],
     "origin_claims": [

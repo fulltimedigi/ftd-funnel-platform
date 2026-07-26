@@ -36,9 +36,19 @@ export function scoreAgainstGold(gold, recommend) {
       const price = priceBy.get(offeredSku);
       const overBudget = price != null && price > (ceiling[c.budget_ceiling] ?? Infinity);
       const wrongFormat = fam.format !== c.format; // bundle/mixed/other ≠ requested single format
-      if (wrongFormat || overBudget) cat = "hard_violation";           // ق8 (format eligibility / budget ceiling)
+      if (wrongFormat || overBudget) cat = "hard_violation";           // ق8 (format eligibility / budget ceiling) — even if disclosed
       else if (offeredSku && accepted.has(offeredSku)) cat = "exact_fulfillment";
-      else cat = (rec.relaxedAxes && rec.relaxedAxes.length) ? "disclosed_compromise" : "silent_compromise";
+      else {
+        // DISCLOSED_COMPROMISE succeeds ONLY if ALL three hold (closure — not merely "disclosed"):
+        // (1) all hard constraints fully met — already true here (not wrongFormat/overBudget);
+        // (2) deviation confined to the intent's named SOFT axis (unsatisfiable_constraint, role=*soft*);
+        // (3) disclosure is STRUCTURED {fulfilled, unfulfilled, unknown}, not prose, and unfulfilled ⊆ {that soft axis}.
+        const soft = /soft/i.test(it.constraint_role || "");
+        const d = rec.disclosure;
+        const structured = !!d && Array.isArray(d.fulfilled) && Array.isArray(d.unfulfilled) && Array.isArray(d.unknown);
+        const confined = structured && d.unfulfilled.length > 0 && d.unfulfilled.every((ax) => ax === it.unsatisfiable_constraint);
+        cat = (soft && structured && confined) ? "disclosed_compromise" : "silent_compromise";
+      }
     }
     cats[cat]++;
     detail.push({ id: it.id, expected: it.expected, family: rec.family || null, cat });
