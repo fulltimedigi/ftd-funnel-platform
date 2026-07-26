@@ -10,6 +10,7 @@ scripts were copied). Each is used under its original license.
 | Humanizer | github.com/blader/humanizer | `523374d` | MIT | `humanizer` — strips AI-writing tells from copy; enforces a no-fabrication rewrite rule |
 | Taste Skill | github.com/Leonxlnx/taste-skill | `e988add` | MIT | `taste-skill` (anti-slop landing/redesign frontend) + `brandkit` (brand styling) |
 | Find Skills | github.com/vercel-labs/skills | `e173b8c` | MIT (Vercel) | `find-skills` — meta-skill to discover/install other skills via the `npx skills` CLI (skills.sh) |
+| Lenny Skills (curated) | github.com/refoundai/lenny-skills | `13598cc` | MIT | Curated strategy/growth subset (18 of 76): competitive-strategy, positioning, defining-icp, growth-model, growth-experimentation, plg-fundamentals, plg-sales-integration, pricing-strategy, first-b2b-customers, founder-sales, launch-planning, measuring-pmf, acquisition-channels, referrals-word-of-mouth, idea-validation, ai-product-strategy, seo-strategy, product-taste. HR/career/PM-internal skills intentionally excluded. |
 
 ## Notes for our use
 - **Under our own standards.** Design skills (`taste-skill`, `brandkit`) operate **below**
