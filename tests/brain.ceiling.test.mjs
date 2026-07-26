@@ -52,12 +52,23 @@ assert.strictEqual(exact.length, 11, "gold has 11 EXACT intents");
 const lostExact = exact.filter((it) => !servable(it.constraints));
 assert.strictEqual(lostExact.length, 0, "ALL 11 EXACT stay inside served: " + (lostExact.map((i) => i.id).join(", ") || "none lost"));
 
-// unserved split by cause: (a) axis dropped though a real candidate exists → needs G4; (b) no candidate → structural
-const hasDescCandidate = (fmt, org) => gold.family_decision_truth.some((f) => f.format === fmt && f.origin === org && f.origin_basis === "description");
+// unserved split by cause: (a) axis dropped though a real candidate exists → needs G4; (b) no candidate → structural.
+// (operator condition 1) the (b) claim is proven catalog-wide: count SELLABLE families that would SERVE the intent
+// (same format + the requested origin, grounded) across the WHOLE catalog — NOT "not published in this branch".
+// Over-pruning (a value that has serving products but the tree didn't publish it) must NOT hide as structural.
+const sellableFamily = new Set(gold.sku_offer_truth.filter((s) => s.buy_url && s.availability !== "out_of_stock").map((s) => s.family));
+const servingCount = (fmt, org) => gold.family_decision_truth.filter((f) => f.format === fmt && f.origin === org && f.origin_basis === "description" && sellableFamily.has(f.family)).length;
+const bareValueCount = (org) => gold.family_decision_truth.filter((f) => f.origin === org && f.origin_basis === "description" && sellableFamily.has(f.family)).length;
+
 const unservedSpecific = gold.intents.filter((it) => it.constraints.origin !== "any" && !servable(it.constraints));
-const causeA = unservedSpecific.filter((it) => hasDescCandidate(it.constraints.format, it.constraints.origin)); // candidate exists but not served
-const causeB = unservedSpecific.filter((it) => !hasDescCandidate(it.constraints.format, it.constraints.origin)); // no candidate = structural
-assert.strictEqual(causeA.length, 0, "category (a) [axis dropped though candidates exist → needs G4] must be zero: " + causeA.map((i) => i.id).join(", "));
+const causeA = unservedSpecific.filter((it) => servingCount(it.constraints.format, it.constraints.origin) > 0); // serving product exists but not served → over-pruning
+const causeB = unservedSpecific.filter((it) => servingCount(it.constraints.format, it.constraints.origin) === 0); // no serving product = structural
+
+// blocking gate: EVERY (b) intent has zero serving products catalog-wide; any with >0 is really (a) and needs G4
+for (const it of causeB) assert.strictEqual(servingCount(it.constraints.format, it.constraints.origin), 0,
+  `category (b) ${it.id} must have 0 serving products catalog-wide (else it is over-pruning → category (a) + G4)`);
+assert.strictEqual(causeA.length, 0, "category (a) [serving product exists but tree did not publish it → needs G4] must be zero: " + causeA.map((i) => i.id).join(", "));
 
 console.log(`PASS — ceiling proof: 11/11 EXACT servable (oil|*|indian preserved). origin branch_values = ${JSON.stringify(branchValues)}`);
-console.log(`  unserved(origin-specific) = ${unservedSpecific.length}  →  (a) gate-dropped-with-candidates = ${causeA.length} · (b) no-candidate/structural = ${causeB.length} (no G4 needed)`);
+console.log(`  unserved(origin-specific) = ${unservedSpecific.length}  →  (a) over-pruning = ${causeA.length} · (b) no serving product catalog-wide = ${causeB.length} (no G4 needed)`);
+console.log(`  (b) transparency — bare-value catalog count (any format): indian=${bareValueCount("indian")} · cambodi=${bareValueCount("cambodi")}  → indian exists only as an OIL, so raw|indian & perfume|indian are honestly structural.`);
