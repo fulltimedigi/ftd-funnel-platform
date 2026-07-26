@@ -78,18 +78,51 @@ export function discoverAxisContracts(familyMatrix = [], skuMatrix = [], opts = 
     if (values.length) candidates.push({ axis_key: "title_tokens", source: "title", grade: "D", values });
   }
 
+  // ---- branch partition (structured product_type) — the unit of applicability scope ----
+  const branchFamilies = new Map(); // product_type -> Set(family_id)
+  for (const f of familyMatrix) {
+    const b = (f.structured && f.structured.product_type) || "(none)";
+    if (!branchFamilies.has(b)) branchFamilies.set(b, new Set());
+    branchFamilies.get(b).add(f.family_id);
+  }
+
   // ---- gates ----
+  // Grounding coverage is judged INSIDE each axis's applicability scope, NEVER the whole catalog
+  // ("نطاق انطباق معرَّف"): a conditional axis (origin) applies only in the branch it is grounded in,
+  // so measuring it against families it never applies to (perfumes/wood) is the wrong denominator.
   const published = [], rejected = [];
   for (const c of candidates) {
     const clean = c.values.filter((v) => clarity(v.value));
     const junkVals = c.values.filter((v) => !clarity(v.value)).map((v) => v.value);
     if (clean.length < 2) { rejected.push({ axis_key: c.axis_key, reason: `clarity: <2 meaningful values (raw tokens: ${junkVals.slice(0, 6).join(",") || "n/a"})` }); continue; }
     if (c.grade === "D") { rejected.push({ axis_key: c.axis_key, reason: "evidence grade D (weak token) — review only, not runtime (ق10)" }); continue; }
-    const covered = new Set(clean.flatMap((v) => v.families)).size;
-    if (covered / N < minCoverage) { rejected.push({ axis_key: c.axis_key, reason: `grounding coverage ${(covered / N).toFixed(2)} < ${minCoverage}` }); continue; }
-    const maxShare = Math.max(...clean.map((v) => v.families.length)) / N;
-    if (maxShare >= 0.95) { rejected.push({ axis_key: c.axis_key, reason: `no distinction (one value ${(maxShare * 100).toFixed(0)}% of catalog)` }); continue; }
-    published.push({ axis_key: c.axis_key, source: c.source, grade: c.grade, ordinal: !!c.ordinal, values: clean });
+
+    // per-branch coverage: covered families in the branch ÷ families in the branch (the correct denominator)
+    const coveredFamilies = new Set(clean.flatMap((v) => v.families));
+    const perBranch = [...branchFamilies.entries()].map(([branch, fams]) => {
+      let cov = 0; for (const fid of fams) if (coveredFamilies.has(fid)) cov++;
+      return { branch, covered: cov, total: fams.size, coverage: fams.size ? cov / fams.size : 0 };
+    });
+    const qualifying = perBranch.filter((pb) => pb.coverage >= minCoverage);
+    if (!qualifying.length) {
+      const best = perBranch.slice().sort((a, b) => b.coverage - a.coverage)[0] || { coverage: 0, branch: "-" };
+      rejected.push({ axis_key: c.axis_key, reason: `grounding coverage < ${minCoverage} in every branch (best: ${best.branch} ${best.coverage.toFixed(2)})`, per_branch: perBranch });
+      continue;
+    }
+    const supported = new Set(qualifying.flatMap((q) => [...branchFamilies.get(q.branch)]));
+
+    // confine values to the applicability scope; drop a value with no candidate inside scope (dead-value guard)
+    const scopedValues = clean.map((v) => ({ ...v, families: v.families.filter((fid) => supported.has(fid)) })).filter((v) => v.families.length);
+    if (scopedValues.length < 2) { rejected.push({ axis_key: c.axis_key, reason: `<2 values inside applicability scope [${qualifying.map((q) => q.branch).join(",")}]` }); continue; }
+
+    // distinctiveness judged inside the scope, not the whole catalog
+    const maxShare = Math.max(...scopedValues.map((v) => v.families.length)) / supported.size;
+    if (maxShare >= 0.95) { rejected.push({ axis_key: c.axis_key, reason: `no distinction inside scope (one value ${(maxShare * 100).toFixed(0)}%)` }); continue; }
+
+    published.push({
+      axis_key: c.axis_key, source: c.source, grade: c.grade, ordinal: !!c.ordinal, values: scopedValues,
+      applicability: { branches: qualifying.map((q) => q.branch), supported_families: [...supported], per_branch: perBranch },
+    });
   }
   return { published, rejected };
 }
