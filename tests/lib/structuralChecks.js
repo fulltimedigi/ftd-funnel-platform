@@ -9,7 +9,7 @@ import { traverse } from "../../authoring/brain/decisionTree.js";
 
 const BANDS = ["low", "mid", "high"];
 
-export function structuralViolations({ tree, familyMatrix, skuMatrix, axes }) {
+export function structuralViolations({ tree, familyMatrix, skuMatrix, axes, accountedSkus = [] }) {
   const v = [];
   const famType = new Map(familyMatrix.map((f) => [f.family_id, (f.structured && f.structured.product_type) || "(none)"]));
   const famBand = new Map(); { const pa = axes.find((a) => a.axis_key === "price"); if (pa) for (const val of pa.values) for (const fid of val.families) famBand.set(fid, val.value); }
@@ -41,11 +41,13 @@ export function structuralViolations({ tree, familyMatrix, skuMatrix, axes }) {
     if (l.path.origin != null && l.path.origin !== "any" && famOrigin.get(it.family) !== l.path.origin) v.push({ check: "path_satisfaction", detail: `${it.family} wrong origin` });
   }
 
-  // (4) EVERY NON-EXCLUDED SKU APPEARS IN ≥1 LEAF — a product that reaches no leaf is a silent drop (ق2).
+  // (4) EVERY NON-EXCLUDED SKU APPEARS IN ≥1 LEAF — or is explicitly ACCOUNTED (price_unknown). A product
+  // that is neither in a leaf nor accounted is a silent drop (ق2).
   const allSku = new Set(skuMatrix.map((s) => s.sku_id));
   const leafSku = new Set(leaves.flatMap((l) => l.skus || []));
-  const missing = [...allSku].filter((s) => !leafSku.has(s));
-  if (missing.length) v.push({ check: "sku_in_leaf", detail: `${missing.length} SKU(s) reach no leaf (silent drop): ${missing.slice(0, 3).join(", ")}` });
+  const accounted = new Set(accountedSkus);
+  const missing = [...allSku].filter((s) => !leafSku.has(s) && !accounted.has(s));
+  if (missing.length) v.push({ check: "sku_in_leaf", detail: `${missing.length} SKU(s) reach no leaf and are not accounted (silent drop): ${missing.slice(0, 3).join(", ")}` });
 
   // (5) FUZZ — a corrupted answer must never fabricate a result.
   if (qs.length && traverse(tree, { [qs[0].axis]: "__garbage__" }).no_result !== true) v.push({ check: "fuzz", detail: "corrupted answer did not return no_result" });

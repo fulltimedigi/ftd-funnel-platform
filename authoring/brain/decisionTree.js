@@ -96,13 +96,21 @@ export function buildDecisionTree(axes = [], familyMatrix = [], skuMatrix = [], 
     return leaf(cands, path);
   }
 
-  const tree = build(allFamilies, 0, {});
+  // NO-PRICE POLICY (ق14 analogue): a family with no purchasable-priced variant never satisfies a budget
+  // band and carries no active buy CTA. It is NOT silently dropped — it is ACCOUNTED in `price_unknown`
+  // (counted + reported; a real product line would go tagged "price on request" or to the merchant queue).
+  const priced = allFamilies.filter((fid) => famMinPrice.get(fid) != null);
+  const noPrice = allFamilies.filter((fid) => famMinPrice.get(fid) == null);
+  const priceUnknownSkus = noPrice.flatMap((fid) => (skusByFam.get(fid) || []).map((s) => s.sku_id));
+
+  const tree = build(priced, 0, {});
   const leaves = [];
   (function walk(n) { if (n.kind === "leaf") leaves.push(n); else for (const o of n.options) walk(o.child); })(tree);
   return {
     tree, leaves,
     oversized_leaf_count: leaves.filter((l) => l.oversized).length,
     biggest_leaf: leaves.reduce((m, l) => Math.max(m, l.count), 0),
+    price_unknown: { families: noPrice, skus: priceUnknownSkus }, // accounted, no CTA, never in a band
   };
 }
 
