@@ -76,6 +76,16 @@ export function scoreAgainstGold(gold, recommend, opts = {}) {
   };
   // ---- acceptance gates, computed on SERVED intents (an unserveable constraint has no category) ----
   const servedN = N - unserved;
+  // identity is judged AMONG served intents only (an unserved intent's category is outside the served
+  // partition). Fix (2026-07-26, operator edit #2): earlier this summed cats GLOBALLY vs servedN, which
+  // could never close when unserved intents produced honest/disclosed — that was a mis-implementation of
+  // the ordered "exact+honest+disclosed = served", not a semantic change. Recorded in decision-record.
+  const servedCats = { exact: 0, honest: 0, disclosed: 0 };
+  for (const d of detail) if (d.served) {
+    if (d.cat === "exact_fulfillment") servedCats.exact++;
+    else if (d.cat === "honest_no_match") servedCats.honest++;
+    else if (d.cat === "disclosed_compromise") servedCats.disclosed++;
+  }
   const exactCeiling = (gold.intents || []).filter((it) => (Array.isArray(it.expected) ? it.expected : [it.expected]).includes("EXACT")).length; // 11
   const exactExpectedUnserved = (gold.intents || []).filter((it) => (Array.isArray(it.expected) ? it.expected : [it.expected]).includes("EXACT") && !canElicit(it.constraints)).length;
   const gates = {
@@ -87,8 +97,8 @@ export function scoreAgainstGold(gold, recommend, opts = {}) {
     exact_ceiling: exactCeiling,
     exact_meets_ceiling: cats.exact_fulfillment === exactCeiling,
     no_exact_in_unserved: exactExpectedUnserved === 0,
-    // identity over SERVED, not 27
-    identity_served: (cats.exact_fulfillment + cats.honest_no_match + cats.disclosed_compromise) === servedN,
+    // identity over SERVED intents only (not global cats vs servedN)
+    identity_served: (servedCats.exact + servedCats.honest + servedCats.disclosed) === servedN,
     // axis-starvation is BLOCKING: extra unserved beyond baseline needs a G4 record
     unserved_within_baseline: unserved <= baselineUnserved || droppedAxes.length > 0,
     false_no_match_zero: cats.false_no_match === 0,

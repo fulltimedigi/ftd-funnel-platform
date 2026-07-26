@@ -106,6 +106,28 @@ export function buildDecisionTree(axes = [], familyMatrix = [], skuMatrix = [], 
   };
 }
 
+/** Tree-DERIVED elicitability (never a hand-written per-axis rule): an intent is elicitable ⇔ there is a
+ *  path in the PUBLISHED tree where every SPECIFIC (non-wildcard) constraint value is an actual published
+ *  option AND that axis is actually asked on the path. A specific constraint whose axis the tree never asks
+ *  (e.g. origin in a branch that publishes no origin question) is NOT elicitable. Wildcard values ("any")
+ *  need no question. Generic over any axis — a Part-3 axis needs no new code here. */
+export function isElicitable(tree, answers = {}, wildcards = ["any"]) {
+  const isWild = (v) => v == null || wildcards.includes(v);
+  const required = Object.keys(answers).filter((a) => !isWild(answers[a])); // axes that MUST be asked with their value
+  function walk(node, asked) {
+    if (node.kind === "leaf") return required.every((a) => asked.has(a));
+    const want = answers[node.axis];
+    if (want !== undefined && !isWild(want)) {
+      const opt = (node.options || []).find((o) => o.value === want);
+      if (!opt) return false;                       // required value not a published option → not elicitable
+      return walk(opt.child, new Set([...asked, node.axis]));
+    }
+    const opt = (node.options || []).find((o) => o.mandatory) || (node.options || []).find((o) => isWild(o.value)) || (node.options || [])[0];
+    return opt ? walk(opt.child, asked) : false;    // wildcard/unspecified → follow the mandatory "any" path
+  }
+  return walk(tree, new Set());
+}
+
 /** Deterministic traversal: returns a leaf ONLY for a fully-valid answer path; an invalid/partial answer
  *  yields the current question or {no_result:true} — never a fabricated result (structural fuzz guard). */
 export function traverse(tree, answers = {}) {
