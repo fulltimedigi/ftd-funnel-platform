@@ -19,6 +19,10 @@ export function structuralViolations({ tree, familyMatrix, skuMatrix, axes }) {
   const leaves = []; (function w(n) { if (!n) return; if (n.kind === "leaf") leaves.push(n); else (n.options || []).forEach((o) => w(o.child)); })(tree);
   const leafCount = (n) => (!n ? 0 : n.kind === "leaf" ? n.count : (n.options || []).reduce((s, o) => s + leafCount(o.child), 0));
 
+  // EMPTY-TRUTH GUARD: a catalog with products must produce at least one leaf. Without this, every
+  // "for each leaf/option, check X" below would pass VACUOUSLY on an empty tree (`.every([])===true`).
+  if (skuMatrix.length > 0 && leaves.length === 0) v.push({ check: "empty_tree", detail: "products exist but the tree has no leaf (would make all per-leaf checks vacuous)" });
+
   // (0) NO DEGENERATE QUESTION — a question with 0 options. This is the gap that let `.every([])===true`
   // pass vacuously; a degenerate node is an unanswerable dead screen for the shopper.
   for (const q of qs) if (!q.options || q.options.length === 0) v.push({ check: "degenerate_question", detail: `question '${q.axis}' has 0 options` });

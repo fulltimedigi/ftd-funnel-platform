@@ -43,7 +43,7 @@ for (const a of out.published) {
 
 // 3) origin's applicability is CONFINED to the branch where it is grounded (Agarwood), not the whole catalog
 assert.deepStrictEqual(origin.applicability.branches, ["Agarwood"], "origin applies only to the branch it is grounded in");
-assert.ok(origin.applicability.supported_families.every((f) => /wood/.test(f)), "origin scope contains only Agarwood families (no perfumes)");
+assert.ok(origin.applicability.supported_families.length > 0 && origin.applicability.supported_families.every((f) => /wood/.test(f)), "origin scope is non-empty and contains only Agarwood families (no perfumes)");
 assert.ok(!origin.applicability.supported_families.some((f) => /perfume-/.test(f)), "perfume families are OUTSIDE origin's applicability (correct denominator)");
 
 // 4) a structured catalog-wide axis (type) still applies across the whole catalog

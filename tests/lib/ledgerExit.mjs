@@ -52,9 +52,13 @@ export function validateLedger(ledger, opts = {}) {
     !(L.source && L.source.page_capped) || (L.accounting && L.accounting.structural_incompleteness === true),
     `page_capped=${L.source && L.source.page_capped}`);
 
+  // EMPTY-TRUTH GUARD: every() below is vacuously true on an empty set — require a non-empty ledger so
+  // an empty catalog can't pass the per-SKU invariants for free.
+  ok("· ledger is non-empty (guards the every() checks below)", skus.length > 0);
+
   // ح · accounting_status enum only
   ok("ح · every SKU accounting_status ∈ {discovered,excluded}",
-    skus.every((s) => ACCOUNTING_STATUS.includes(s.accounting_status)));
+    skus.length > 0 && skus.every((s) => ACCOUNTING_STATUS.includes(s.accounting_status)));
 
   // ط · availability 5-enum + unknown ≠ sellable (no active buy_url on unknown)
   ok("ط · availability ∈ 5-enum", skus.every((s) => AVAIL_ENUM.includes(s.availability)));

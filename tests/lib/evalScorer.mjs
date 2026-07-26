@@ -95,10 +95,11 @@ export function scoreAgainstGold(gold, recommend, opts = {}) {
     silent_zero: cats.silent_compromise === 0,
     // exact reaches the gold ceiling; all achievable matches lie inside served (proof: none unserved)
     exact_ceiling: exactCeiling,
-    exact_meets_ceiling: cats.exact_fulfillment === exactCeiling,
+    // EMPTY-TRUTH GUARDS: "=== ceiling" / "=== served" pass vacuously when the set is empty (0===0). Require
+    // a non-empty ceiling and a non-empty served set so a corpus with 0 EXACT / 0 served can't read green.
+    exact_meets_ceiling: exactCeiling > 0 && cats.exact_fulfillment === exactCeiling,
     no_exact_in_unserved: exactExpectedUnserved === 0,
-    // identity over SERVED intents only (not global cats vs servedN)
-    identity_served: (servedCats.exact + servedCats.honest + servedCats.disclosed) === servedN,
+    identity_served: servedN > 0 && (servedCats.exact + servedCats.honest + servedCats.disclosed) === servedN,
     false_no_match_zero: cats.false_no_match === 0,
     // NOTE (2026-07-26): the raw `unserved_within_baseline` (unserved ≤ baseline count) gate was REMOVED.
     // It conflated genuine axis-STARVATION (category a) with legitimate STRUCTURAL narrowness of the
