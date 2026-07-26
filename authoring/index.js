@@ -78,7 +78,7 @@ export async function generateFunnelFromUrl(url, opts = {}) {
   if (!config) {
     return {
       ok: false, stage: "author", reason: (authored && authored.reason) || "author-failed",
-      meta: authored && authored.meta, catalog, notes: ing.notes,
+      meta: authored && authored.meta, catalog, ledger: ing.ledger, notes: ing.notes,
     };
   }
 
@@ -98,6 +98,7 @@ export async function generateFunnelFromUrl(url, opts = {}) {
     config,
     source,                // "deterministic" | "ai" — how this funnel was authored
     catalog,
+    ledger: ing.ledger,    // SKU Ledger (ق2/ق3) — carried through so the production entry can verify accounting
     brand,                 // { logo, colors }
     trust,                 // { ok, findings }
     bland,                 // { ok, findings } — anti-bland gate (ADR-0016)

@@ -1,0 +1,171 @@
+{
+  "_comment": "FROZEN, brain-independent evaluation corpus for the Part-2 brain (constitution results-first). Buyer intents = format x budget-ceiling x origin over oudfactory canonical values. The SAME corpus + SAME independent classifier (tests/lib/evalScorer.mjs) runs on the OLD and NEW brain. Anti-gaming: fixed denominator (never filtered); classification from RAW catalog, not matcher flags; no COMPROMISE->EXACT reclassification; profile coverage must not regress.",
+  "corpus_version": "eval-1.0.0",
+  "catalog": "oudfactory.com (85 SKU / 50 products)",
+  "value_sets": {
+    "formats": [
+      "perfume",
+      "oil",
+      "raw"
+    ],
+    "budget_bands": [
+      0,
+      1,
+      2
+    ],
+    "origins": [
+      "indian",
+      "cambodi",
+      "any"
+    ]
+  },
+  "price_tertiles": {
+    "t1": 458.5,
+    "t2": 945,
+    "note": "budget band: <=t1 =0, >=t2 =2, else 1; budget_ceiling is a NEVER_RELAX ceiling per ق13"
+  },
+  "classification": {
+    "exact_fulfillment": "returned product: format matches AND band<=ceiling AND (origin=any OR origin token present)",
+    "hard_violation": "returned product violates a HARD choice: wrong format OR band>ceiling (over budget, NEVER_RELAX)",
+    "silent_compromise": "returned product but fails a SOFT choice only (origin ignored) — THE BETRAYAL",
+    "honest_no_match": "brain returns NO_MATCH AND ground-truth is empty (honest degradation)",
+    "false_no_match": "(diagnostic) brain returns NO_MATCH while ground-truth is non-empty"
+  },
+  "intents": [
+    {
+      "format": "perfume",
+      "budget_ceiling": 0,
+      "origin": "indian"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 0,
+      "origin": "cambodi"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 0,
+      "origin": "any"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 1,
+      "origin": "indian"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 1,
+      "origin": "cambodi"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 1,
+      "origin": "any"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 2,
+      "origin": "indian"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 2,
+      "origin": "cambodi"
+    },
+    {
+      "format": "perfume",
+      "budget_ceiling": 2,
+      "origin": "any"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 0,
+      "origin": "indian"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 0,
+      "origin": "cambodi"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 0,
+      "origin": "any"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 1,
+      "origin": "indian"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 1,
+      "origin": "cambodi"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 1,
+      "origin": "any"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 2,
+      "origin": "indian"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 2,
+      "origin": "cambodi"
+    },
+    {
+      "format": "oil",
+      "budget_ceiling": 2,
+      "origin": "any"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 0,
+      "origin": "indian"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 0,
+      "origin": "cambodi"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 0,
+      "origin": "any"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 1,
+      "origin": "indian"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 1,
+      "origin": "cambodi"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 1,
+      "origin": "any"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 2,
+      "origin": "indian"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 2,
+      "origin": "cambodi"
+    },
+    {
+      "format": "raw",
+      "budget_ceiling": 2,
+      "origin": "any"
+    }
+  ]
+}

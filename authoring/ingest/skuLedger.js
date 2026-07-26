@@ -14,6 +14,11 @@
 const AVAIL_ENUM = new Set(["available", "out_of_stock", "preorder", "backorder", "unknown"]);
 const NO_OPTION_SENTINEL = "default title"; // Shopify's no-options variant name
 
+/** Non-products (gift cards / samples / shipping / warranty / subscriptions) — signed out of the
+ *  buyable set (ق2). Literal here in the ingest/ledger layer (mirrors the brain's cleanCatalog;
+ *  the ledger OWNS exclusion-signing so a dropped SKU is accounted-for, not silently lost). */
+const NON_PRODUCT = /gift\s*-?\s*card|e-?\s*gift|\bvoucher\b|\bsample\b|\btester\b|\bshipping\b|\bwarranty\b|\bsubscription\b/i;
+
 /** Coerce any availability signal into the 5-state enum (unknown when unsure — never guessed). */
 function coerceAvailability(a) {
   const s = String(a || "").trim().toLowerCase();
@@ -46,6 +51,11 @@ export function buildSkuLedger(extracted = {}, source = {}) {
     const option_values = cleanOptionValues(raw.option_values);
     const availability = coerceAvailability(raw.availability);
     const fold_basis = Object.keys(option_values).length ? Object.keys(option_values).map((k) => k.toLowerCase()) : null;
+    // signed exclusion for non-products (ق2): a dropped SKU is ACCOUNTED-FOR via a signed record,
+    // never silently absent. Basis = the family's title + product_type (the same signal cleanCatalog uses).
+    const fam = famMap.get(raw.family_id) || {};
+    const nonProduct = NON_PRODUCT.test(`${fam.title || ""} ${fam.product_type || ""}`);
+    const excluded = nonProduct;
     skuMap.set(raw.sku_id, {
       sku_id: raw.sku_id,
       family_id: raw.family_id || null,
@@ -54,14 +64,14 @@ export function buildSkuLedger(extracted = {}, source = {}) {
       price: raw.price != null ? raw.price : null,
       currency: raw.currency || null,
       availability,
-      // unknown ≠ sellable (ق7/ق14): an unverifiable SKU never carries an active buy link
-      buy_url: availability === "unknown" ? null : (raw.buy_url || null),
+      // unknown ≠ sellable (ق7/ق14); an excluded SKU is not buyable either
+      buy_url: (availability === "unknown" || excluded) ? null : (raw.buy_url || null),
       sku_code: raw.sku_code || null,
-      accounting_status: "discovered",   // (ح) — roles are filled at compile-time, not here
+      accounting_status: excluded ? "excluded" : "discovered",   // (ح)
       roles: [],
       fold_basis,
       bundle_class: "pending",           // (ي) — semantic classification deferred to Part 2
-      signed_exclusion: null,
+      signed_exclusion: excluded ? { reason: "non-product (gift-card/sample/shipping/warranty/subscription)", by: "ingest:skuLedger", basis: "NON_PRODUCT" } : null,
       path_witness: null,                // (هـ) — generated compile-time (Part 3)
     });
   }

@@ -162,7 +162,7 @@ export async function ingestCatalog(startUrl, opts = {}) {
   } else {
     extracted = {
       families: products.map((p) => ({ family_id: p.url, title: p.name, url: p.url, brand: p.brand, product_type: (p.attributes && p.attributes.type) || null, extraction_method: p.method })),
-      skus: products.map((p) => ({ sku_id: p.url, family_id: p.url, variant_title: null, option_values: {}, price: p.price, currency: p.currency, availability: "unknown", buy_url: p.url, sku_code: p.sku })),
+      skus: products.map((p) => ({ sku_id: p.url, family_id: p.url, variant_title: null, option_values: {}, price: p.price, currency: p.currency, availability: p.availability || "unknown", buy_url: p.url, sku_code: p.sku })),
     };
     if (!sourceActiveSkus) sourceActiveSkus = products.length; // non-Shopify oracle = product count
   }

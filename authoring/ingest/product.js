@@ -49,6 +49,7 @@ export function makeProduct(f = {}) {
     sku: f.sku != null && f.sku !== "" ? String(f.sku).trim() : null,
     brand: f.brand ? String(f.brand).trim() : null,
     attributes: f.attributes && typeof f.attributes === "object" ? f.attributes : {},
+    availability: f.availability || null,   // 5-state enum when a source provides it (JSON-LD offers); else null
     differentiators: Array.isArray(f.differentiators) ? f.differentiators.filter(Boolean) : [],
     sourceUrl: (f.sourceUrl || f.url || "").toString().trim(),
     method: f.method || "unknown",

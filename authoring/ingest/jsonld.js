@@ -67,13 +67,24 @@ function _brandName(brand) {
   return null;
 }
 
-/** Pull price + currency + offer url from an offers value (Offer/AggregateOffer/array). */
+/** Map a schema.org availability URI/token to the 5-state enum (unknown when unrecognized). */
+function _availability(a) {
+  const s = String(a || "").toLowerCase();
+  if (!s) return "unknown";
+  if (/instock|in_stock|\bavailable\b/.test(s)) return "available";
+  if (/outofstock|out_of_stock|soldout|sold_out|discontinued/.test(s)) return "out_of_stock";
+  if (/preorder/.test(s)) return "preorder";
+  if (/backorder/.test(s)) return "backorder";
+  return "unknown";
+}
+
+/** Pull price + currency + offer url + availability from an offers value (Offer/AggregateOffer/array). */
 function _offer(offers) {
   if (!offers) return {};
   if (Array.isArray(offers)) return _offer(offers[0]);
   if (typeof offers !== "object") return {};
   const price = offers.price ?? offers.lowPrice ?? offers.highPrice ?? null;
-  return { price, currency: offers.priceCurrency || null, url: offers.url || null };
+  return { price, currency: offers.priceCurrency || null, url: offers.url || null, availability: _availability(offers.availability) };
 }
 
 /**
@@ -97,6 +108,7 @@ export function productsFromJsonLd(html, pageUrl) {
       sku: node.sku || node.mpn || null,
       brand: _brandName(node.brand),
       attributes: node.category ? { category: node.category } : {},
+      availability: offer.availability,   // schema.org offer availability → 5-state enum
       sourceUrl: pageUrl || node.url || "",
       method: "json-ld",
       confidence: 0.9,
