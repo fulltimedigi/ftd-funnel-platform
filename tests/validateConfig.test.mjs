@@ -36,7 +36,8 @@ const hasErrAt = (res, substr) => res.errors.some((e) => e.path.includes(substr)
 
 await (async () => {
   console.log("\nEvery shipped config validates clean against the real schema:");
-  const configFiles = readdirSync(configsDir).filter((f) => f.endsWith(".json") && f !== "_schema.json");
+  // `_`-prefixed files are internal, non-funnel config files (_schema.json, _classification.json) — not validated as funnels.
+  const configFiles = readdirSync(configsDir).filter((f) => f.endsWith(".json") && !f.startsWith("_"));
   for (const f of configFiles) {
     await check(`${f} is valid`, () => {
       const res = validateConfig(load(f), schema);

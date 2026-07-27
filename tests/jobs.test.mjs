@@ -18,6 +18,7 @@ const okResult = (source = "ai", questions = 5) => ({
   ok: true, source,
   config: { id: "f", questions: Array.from({ length: questions }, (_, i) => ({ id: "q" + i })), archetypes: [] },
   trust: GREEN, bland: GREEN, richness: { ok: source === "ai", metrics: { questions } },
+  verify: GREEN, // a real ok authoring result ALWAYS carries the publish-gate proof (verifyFunnel)
   catalog: { origin: "https://s", products: [1, 2, 3] },
   ai: source === "deterministic" ? { attempted: true, enrichOk: false, reason: "model-error" } : { attempted: true, accepted: true },
 });
@@ -173,6 +174,15 @@ await (async () => {
   await check("shapes ready/error records", () => {
     assert.equal(recordFrom(okResult("ai", 4), "u").status, "ready");
     assert.equal(recordFrom({ ok: false, stage: "author", reason: "x" }, "u").status, "error");
+  });
+  await check("PUBLISH GATE (fail-closed): an ok result that fails / omits verifyFunnel is NOT served", () => {
+    // verify.ok === false → withheld
+    const failing = recordFrom({ ...okResult("ai", 4), verify: { ok: false, findings: [{ code: "PROOF_COVERAGE" }] } }, "u");
+    assert.equal(failing.status, "error");
+    assert.equal(failing.reason, "publish-gate:proof-coverage-below-100");
+    // verify MISSING → still withheld (no silent bypass)
+    const noVerify = recordFrom({ ...okResult("ai", 4), verify: undefined }, "u");
+    assert.equal(noVerify.status, "error", "a missing publish-gate proof must fail closed, never ship");
   });
 
   if (process.exitCode === 1) console.error("\nFAIL — jobs tests did not all pass.\n");

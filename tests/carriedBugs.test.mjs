@@ -106,7 +106,8 @@ await (async () => {
   });
 
   console.log("\nBug 3 — every config's declared theme has a real CSS file:");
-  const configFiles = readdirSync(configsDir).filter((f) => f.endsWith(".json") && f !== "_schema.json");
+  // `_`-prefixed files are internal, non-funnel config files (_schema.json, _classification.json).
+  const configFiles = readdirSync(configsDir).filter((f) => f.endsWith(".json") && !f.startsWith("_"));
   for (const f of configFiles) {
     await check(`${f} theme file exists`, () => {
       const theme = load(f).theme;

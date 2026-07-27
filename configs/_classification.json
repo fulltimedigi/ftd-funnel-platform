@@ -1,0 +1,9 @@
+{
+  "_comment": "Step-1 (ADR-0041) explicit classification of the shipped configs/. These are CURATED reference/demo funnels that predate the constraint kernel (ADR-0037) — NOT merchant deliverables. They are served only as references/examples and are classified NON-PUBLISHABLE: they must never be treated as live merchant funnels. Merchant funnels ship ONLY through the authoring pipeline (authoring/index.js), which mints proofs and passes the per-funnel publish gate (platform/jobs/generateJob.js recordFrom). A served COMMERCE config that carries NO proofs must be listed here (reference-only) OR carry proofs — the invariant is enforced by tests/reference-classification.test.mjs, so a new proofless commerce config is a RED, never a silent proofless card. q21 note: a reference-only commerce config still renders on the legacy (no-certificate) path today; that is the known ق21 gap tracked in docs/KNOWN-GAPS.md until the serve-path cert mandate lands.",
+  "reference_only": {
+    "pm-certification-advisor": "curated reference bar (the constitution's designated deterministic reference); hand-tuned, browser-verified — regenerating would destroy its reference value.",
+    "houseplant-advisor": "curated demo funnel (commerce layout) predating the kernel.",
+    "asq-perfume": "curated demo funnel (commerce layout) predating the kernel.",
+    "freelancex": "curated demo funnel (tracks/coaching layout — non-commerce, no product certificate concept)."
+  }
+}

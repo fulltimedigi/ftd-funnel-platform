@@ -79,9 +79,25 @@ export async function reserveRateSlot({ store, scope, id, cap, windowMs, now = D
   return reserveDailySlot({ store, key: windowKey(scope, id, windowMs, now), cap, now });
 }
 
-/** Shape the record we persist from a generateFunnelFromUrl result. */
+/** Shape the record we persist from a generateFunnelFromUrl result.
+ *
+ * PER-FUNNEL PUBLISH GATE (Step 1, ADR-0041): a funnel is persisted `ready` (i.e. SERVED to visitors)
+ * ONLY if it passed verifyFunnel — 100% proof coverage, every COMMERCE answer-path carrying a
+ * ProvenSelection. This is FAIL-CLOSED: a missing `verify`, or `verify.ok !== true`, is NOT published
+ * — never a live funnel that could render a proofless card. The funnel was still generated; it is
+ * withheld from serving with an honest reason (surfaced to the poller), never silently shipped.
+ * The real generate() (generateFunnelFromUrl) ALWAYS attaches `verify`, so in production the only way
+ * to hit the fail-closed branch is a genuinely gate-failing funnel. */
 export function recordFrom(res, url) {
   if (res && res.ok) {
+    if (!res.verify || res.verify.ok !== true) {
+      return {
+        status: "error", url, stage: "publish-gate",
+        reason: "publish-gate:proof-coverage-below-100",
+        verify: res.verify || { ok: false, reason: "verify-missing" },
+        source: res.source || null,
+      };
+    }
     return {
       status: "ready", url,
       config: res.config,
@@ -89,6 +105,7 @@ export function recordFrom(res, url) {
       trust: res.trust || null,
       bland: res.bland || null,
       richness: res.richness || null,
+      verify: res.verify, // carry the publish-gate proof through with the served funnel
       ai: res.ai || null,
       catalog: { origin: res.catalog && res.catalog.origin, count: (res.catalog && res.catalog.products && res.catalog.products.length) || 0 },
     };
