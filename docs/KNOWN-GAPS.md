@@ -28,6 +28,26 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 - **Do NOT:** fabricate a passing STALE check, or claim ق17 is "covered" because the code is present.
 - **Tracked in:** ADR-0041; this gap is checked whenever the deploy/serve path changes.
 
+## GAP-6 — a variant/size picker is N certificates per leaf, not a display feature
+
+- **The finding (recorded now, before it is "discovered" later):** ق21 requires every CTA to come from a
+  certificate. So if a result card offers 6 buyable sizes, **each buyable size needs its OWN certificate**
+  (its own proven SKU + buy_url). A variant/size picker is therefore **N certificates per leaf**, not a
+  presentation feature — it is N times the certification work.
+- **Why it matters for ق2 (screen-level reachability):** today the leaf offers ONE variant and the
+  visitor can reach+buy only ~13 of 85 SKUs (measured, Part-4A). Closing that is not a UI task; it is
+  minting a Purchase Witness (certificate) per buyable variant on a reachable result.
+- **Witness model (to be enforced by `NoActiveSKUWithoutAccountingOrWitness`, step 4):**
+  - **Surface Witness** for every non-excluded SKU: `path_id · result_id · sku_id · surface_role ·
+    variant_option` — proves the visitor **reaches it by walking published options**, not that it merely
+    exists in the artifact.
+  - **Purchase Witness** for every AVAILABLE SKU: `selection_result_id · buy_url · price · availability ·
+    path_certified` — a CTA that comes from a kernel certificate.
+  - Unavailable SKU: Surface Witness + an explicit no-active-CTA state (ق14).
+- **Split (operator ruling):** the picker **UI** may be deferred; SKU **reachability** may NOT — the
+  13/85 gap stays visible here until the witnesses are minted. The witness invariant **blocks wiring
+  (publish/serve)**, not the measurement.
+
 ## GAP-3 — post-publish catalog DRIFT is not covered by the publish-time gate
 
 - **The gap, stated plainly:** **التحقق وقت النشر لا يغطي انجراف الكتالوج بعد النشر؛ التحقق وقت العرض ما
