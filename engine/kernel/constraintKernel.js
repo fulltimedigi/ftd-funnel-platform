@@ -320,6 +320,29 @@ export function verify(chosen, constraints, answers, ctx) {
 }
 
 /**
+ * classifyUnit() — the AUTHORING partition primitive (Kernel Authoring Oracle, ADR-0046). It reuses
+ * the SAME `eligibility` + `matchState` that runtime `select()` uses, so authoring and runtime can
+ * NEVER diverge on what "matches" means (one source of truth, G1). It classifies ONE candidate:
+ *   • rejected   — INELIGIBLE: a NEVER_RELAX break, a require-proof UNKNOWN, or an over-cap relaxation
+ *                  (an over-cap unit must never be chosen and must never beat an UNKNOWN).
+ *   • exact      — eligible AND every promise SAT (matchState === EXACT).
+ *   • compromise — eligible AND ≥1 promise VIOLATED-or-UNKNOWN (matchState COMPROMISE | UNVERIFIED).
+ * Returns { klass, perC, matchState, eligible, reason }.
+ * NOTE (two-axes law): the UNVERIFIED folded into `compromise` here is the MATCH-time unknown (a
+ * promise the catalog cannot ground). It is NOT the render-time CERTIFICATE state — a render-time
+ * verification failure on an EXACT pick is a certificate downgrade (shown UNVERIFIED with
+ * disclosure), never a demotion into this authoring `rejected`/`compromise` partition.
+ */
+export function classifyUnit(unit, constraints, answers, opts = {}) {
+  const bounds = { ...DEFAULT_BOUNDS, ...(opts.bounds || {}) };
+  const perC = evaluateUnit(unit, constraints, answers);
+  const elig = eligibility(constraints, perC, bounds);
+  if (!elig.eligible) return { klass: "rejected", perC, matchState: NO_MATCH, eligible: false, reason: elig.reason };
+  const ms = matchState(constraints, perC);
+  return { klass: ms === EXACT ? "exact" : "compromise", perC, matchState: ms, eligible: true, reason: null };
+}
+
+/**
  * select() — the whole kernel decision for ONE answer-path. Deterministic.
  * @param {Array} units       recommendable units (product shells; may carry .variants)
  * @param {Array} constraints typed constraints (see compileConstraints upstream)
@@ -390,5 +413,5 @@ function tieReason(loss, disc) {
 
 export default {
   SAT, VIOLATED, UNKNOWN, NEVER_RELAX, RELAXABLE, ADVISORY, EXACT, COMPROMISE, UNVERIFIED, NO_MATCH,
-  status, evaluateUnit, disclose, select, verify,
+  status, evaluateUnit, disclose, select, verify, classifyUnit,
 };
