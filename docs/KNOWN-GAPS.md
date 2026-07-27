@@ -28,6 +28,27 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 - **Do NOT:** fabricate a passing STALE check, or claim ق17 is "covered" because the code is present.
 - **Tracked in:** ADR-0041; this gap is checked whenever the deploy/serve path changes.
 
+## GAP-3 — post-publish catalog DRIFT is not covered by the publish-time gate
+
+- **The gap, stated plainly:** **التحقق وقت النشر لا يغطي انجراف الكتالوج بعد النشر؛ التحقق وقت العرض ما
+  زال غير إلزامي لكل تخطيط.** (Publish-time verification does not cover catalog drift after publish;
+  render-time verification is still not mandatory for every layout.)
+- **State:** the per-funnel publish gate (ADR-0041) verifies proof coverage **at publish time**. The
+  merchant's catalog then changes — a price moves, a variant sells out, a product is deleted. The
+  storage-crossing E2E case C tested drift *at the same instant, before serve* (a post-publish edit
+  applied then rendered immediately); it does **not** test a config that was gate-green days ago and is
+  served after the catalog moved underneath it.
+- **What partially covers it today:** the render-time verifier (`verifyServedResult` →
+  `certifyForRender`) re-checks proof/SKU identity on the certificate path, so a *kernel-authored*
+  funnel whose displayed product no longer matches the proof degrades to a terminal rather than a wrong
+  card. But render-time verification is **not mandatory for every layout** (legacy/no-cert path
+  exists — GAP-2), and it deliberately defers **live price/stock** checks (`verifyRuntime.js`), so a
+  stale price on a still-valid SKU is not caught.
+- **What it takes to close:** render-time (or near-real-time) re-validation mandatory for every layout,
+  plus a freshness/webhook signal from the merchant catalog. Deferred by decision — but **visible here**.
+- **Tracked in:** ADR-0041; revisit with the serve-path cert mandate (GAP-2) and the first published
+  merchant.
+
 ## GAP-2 — ق21 (no render without a certificate) is PARTIAL for legacy reference configs
 
 - **Law (constitution ق21):** the result page renders only from a minted certificate; the CTA lives

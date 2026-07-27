@@ -24,6 +24,7 @@ import { generateFunnelFromUrl } from "../authoring/index.js";
 import { authorFunnel } from "../authoring/author/index.js";
 import { trustValidate } from "../engine/trustValidate.js";
 import { antiBlandCheck } from "../authoring/author/qualityGate.js";
+import { verifyFunnel } from "../engine/kernel/verifyFunnel.js";
 import { buildArtifact } from "./publish.js";
 
 /** Knobs that genuinely re-author today (honest — no no-op knobs advertised). */
@@ -33,11 +34,18 @@ const LIVE_KNOBS = ["brandName", "theme", "lang", "sheetsEndpoint"];
 function defaultReauthor(catalog, opts) {
   const a = authorFunnel({ products: catalog.products, origin: catalog.origin, brandUrl: catalog.brandUrl }, opts);
   if (!a.ok) return { ok: false, reason: a.reason, meta: a.meta };
-  return { ok: true, config: a.config, trust: trustValidate(a.config), bland: antiBlandCheck(a.config), meta: a.meta };
+  // Re-author must re-run the PUBLISH GATE too (ADR-0041): a refined funnel is only publishable if it
+  // still passes verifyFunnel (100% proof coverage) — not just trust + anti-bland.
+  const verify = (a.meta && a.meta.verify) || verifyFunnel(a.config, catalog);
+  return { ok: true, config: a.config, trust: trustValidate(a.config), bland: antiBlandCheck(a.config), verify, meta: a.meta };
 }
 
+/** The Studio publish gate — ONE rule, same as the async path's recordFrom (ADR-0041): a funnel is
+ *  publishable only if trust + anti-bland + the verifyFunnel PROOF-COVERAGE gate are ALL green.
+ *  FAIL-CLOSED: a missing `verify` is not green (never publish a funnel whose proof coverage is
+ *  unproven). This closes the second publish path that previously checked only trust + bland. */
 function _gatesGreen(gates) {
-  return !!(gates && gates.trust && gates.trust.ok && gates.bland && gates.bland.ok);
+  return !!(gates && gates.trust && gates.trust.ok && gates.bland && gates.bland.ok && gates.verify && gates.verify.ok);
 }
 
 /** A fresh draft project (not yet persisted — the caller stores it). */
@@ -83,7 +91,7 @@ export async function generate(project, deps = {}) {
     };
   }
 
-  const gates = { trust: res.trust, bland: res.bland };
+  const gates = { trust: res.trust, bland: res.bland, verify: res.verify };
   const catalog = res.catalog ? { ...res.catalog, brandUrl: project.brandUrl } : null;
 
   if (!_gatesGreen(gates)) {
@@ -120,7 +128,7 @@ export function refine(project, knobs = {}, deps = {}) {
   const res = reauthor(project.catalog, { goal: nextGoal || undefined, ...mergedKnobs });
   if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || "reauthor-failed", project: { ...project } };
 
-  const gates = { trust: res.trust, bland: res.bland };
+  const gates = { trust: res.trust, bland: res.bland, verify: res.verify };
   if (!_gatesGreen(gates)) {
     // Refuse the edit — keep the last good draft, surface why it was rejected.
     return { ok: false, reason: "failed-gate", gates, project: { ...project } };

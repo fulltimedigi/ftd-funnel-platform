@@ -11,7 +11,9 @@ import assert from "node:assert/strict";
 import { createDraft, generate, refine, publish } from "../platform/studio.js";
 import { createMemoryStore } from "../platform/tenantStore.js";
 
-const GREEN = { trust: { ok: true, findings: [] }, bland: { ok: true, findings: [] } };
+// A real ok authoring result carries ALL THREE publish gates (ADR-0041): trust + anti-bland + verify
+// (proof coverage). The fixture models that; omitting verify would (correctly) be treated as ungated.
+const GREEN = { trust: { ok: true, findings: [] }, bland: { ok: true, findings: [] }, verify: { ok: true, findings: [] } };
 const CFG = (id = "brand-advisor") => ({ id, brand: { name: "Brand" }, leadForm: {}, analytics: {} });
 const CATALOG = { origin: "https://brand.com", products: [{ name: "P1" }], report: {} };
 const genOk = async () => ({ ok: true, config: CFG(), catalog: CATALOG, ...GREEN, meta: {} });
@@ -50,6 +52,16 @@ await (async () => {
     assert.equal(p.blockedReason, "failed-gate");
     assert.equal(p.gates.bland.ok, false);
     assert.ok(p.config, "config kept so the operator can see WHY it was blocked");
+  });
+  await check("PUBLISH GATE (ADR-0041): trust+bland green but verify FAILS (proof coverage < 100%) → blocked, NEVER in-review", async () => {
+    const gen = async () => ({ ok: true, config: CFG(), catalog: CATALOG,
+      trust: { ok: true, findings: [] }, bland: { ok: true, findings: [] }, verify: { ok: false, findings: [{ code: "PROOF_COVERAGE_BELOW_1" }] } });
+    const p = await generate(createDraft({ tenantId: "A", url: "https://brand.com" }), { generate: gen });
+    assert.equal(p.status, "blocked", "the Studio path enforces the SAME publish gate as the async path");
+    assert.equal(p.blockedReason, "failed-gate");
+    // and publish() refuses such a project even if someone hands it an in-review shape
+    const smuggled = { ...createDraft({ tenantId: "A", url: "https://brand.com" }), status: "in-review", config: CFG(), gates: { trust: { ok: true }, bland: { ok: true }, verify: { ok: false } } };
+    assert.equal(publish(smuggled, { origin: "https://x.com" }).ok, false, "publish refuses a proof-coverage-failing project (second path is gated)");
   });
 
   console.log("\nstudio — refine (gate-guarded):");

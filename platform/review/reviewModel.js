@@ -13,6 +13,7 @@ import { respondentStepCount } from "../../engine/flow.js";
 const GATE_LABELS = {
   trust: "بوابة الثقة (لا نتائج مسدودة)",
   bland: "بوابة الجودة (لا رتابة)",
+  verify: "بوابة البرهان (تغطية إثبات 100٪ — لا نتيجة بلا برهان)",
 };
 
 function _findings(g) {
@@ -41,12 +42,29 @@ function _primaryNames(config) {
   return out;
 }
 
+/** Config-only PROOF-COVERAGE signal for the review screen (ADR-0041): every COMMERCE answer-path must
+ *  carry a ProvenSelection, else the funnel is not publishable — no result without a proof. This is the
+ *  catalog-free view of the publish gate; the authoritative catalog-aware gate (verifyFunnel) runs
+ *  server-side in studio.generate/refine. Used only when the caller didn't already pass `res.verify`. */
+function _proofCoverage(config) {
+  if (!config) return { ok: false, findings: [{ code: "NO_CONFIG" }] };
+  const isDecision = config.scoring && config.scoring.mode === "decision-table";
+  if (!isDecision) return { ok: true, findings: [] }; // non-decision funnel → no product-proof concept
+  const commerce = (config.decisionTable || []).filter((r) => r && r.kind !== "TERMINAL" && r.when && Object.keys(r.when).length);
+  const missing = commerce.filter((r) => !(r.proof && r.proof.product_id && r.proof.match_state));
+  return { ok: commerce.length === 0 ? true : missing.length === 0, findings: missing.map((r) => ({ code: "NO_PROOF", rule: r.id })) };
+}
+
 /**
- * @param {{config:Object, trust:Object, bland:Object, catalog?:Object, meta?:Object}} res
+ * @param {{config:Object, trust:Object, bland:Object, verify?:Object, catalog?:Object, meta?:Object}} res
  */
 export function buildReviewModel(res = {}) {
   const config = res.config || null;
-  const gates = [_gateCard("trust", res.trust), _gateCard("bland", res.bland)];
+  // The publish gate is a THREE-gate conjunction now (ADR-0041): trust + anti-bland + proof coverage.
+  // Fail-closed: if the caller didn't pass an authoritative `verify`, derive proof coverage from the
+  // config so the review screen can never show "ready" for a funnel that would render a proofless card.
+  const verify = res.verify || _proofCoverage(config);
+  const gates = [_gateCard("trust", res.trust), _gateCard("bland", res.bland), _gateCard("verify", verify)];
 
   const blockers = [];
   if (!config) blockers.push("لم يتم إنشاء فانل بعد.");

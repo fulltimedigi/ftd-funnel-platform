@@ -60,6 +60,26 @@ check("a failing gate → blocked, and the finding is surfaced (never hidden)", 
   assert.ok(m.blockers.some((b) => b.includes("الجودة")));
 });
 
+check("PROOF-COVERAGE gate (ADR-0041): a decision config with a proofless COMMERCE rule → blocked, never 'ready'", () => {
+  const proofless = {
+    ...CFG, scoring: { mode: "decision-table" },
+    decisionTable: [
+      { id: "r_0", kind: "COMMERCE", when: { D_x: "a" }, result: "R1", proof: { product_id: "u", match_state: "EXACT" } },
+      { id: "r_1", kind: "COMMERCE", when: { D_x: "b" }, result: "R2" }, // NO proof → not publishable
+    ],
+  };
+  const m = buildReviewModel({ config: proofless, trust: GREEN, bland: GREEN });
+  assert.equal(m.ok, false, "trust+bland green is NOT enough — proof coverage < 100% blocks publish");
+  const vGate = m.gates.find((g) => g.id === "verify");
+  assert.ok(vGate && !vGate.ok, "the review screen shows the proof gate as failed (can't show stale green)");
+  assert.ok(m.blockers.some((b) => b.includes("البرهان")), "the operator sees a proof-coverage blocker");
+});
+
+check("an authoritative verify result (passed by the caller) is honored over the config-only derivation", () => {
+  const m = buildReviewModel({ config: CFG, trust: GREEN, bland: GREEN, verify: { ok: false, findings: [{ code: "PROOF_COVERAGE" }] } });
+  assert.equal(m.ok, false, "a server-side verify failure blocks even a proof-carrying-looking config");
+});
+
 check("surfaces respondent step count in the 3–5 target (incl. email)", () => {
   const cfg = { ...CFG, leadForm: { gated: true, fields: [{ name: "email", type: "email" }] } };
   const m = buildReviewModel({ config: cfg, trust: GREEN, bland: GREEN });
