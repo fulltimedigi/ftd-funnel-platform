@@ -41,27 +41,57 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 - **What partially covers it today:** the render-time verifier (`verifyServedResult` →
   `certifyForRender`) re-checks proof/SKU identity on the certificate path, so a *kernel-authored*
   funnel whose displayed product no longer matches the proof degrades to a terminal rather than a wrong
-  card. But render-time verification is **not mandatory for every layout** (legacy/no-cert path
-  exists — GAP-2), and it deliberately defers **live price/stock** checks (`verifyRuntime.js`), so a
-  stale price on a still-valid SKU is not caught.
+  card. Since ADR-0042 the certificate is mandatory for every decision funnel (GAP-2 closed), so this
+  covers all catalog funnels; it still deliberately defers **live price/stock** checks
+  (`verifyRuntime.js`), so a stale price on a still-valid SKU is not caught.
 - **What it takes to close:** render-time (or near-real-time) re-validation mandatory for every layout,
   plus a freshness/webhook signal from the merchant catalog. Deferred by decision — but **visible here**.
 - **Tracked in:** ADR-0041; revisit with the serve-path cert mandate (GAP-2) and the first published
   merchant.
 
-## GAP-2 — ق21 (no render without a certificate) is PARTIAL for legacy reference configs
+## GAP-2 — ق21 (no render without a certificate): CLOSED for the `isKernelAuthored` backdoor (ADR-0042)
 
-- **Law (constitution ق21):** the result page renders only from a minted certificate; the CTA lives
-  inside it; NO_MATCH/STALE/UNVERIFIED are typed states.
-- **State: enforced for authored funnels; not for legacy reference configs.** Every funnel from the
-  authoring pipeline is kernel-authored (`isKernelAuthored` true) and renders through
-  `certifyForRender` (fail-closed). The shipped `configs/` reference/demo funnels carry no proofs, so
-  `isKernelAuthored` is false and they render on the legacy no-certificate path.
-- **Containment (ADR-0041):** those configs are classified **reference-only / non-publishable**
-  (`configs/_classification.json`) and the classification is enforced live
-  (`tests/reference-classification.test.mjs`) — a new proofless COMMERCE config is a RED, so the gap
-  cannot silently grow. Merchant funnels ship only through authoring (gated).
-- **What it takes to fully close:** the serve-path cert mandate (make `renderResult` consume only a
-  certificate for every layout, retiring the legacy path) — a later, deliberate step; a hand-authored
-  merchant config makes it mandatory (ADR-0041 forward rule).
-- **Tracked in:** ADR-0041; the classification invariant keeps it from widening.
+- **Was:** the certificate was mandatory only when `isKernelAuthored` — a config-classification flag,
+  not a structural property. A decision funnel without proofs (the shipped reference configs) rendered
+  a **config-composited** product card on the legacy path, with no certificate.
+- **Closed:** `isKernelAuthored` is REMOVED. Any **decision-table** funnel MUST certify; an
+  uncertified/proofless path renders an honest **terminal** (no product, no CTA). The standalone
+  brand-home result CTA (`ctaLink`) is DELETED — the only result CTA is the certified product card's
+  (`cert.cta_url`); no certificate → no CTA. Proven on a fixture MINTED from real authoring
+  (`tests/ux.standard`, `tests/lib/mintedFunnel.mjs`) + poison canary (reintroducing the backdoor
+  reddens the suite).
+- **Consequence (recorded, NOT a regression):** the proofless reference configs
+  (`pm-certification-advisor`, `houseplant-advisor`) now render a **terminal** instead of a product —
+  because they carry no proofs. The `isKernelAuthored` backdoor was silently serving them; removing it
+  is the fix, not a break. They keep their role as **design references** (questions / copy / flow).
+- **REJECTED option (recorded with reason):** giving the reference configs real proofs — **rejected**:
+  it would require real catalogs for houseplants and PM certifications that **do not exist**, so minting
+  proofs would mean **fabricating catalog data** — a direct violation of the constitution's first rule
+  (no fabrication). Certified render fixtures are therefore minted from the real oudfactory pipeline.
+- **Remaining sub-gaps:** GAP-4 (non-catalog coaching recommendations) and GAP-5 (scoring/dominant
+  funnels) — both outside the certificate mechanism, contained by "no product claim / no CTA", below.
+
+## GAP-4 — non-catalog (coaching) recommendations have no certificate mechanism
+
+- **The gap:** funnels like FreelanceX recommend a **coaching track / profile**, not a catalog product.
+  The certificate mechanism is built on "a real catalog SKU with a real URL", so it **does not apply** —
+  a **mechanism gap, not an exemption**: the promise principle (no result without grounding) still holds
+  for these funnels, and there is currently no way to certify it.
+- **Containment (enforced):** until the mechanism exists, a non-decision (coaching) funnel renders its
+  recommendation **descriptively only — no catalog-product claim, no buy CTA, no brand-home CTA**
+  (`renderTracks`/`renderPersonas`, `showCta:false`, `ctaLink` deleted). Enforced by `tests/asq` and
+  `tests/funnel.freelancex` (a scoring/coaching result carries no CTA element of any kind).
+- **What it takes to close:** a grounding/certificate mechanism for non-catalog recommendations.
+
+## GAP-5 — scoring (dominant / weighted-multi) funnels are entirely outside the certificate mechanism
+
+- **The gap:** the certificate mechanism is built for **decision-table** funnels. A `dominant` /
+  `weighted-multi` funnel (e.g. `asq-perfume`) never reaches `certifyForRender`. That is a whole
+  **class** of funnels outside the guarantee — a **mechanism gap, not an exemption**.
+- **Containment (enforced):** a non-decision funnel makes **NO product claim and carries NO CTA**
+  (`renderCommerce` draws a product only for a certificate; a non-decision funnel has none). Enforced by
+  `tests/asq` (GAP-5: no signature, no price, no grid, no shop CTA, no CTA element). It is NOT allowed to
+  render a product via any backdoor "because it's a different type".
+- **What it takes to close:** extend the certificate mechanism to scoring funnels (or migrate catalog
+  scoring funnels to decision-table).
+

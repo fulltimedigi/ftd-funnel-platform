@@ -77,7 +77,10 @@ await (async () => {
   });
 
   console.log("\nUI — value layer renders:");
-  await check("result text includes why-title, next-title, and the pet-safety why-not", () => {
+  // ق21 (ADR-0042): houseplant-advisor is a decision-table config with NO kernel proofs. With the
+  // isKernelAuthored backdoor removed, the certificate is mandatory → an honest TERMINAL (no value
+  // layer, no product). NOT a regression — the backdoor silently served the proofless config.
+  await check("proofless houseplant reference → TERMINAL: no why/next value layer (ق21, backdoor removed)", () => {
     const { root, api } = runToLead(
       { q_experience:"opt_some", q_care:"opt_minimal", q_light:"opt_bright", q_pets:"opt_pets", q_goal:"opt_aesthetics" },
       { submitLead: async ()=>({ok:true}) }
@@ -85,9 +88,9 @@ await (async () => {
     api.getLeadHandle().skip();
     assert.equal(api.getView(), "result");
     const t = root.textContent;
-    assert.ok(t.includes(CFG.copy.result.whyTitle));
-    assert.ok(t.includes(CFG.copy.result.nextTitle));
-    assert.ok(t.includes("سامة")); // toxic-exclusion reasoning rendered
+    const hasTerminal = (function find(n){ if(!n||typeof n!=="object")return false; if(n._attrs&&n._attrs["data-terminal"])return true; return (n._children||[]).some(find); })(root);
+    assert.ok(hasTerminal, "a proofless decision funnel renders a terminal screen");
+    assert.ok(!t.includes(CFG.copy.result.whyTitle), "no why value-layer on a terminal");
   });
 
   if (process.exitCode === 1) console.error("\nFAIL\n"); else console.log(`\nPASS — all ${passed} houseplant-conversion assertions passed.\n`);

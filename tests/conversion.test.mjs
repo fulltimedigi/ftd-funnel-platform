@@ -117,9 +117,14 @@ await (async () => {
     assert.ok(captured[0].recommended.includes("MSP")); // gov variant
   });
 
-  /* 4 — the result UI renders the value layer */
-  console.log("\nUI — the result screen renders the why / next-step layer:");
-  await check("result text includes the why-title, next-title, and a reason", () => {
+  /* 4 — ق21 (ADR-0042): a PROOFLESS reference config renders a TERMINAL, not a product/value layer.
+   *     pm-certification-advisor is a decision-table config with NO kernel proofs. The isKernelAuthored
+   *     backdoor that silently rendered its config-composited card is REMOVED, so the certificate is
+   *     mandatory and this path is an honest terminal (no why/next, no product). This is NOT a
+   *     regression — the backdoor was serving it. The certified value-layer render is covered by
+   *     tests/gap-cert-mandatory.test.mjs on a fixture minted from the real authoring pipeline. */
+  console.log("\nUI — a proofless reference config renders an honest TERMINAL (no value layer):");
+  await check("proofless pm reference → TERMINAL: no why/next/product card (ق21, backdoor removed)", () => {
     const { root, api } = runToLead(
       { q_credential: "opt_none", q_qualification: "opt_bachelor", q_hours: "opt_4500_7499", q_environment: "opt_gov", q_goal: "opt_mobility" },
       { submitLead: async () => ({ ok: true }) }
@@ -127,9 +132,10 @@ await (async () => {
     api.getLeadHandle().skip(); // straight to result
     assert.equal(api.getView(), "result");
     const t = root.textContent;
-    assert.ok(t.includes(CFG.copy.result.whyTitle), "missing why section");
-    assert.ok(t.includes(CFG.copy.result.nextTitle), "missing next-step section");
-    assert.ok(t.includes("PRINCE2"), "gov R3 should name PRINCE2 as a rejected alternative");
+    const hasTerminal = (function find(n){ if(!n||typeof n!=="object")return false; if(n._attrs&&n._attrs["data-terminal"])return true; return (n._children||[]).some(find); })(root);
+    assert.ok(hasTerminal, "a proofless decision funnel renders a terminal screen");
+    assert.ok(!t.includes(CFG.copy.result.whyTitle), "no why value-layer on a terminal");
+    assert.ok(!t.includes(CFG.copy.result.nextTitle), "no next-step value-layer on a terminal");
   });
 
   if (process.exitCode === 1) console.error("\nFAIL — conversion tests did not all pass.\n");

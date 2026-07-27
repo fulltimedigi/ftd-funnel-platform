@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { mintedFunnel } from "./lib/mintedFunnel.mjs";
 
 /* ------- minimal DOM shim (same shape as the conversion suites) ------------ */
 class El { constructor(t){this.tagName=t;this._children=[];this._text="";this._attrs={};this._listeners={};this.className="";this.value="";this.disabled=false;this.style={};}
@@ -89,26 +90,28 @@ await (async () => {
     assert.equal(respondentStepCount(three), 4);
   });
 
-  console.log("\nresult — decisive (one pick + ≤3 reasons + one CTA):");
-  await check("CONTROL: houseplant reference (non-decisive) shows why-not + a second (global) CTA", () => {
+  // ق21/GAP (ADR-0042): the decisive UX standard is now proven on a CERTIFIED funnel MINTED from the
+  // real authoring pipeline — the proofless reference configs (HP/PM) correctly render terminals, so
+  // they can no longer stand in for a certified product screen. No hand-written proofs (that would fake
+  // the mechanism); the fixture is authored from oudfactory.
+  console.log("\nresult — decisive UX standard on a CERTIFIED (minted) funnel:");
+  const minted = await mintedFunnel();
+  await check("DECISIVE certified: exactly ONE product-card CTA, no why-not, no grid, NO brand-home CTA", () => {
+    const { root, api } = driveToResult(minted.config, minted.script);
+    assert.equal(api.getView(), "result");
+    assert.equal(countClass(root, "is-whynot"), 0, "decisive drops why-not");
+    assert.equal(countClass(root, "ftd-grid"), 0, "decisive drops the contextual grid");
+    assert.equal(countClass(root, "ftd-cta"), 0, "NO separate brand-home CTA (forbidden fallback removed)");
+    assert.equal(countClass(root, "ftd-card-cta"), 1, "exactly ONE CTA — the certified product card's");
+  });
+  await check("CONTROL: a proofless reference config (houseplant) → TERMINAL, no card CTA, no brand CTA (ق21)", () => {
     const { root, api } = driveToResult(HP, HP_SCRIPT);
     assert.equal(api.getView(), "result");
-    assert.ok(countClass(root, "is-whynot") >= 1, "why-not present by default");
-    assert.ok(countClass(root, "ftd-cta") >= 1, "global CTA present by default");
-    // (the contextual grid shares the SAME !decisive guard as why-not — proven off below)
+    assert.equal(countClass(root, "ftd-card-cta"), 0, "proofless decision funnel → no product card");
+    assert.equal(countClass(root, "ftd-cta"), 0, "proofless → no brand-home CTA either");
   });
-  await check("DECISIVE: drops why-not, contextual grid, and the second CTA", () => {
-    const dec = JSON.parse(JSON.stringify(HP)); dec.decisiveResult = true;
-    const { root } = driveToResult(dec, HP_SCRIPT);
-    assert.equal(countClass(root, "is-whynot"), 0, "no why-not");
-    assert.equal(countClass(root, "ftd-grid"), 0, "no contextual grid");
-    assert.equal(countClass(root, "ftd-cta"), 0, "no separate global CTA");
-    assert.equal(countClass(root, "ftd-card-cta"), 1, "exactly one CTA — the product card");
-  });
-  await check("DECISIVE: at most 3 grounded reasons", () => {
-    const dec = JSON.parse(JSON.stringify(HP)); dec.decisiveResult = true;
-    const { root } = driveToResult(dec, HP_SCRIPT);
-    // count reason <li> under the is-why block
+  await check("DECISIVE certified: at most 3 grounded reasons", () => {
+    const { root } = driveToResult(minted.config, minted.script);
     let reasons = 0;
     const visit = (x, inWhy) => { if (!x || !x._children) return; const isWhy = inWhy || (typeof x.className === "string" && x.className.includes("is-why")); x._children.forEach((c) => { if (isWhy && typeof c.className === "string" && c.className.includes("ftd-reason")) reasons++; visit(c, isWhy); }); };
     visit(root, false);

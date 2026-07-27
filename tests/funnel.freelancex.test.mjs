@@ -123,13 +123,18 @@ check("scores: development 30 (incl. EN_GOOD +2), graphic_design 2", () => {
   assert.equal(s.scores.graphic_design, 2);
   assert.deepEqual(s.flags, ["EN_GOOD"]);
 });
-check("result screen shows the archetype + a because + score bars + CTA", () => {
+// GAP-5 (ADR-0042): FreelanceX is a weighted-multi/scoring coaching funnel — outside the certificate
+// mechanism. Its coaching recommendation renders descriptively (no buy CTA), and the brand-home CTA is
+// REMOVED (a generic store link is exactly the forbidden fallback). No result CTA on a scoring funnel.
+check("result screen shows the archetype + a because + score bars, and (GAP-5) NO CTA", () => {
   const t = A.root.textContent;
   assert.ok(t.includes("البرمجة والتطوير")); // archetype name
-  assert.ok(t.includes("توصيتنا لك")); // recommendation block
+  assert.ok(t.includes("توصيتنا لك")); // descriptive recommendation block (no buy CTA)
   assert.ok(t.includes("حل المشكلات بالبرمجة")); // because contains chosen q2 label
   assert.ok(t.includes("توزيع نتيجتك")); // score distribution
-  assert.ok(t.includes("ابدأ مسارك في FreelanceX")); // CTA
+  assert.ok(!t.includes("ابدأ مسارك في FreelanceX"), "no brand-home CTA (forbidden fallback removed, GAP-5)");
+  const hasCta = (function find(n){ if(!n||typeof n!=="object")return false; if((n.className||"").split(" ").includes("ftd-cta")||(n.className||"").split(" ").includes("ftd-card-cta"))return true; return (n._children||[]).some(find); })(A.root);
+  assert.ok(!hasCta, "no CTA element of any kind on a scoring result");
 });
 
 console.log("\nFull run B — copywriting path (URGENT + AR_ONLY flags):");

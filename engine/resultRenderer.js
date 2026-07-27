@@ -117,16 +117,9 @@ function restartButton(config, onRestart) {
   });
 }
 
-function ctaLink(config) {
-  if (!config.cta?.primaryUrl) return null;
-  return el("a", {
-    class: "ftd-cta",
-    href: config.cta.primaryUrl,
-    target: "_blank",
-    rel: "noopener",
-    text: config.cta.primaryLabel || "ابدأ الآن ←",
-  });
-}
+// (removed) ctaLink — the standalone brand-home result CTA (config.cta.primaryUrl). Deleted in ADR-0042:
+// a generic store link must NEVER be a value the result screen falls onto. The ONLY result CTA is the
+// certified product card's (cert.cta_url); a screen with no certificate carries no CTA.
 
 /* ----------------------------------------------------------- layouts */
 
@@ -168,7 +161,7 @@ function renderTracks(ctx) {
     children.push(
       el("div", { class: "ftd-rec" }, [
         el("h3", { class: "ftd-rec-title", text: copy.recommendationTitle || "توصيتنا لك" }),
-        recommendationCard(rec, answers, config, { showCta: false }),
+        recommendationCard(rec, answers, config, { showCta: false }), // non-decision: descriptive, NO buy CTA (GAP-4/5)
       ])
     );
   }
@@ -191,7 +184,7 @@ function renderTracks(ctx) {
     ])
   );
 
-  children.push(ctaLink(config));
+  // NO brand-home CTA — a non-decision (scoring) funnel makes no product claim and carries no CTA (GAP-5).
   children.push(restartButton(config, onRestart));
   return el("section", { class: "ftd-screen ftd-result ftd-result-tracks" }, children);
 }
@@ -293,13 +286,13 @@ function renderCommerce(ctx) {
   // screen (no card, no CTA). For decision funnels the client echoes the served version stamps; a
   // real deployment substitutes what the browser actually loaded (any drift → STALE terminal).
   const isDecision = config.scoring?.mode === "decision-table";
-  // The reference monitor gates KERNEL-AUTHORED funnels (those carrying ProvenSelections). Curated
-  // hand-built reference configs (no proofs) predate the kernel and render on the legacy path — they
-  // are trusted through trust + anti-bland, not the render certificate. Every AUTHORED commercial
-  // funnel (the AI / deterministic pipeline) is kernel-authored and IS completely mediated here.
-  const isKernelAuthored = isDecision && ((config.decisionTable || []).some((r) => r.proof) || !!config.constraintPolicy);
-  const cert = isKernelAuthored ? certifyForRender(config, resolved, answers, ctx.clientVersions || clientVersionsOf(config)) : null;
-  if (isKernelAuthored && !isCertified(cert)) {
+  // ق21 (ADR-0042): the certificate is MANDATORY — the `isKernelAuthored` backdoor is REMOVED. Any
+  // decision funnel MUST certify; a proofless/uncertified path draws a TERMINAL, never a config-derived
+  // card (that backdoor silently served the proofless reference configs). A NON-decision funnel
+  // (dominant/scoring) has NO certificate mechanism yet (GAP-5) → it draws NO product claim and NO CTA
+  // at all (enforced by tests/gap5-noncert-layouts.test.mjs), never a config-composited product.
+  const cert = isDecision ? certifyForRender(config, resolved, answers, ctx.clientVersions || clientVersionsOf(config)) : null;
+  if (isDecision && !isCertified(cert)) {
     return renderTerminal(cert, config, onRestart, copy);
   }
 
@@ -316,12 +309,12 @@ function renderCommerce(ctx) {
 
   // Signature recommendation. For decision funnels EVERY commercial field (title/image/price/url and
   // the CTA) comes from the CERTIFICATE's CanonicalOfferRecord — the proven SKU — never composited.
-  const recs = primary?.recommendations || {};
+  // Signature recommendation: ONLY from the CERTIFICATE (the proven SKU). No certificate → NO product
+  // card — never a config-derived/composited product, never a brand-home fallback CTA (ق21).
   const sig = cert
     ? { ...(built ? built.primary : {}), name: cert.offer.title || (built && built.primary && built.primary.name), url: cert.cta_url, price: cert.offer.price, image: cert.offer.image }
-    : (built ? built.primary : recs.primary);
-  const sigOk = cert ? true : (sig && fillBecause(sig.becauseTemplate, answers, config));
-  if (sigOk && sig) {
+    : null;
+  if (sig) {
     children.push(
       el("div", { class: "ftd-signature" }, [
         el("h3", { class: "ftd-section-title", text: copy.recommendationTitle || "توصيتنا" }),
@@ -360,9 +353,10 @@ function renderCommerce(ctx) {
       children.push(el("p", { class: "ftd-tip", text: "💡 " + extras.tip }));
     }
 
-    // Contextual recommendation grid (gated for decision funnels, raw otherwise).
-    const contextual = built ? built.contextual : recs.contextual || [];
-    if (contextual.length) {
+    // Contextual grid — ONLY the certificate's independently-certified alternates (never config-raw
+    // products, which would be an uncertified product claim). No cert → no grid.
+    const contextual = built ? built.contextual : [];
+    if (cert && contextual.length) {
       children.push(el("h3", { class: "ftd-section-title", text: copy.contextualTitle || "توصيات إضافية" }));
       const cards = contextual.map((rec, i) =>
         recommendationCard(rec, answers, config, {
@@ -373,8 +367,8 @@ function renderCommerce(ctx) {
       );
       children.push(el("div", { class: "ftd-grid" }, cards));
     }
-
-    children.push(ctaLink(config)); // decisive keeps only the product card CTA above
+    // NO brand-home CTA on a result screen — the ONLY result CTA is the certified product card's, above
+    // (the forbidden fallback is deleted: a generic store link is never a value the code falls onto).
   }
 
   // Decisive mode: a compact strip of real nearest alternates. For decision funnels these come ONLY
@@ -434,12 +428,12 @@ function renderPersonas(ctx) {
     children.push(
       el("div", { class: "ftd-rec" }, [
         el("h3", { class: "ftd-rec-title", text: copy.recommendationTitle || "توصيتنا لك" }),
-        recommendationCard(rec, answers, config, { showCta: true }),
+        recommendationCard(rec, answers, config, { showCta: false }), // non-decision: descriptive, NO buy CTA (GAP-4/5)
       ])
     );
   }
 
-  children.push(ctaLink(config));
+  // NO brand-home CTA — a non-decision (scoring) funnel makes no product claim and carries no CTA (GAP-5).
   children.push(restartButton(config, onRestart));
   return el("section", { class: "ftd-screen ftd-result ftd-result-personas" }, children);
 }

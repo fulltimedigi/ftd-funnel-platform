@@ -111,17 +111,20 @@ check("result section is commerce, not tracks", () => {
   const { root } = drive(ASQ, ASQ_SCRIPT);
   assert.ok(root.firstChild.className.includes("ftd-result-commerce"));
 });
-check("shows signature recommendation, price, because, contextual grid, shop CTA", () => {
+// GAP-5 (ADR-0042): ASQ is a DOMINANT/scoring funnel — entirely OUTSIDE the certificate mechanism
+// (which is built for decision-table). A scoring funnel cannot be certified, so it makes NO product
+// claim and carries NO CTA (never via the removed isKernelAuthored backdoor). Enforced here: no
+// signature product, no price, no contextual grid, no shop CTA. The certificate mechanism for scoring
+// funnels is a declared gap (docs/KNOWN-GAPS.md GAP-5), not an exemption.
+check("GAP-5: a scoring (dominant) funnel shows NO product claim and NO CTA", () => {
   const { root } = drive(ASQ, ASQ_SCRIPT);
   const t = root.textContent;
-  assert.ok(t.includes("توقيعك العطري")); // recommendationTitle (config copy)
-  assert.ok(t.includes("المزيج الملكي")); // signature product name
-  assert.ok(t.includes("٣٤ د.ك")); // price
-  assert.ok(t.includes("خصم ٥٠٪")); // discount badge
-  assert.ok(t.includes("العود")); // because resolved from chosen q2 label
-  assert.ok(t.includes("لكل مناسبة")); // contextual grid title
-  assert.ok(t.includes("الأنسب لك")); // best-for-you badge on first card
-  assert.ok(t.includes("تسوّق")); // shop CTA
+  assert.ok(!t.includes("المزيج الملكي"), "no signature product name (uncertified scoring funnel)");
+  assert.ok(!t.includes("٣٤ د.ك"), "no price claim");
+  assert.ok(!t.includes("لكل مناسبة"), "no contextual product grid");
+  assert.ok(!t.includes("تسوّق"), "no shop CTA");
+  const hasBuy = (function find(n){ if(!n||typeof n!=="object")return false; if((n.className||"").split(" ").includes("ftd-card-cta")||(n.className||"").split(" ").includes("ftd-cta"))return true; return (n._children||[]).some(find); })(root);
+  assert.ok(!hasBuy, "no buy/brand CTA element anywhere on a scoring result");
 });
 check("commerce layout has NO score-distribution bars", () => {
   const { root } = drive(ASQ, ASQ_SCRIPT);
@@ -145,10 +148,10 @@ check("FreelanceX = tracks + platform-clean; ASQ = commerce + luxury-gold-light"
   assert.ok(fx.root.firstChild.className.includes("ftd-result-tracks"));
   assert.ok(asq.root.firstChild.className.includes("ftd-result-commerce"));
 
-  // Different content surfaces
+  // Different content surfaces (both are scoring funnels → neither makes a certified product claim; GAP-5)
   assert.ok(fx.root.textContent.includes("توزيع نتيجتك")); // tracks-only score bars
-  assert.ok(asq.root.textContent.includes("لكل مناسبة")); // commerce-only grid
-  assert.ok(!asq.root.textContent.includes("توزيع")); // ASQ has no bars
+  assert.ok(!asq.root.textContent.includes("لكل مناسبة")); // no product grid (uncertified scoring funnel, GAP-5)
+  assert.ok(!asq.root.textContent.includes("توزيع")); // ASQ (commerce layout) has no bars
 });
 check("FreelanceX still works end-to-end on the shared engine", () => {
   const { api } = drive(FX, FX_SCRIPT);
