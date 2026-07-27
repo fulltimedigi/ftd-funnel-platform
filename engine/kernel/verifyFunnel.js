@@ -131,8 +131,13 @@ export function verifyFunnel(config, catalog, axisSet) {
   if (dflt && dflt.kind !== "TERMINAL") {
     findings.push({ rule: dflt.id, criterion: 3, msg: "default rule (when:{}) is not TERMINAL — a global product fallback is forbidden" });
   }
-  const proofCoverage = renderable ? proven / renderable : 1;
-  if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `COMMERCE proof coverage ${proven}/${renderable} < 100%` });
+  // ZERO-DENOMINATOR GUARD (ADR-0043): `renderable ? … : 1` would report a vacuous 100% when there is
+  // NOTHING to cover. A decision funnel that offers ZERO renderable COMMERCE slots never recommends a
+  // product on any path — that is not a publishable product funnel, it is a dead one. Fail explicitly,
+  // never coast on a vacuous 1.
+  const proofCoverage = renderable ? proven / renderable : 0;
+  if (renderable === 0) findings.push({ rule: "*", criterion: 3, msg: "no renderable COMMERCE slot — a decision funnel must offer ≥1 proven product (zero-denominator vacuous-100% closed)" });
+  else if (proofCoverage < 1) findings.push({ rule: "*", criterion: 3, msg: `COMMERCE proof coverage ${proven}/${renderable} < 100%` });
 
   // PROMISE BINDING (item 1): each offered option's group is derived from its predicate; witness
   // that no option is dead, and no label inverts/widens its value. A contradiction fails the funnel.
