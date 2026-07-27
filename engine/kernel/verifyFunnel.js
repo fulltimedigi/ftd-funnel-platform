@@ -24,6 +24,7 @@ import { compileConstraints, compileUnits, comboAnswers } from "./compile.js";
 import { proveSelection } from "./referenceEvaluator.js";
 import { checkPromiseBinding } from "./promiseBinding.js";
 import { isJunkLabel } from "./labelQuality.js";
+import { makeReport } from "./verificationReport.js";
 
 /**
  * @param {Object} config   authored funnel config (decisionTable with proofs, constraintPolicy, versions, archetypes)
@@ -150,7 +151,26 @@ export function verifyFunnel(config, catalog, axisSet) {
     }
   }
 
-  return { ok: findings.length === 0, checked, proofCoverage, renderable, findings };
+  // VERIFICATION REPORT (ADR-0043): `ok` is DERIVED by the independent library, which FAILS CLOSED on an
+  // empty expected set — an absent/empty decision table can no longer "pass" vacuously (checked=0 → ok).
+  // expected = the reachable answer-path rules that make a claim (COMMERCE + TERMINAL, excluding the
+  // when:{} default). `checked` is incremented once per such rule before any continue, so checked ===
+  // expected for a well-formed table; a table with zero reachable rules has expected 0 → ok false.
+  const reachableIds = new Set(withWhen.map((r) => r.id));
+  const failingReachable = new Set(findings.map((f) => f.rule).filter((id) => reachableIds.has(id)));
+  const report = makeReport({
+    expected_count: withWhen.length,
+    observed_count: withWhen.length,
+    checked_count: checked,
+    passed_count: checked - failingReachable.size,
+    failed_count: findings.length,
+    skipped_count: withWhen.length - checked,
+    missing_ids: [],
+    failures: findings,
+  });
+  // Back-compat fields (ok/checked/proofCoverage/renderable/findings) kept so existing callers are
+  // unchanged; `report` is the authoritative structured result. `ok` now also requires expected > 0.
+  return { ok: report.ok, report, checked, proofCoverage, renderable, findings };
 }
 
 function orderedCombo(axisSet, when) {
