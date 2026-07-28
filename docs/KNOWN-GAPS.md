@@ -116,7 +116,19 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
   scoring funnels to decision-table).
 
 
-## GAP-7 — SKU-level reach (oversized-leaf grid, ق20) — 🔴 REOPEN / PUBLISH BLOCKER (round-11, ADR-0062)
+## GAP-7 / GAP-6 — SKU-level reach + the size picker (ق20/ق4) — ✅ CLOSED / BUILT (round-12, ADR-0063)
+
+> **RESOLVED 2026-07-28 (ADR-0063).** The deferred variant/size picker (GAP-6) is built at the data/certifier
+> layer: one card per family + an in-card size picker (ق4 — size folded, never a card per size); every in-budget
+> purchasable variant is a SELECTABLE option with its own certificate (`selection_result_id · buy_url · price ·
+> availability · path_certified`); the default comes from the KERNEL (recorded reason), not a display rule;
+> over-ceiling / unavailable sizes are shown labeled with no active CTA. Band matching moved to the VARIANT level
+> with a ceiling (boundaries stay at the family level — the frozen fixture is untouched); `band_locked_out = 0`
+> (no purchasable variant is design-locked-out). Result on oud: **SKU-level I3 = 80/80**, `not_arrived = []`,
+> mint stays 100%. **PUBLISH is unblocked.** Remaining out of scope: the live render of the picker UI + wiring/
+> delivery. The reopened SKU-level analysis (round-11) and the retracted family metric (round-10) are kept below.
+
+<details><summary>Round-11 (ADR-0062, superseded): the family metric was blind — SKU-level I3 was 50/80</summary>
 
 > **REOPENED 2026-07-28 (ADR-0062) — the round-10 "closed at 80/80" was a FAMILY metric, RETRACTED.** The
 > family measure counted a family as accounted and credited ALL its variants, so `variant_unreachable = 0` was
@@ -130,6 +142,7 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 > yet. Proven red-first in `tests/certifier.gap7.test.mjs`. Mint rate stays 100% (equivalence unchanged; the gap
 > is display reach, not the pick). The original (family-level) analysis is kept below for the record.
 
+</details>
 
 The full oracle-authored tree (4-b, ADR-0051) measures TWO reach numbers: `surface_reachable@cap`
 (today's truth — a leaf surfaces `leaf_total_cap` SKUs) and `surface_reachable_with_expansion` (what the

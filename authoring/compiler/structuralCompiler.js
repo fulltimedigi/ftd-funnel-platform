@@ -15,16 +15,16 @@
  *     tree.displayModeNodes (those stay in the brain transcript, for build-time inspection only).
  *   • `d*` is computed HERE from the tree depth (ق20), not taken from the brain.
  *
- * node_kind is derived PURELY from structure (no reason needed) — round-11 INTEGRITY fix (ADR-0062): it is
- * derived from the EXACT count, not the resolved (exact ∪ compromise) count, because the live render layer
- * reads node_kind and a decisive 1-exact-pick leaf padded with compromise alternates must NOT be built as a
- * "pick-one" display:
+ * node_kind is derived PURELY from structure (no reason needed) — round-12 INTEGRITY fix (ADR-0063): it is
+ * derived from the EXACT count (not resolved), and a decisive result needs a SINGLE exact pick, so both bounds
+ * apply. The live render layer reads node_kind:
  *   • question — the node branches (it has children).
- *   • terminal — a leaf with ≥1 EXACT candidate (a decisive result: the kernel picks THE exact; any alternates
- *     ride as a comparison surface). Decisiveness is independent of how many compromise alternates pad it.
- *   • display — a leaf with 0 exact (COMPROMISE_ONLY): no decisive pick, so the render is a grid to choose from.
+ *   • terminal — a leaf with exactly a decisive exact pick: `1 ≤ exact ≤ leaf_primary_cap` (the kernel picks
+ *     THE exact; compromise alternates padding it never demote it — that was the round-10 resolved≤cap bug).
+ *   • display — a GRID: `exact > leaf_primary_cap` (many equally-exact picks) OR `exact = 0` (COMPROMISE_ONLY /
+ *     no decisive pick — a grid to choose from). (`exact = 0` with an empty resolved pool is a dead-end, barred.)
  * The oversized-leaf comparison GRID (ق20) is a SEPARATE, orthogonal declaration (resolved > leaf_primary_cap)
- * carried on EITHER kind — a leaf can be terminal AND still need to surface its alternates/variants.
+ * carried on EITHER kind — a terminal leaf still surfaces its alternates/variants (the size picker).
  */
 
 /** keys that would leak the "why" — the compiler must never emit them; the consumer rejects them if present. */
@@ -73,8 +73,9 @@ export function compileTree(oracle, tree, opts = {}) {
       counts: { exact: proj.counts.exact, compromise: proj.counts.compromise },
       exact_pool_ref: proj.exact_pool_ref, compromise_pool_ref: proj.compromise_pool_ref,
     };
-    // node_kind (round-11): decisive iff there is ≥1 EXACT candidate — NOT resolved≤cap (ADR-0062).
-    const node_kind = proj.counts.exact >= 1 ? "terminal" : "display";
+    // node_kind (round-12, ADR-0063): decisive iff a SINGLE exact pick — 1 ≤ exact ≤ leaf_primary_cap; a
+    // many-exact leaf is a real grid (display), a 0-exact leaf is COMPROMISE_ONLY (display). NOT resolved≤cap.
+    const node_kind = (proj.counts.exact >= 1 && proj.counts.exact <= leafPrimaryCap) ? "terminal" : "display";
     // GAP-7 (ق20): an OVERSIZED leaf (resolved > leaf_primary_cap) DECLARES a comparison grid that surfaces
     // EVERY candidate — orthogonal to node_kind (a decisive terminal still surfaces its alternates/variants).
     // Structural commitment only; the compiler does not order/CTA/phrase — the Certifier resolves it kernel-side.

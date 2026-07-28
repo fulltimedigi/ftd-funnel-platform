@@ -76,7 +76,7 @@ check("4. THE CERTIFICATE — minted (equivalence holds) with the agreed counts 
   const c = result.certificate;
   const stateDist = result.perLeaf.reduce((m, l) => ((m[l.state] = (m[l.state] || 0) + 1), m), {});
   console.log(`  · certificate: expected=${c.expected_reachable_paths} checked=${c.checked} certified=${c.certified} terminal=${c.terminal} display=${c.display} unresolved=${c.unresolved}`);
-  console.log(`  · leaf STATE distribution: ${JSON.stringify(stateDist)} · node_kind terminal=${c.terminal} display=${c.display} — round-11 INTEGRITY fix (ADR-0062): node_kind now derives from exact≥1 (decisive), NOT resolved≤cap; every EXACT_AVAILABLE leaf is correctly 'terminal'.`);
+  console.log(`  · leaf STATE distribution: ${JSON.stringify(stateDist)} · node_kind terminal=${c.terminal} display=${c.display} — round-12 (ADR-0063): terminal ⟺ 1≤exact≤cap (a single decisive pick); multi-exact leaves are grids (display). NOT resolved≤cap.`);
   console.log(`  · versions: policy=${c.versions.policy_version} compiler=${c.versions.compiler_version} kernel=${c.versions.kernel_version} artifact=${c.versions.artifact_version} catalog[struct=${c.versions.catalog_version_structural}, runtime=${c.versions.catalog_version_runtime}]`);
   assert.equal(c.checked, c.expected_reachable_paths); assert.equal(c.certified, c.expected_reachable_paths); assert.equal(c.unresolved, 0);
   for (const v of ["policy_version", "compiler_version", "kernel_version", "artifact_version", "catalog_version_structural", "catalog_version_runtime"]) assert.ok(c.versions[v] != null, `certificate carries ${v}`);

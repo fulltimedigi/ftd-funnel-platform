@@ -15,7 +15,10 @@
 
 import { classifyUnit, select, EXACT, COMPROMISE, NO_MATCH } from "./constraintKernel.js";
 
-export const CERTIFIER_VERSION = "certifier-1";
+export const CERTIFIER_VERSION = "certifier-2";
+
+/** deterministic id (fnv-1a) — used for a per-(path,variant) selection_result_id. */
+function fnvId(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return (h >>> 0).toString(16); }
 
 /** THE certificate constructor (kernel-monopoly). Refuses unless the whole artifact is checked+certified. */
 export function makeCertificate(tally, versions) {
@@ -78,45 +81,61 @@ export function validateCta(card, skuMeta, budget, answers) {
 }
 
 /**
- * GAP-7 (round-11, SKU-LEVEL): resolve one leaf's comparison grid at SKU GRANULARITY. The runtime surfaces
- * FAMILIES, and each family card carries ONE CTA → one variant; so per surfaced family we PIN the cheapest
- * in-budget available variant (deterministic: price, then sku_id) as the one selectable+purchasable sku. The
- * family's OTHER variants have no selection path (the variant/size picker is unbuilt) — they are reported, per
- * leaf, as over-ceiling (priced beyond this path's budget) or otherwise not individually pinned. Every emitted
- * card is validated by `validateCta`. Returns { cards, overCeiling } where cards are the VALID pinned skus.
+ * GAP-6 (round-12, THE SIZE PICKER): resolve one leaf's comparison grid — ONE card per surfaced family, with an
+ * IN-CARD variant/size picker (ق4: size is a folded dimension — never a card per size). EVERY purchasable,
+ * in-budget variant is a SELECTABLE option, each carrying its OWN certificate (selection_result_id, buy_url,
+ * price, availability, path_certified). Matching is at the VARIANT level with a ceiling (ADR-0063): a variant
+ * priced over this path's budget ceiling is NOT purchasable here (shown labeled, no active CTA); an unavailable
+ * variant is shown labeled, no CTA (ق14). The DEFAULT pre-selected variant comes from the KERNEL's `select` over
+ * the family's in-budget variants (a recorded tie_break_reason) — NEVER a display-layer selection rule.
+ * Returns { cards } where each card = { family_id, default_sku_id, default_reason, options:[…selectable…], labeled:[…] }.
  */
-function resolveLeafSkus(leaf, units, constraints, opts, skuMeta, skusByFamily, budget) {
+function famValues(u) { const out = {}; const v = u && u.values; if (v) for (const k of Object.keys(v)) out[k] = v[k]; return out; }
+
+function resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget) {
   const answers = leaf.answers || {};
   const exact = [], compromise = [];
   for (const u of units) { const { klass } = classifyUnit(u, constraints, answers, opts); if (klass === "exact") exact.push(String(u.id)); else if (klass === "compromise") compromise.push(String(u.id)); }
+  const famUnit = new Map(units.map((u) => [String(u.id), u]));
   const fams = [...exact.sort(), ...compromise.sort()];
   const useCeiling = !!(budget && answers[budget.axis] != null);
   const ceilIdx = useCeiling ? budget.order.indexOf(answers[budget.axis]) : Infinity;
-  const cards = [], overCeiling = [];
-  for (let fi = 0; fi < fams.length; fi++) {
-    const fid = fams[fi];
-    const variants = (skusByFamily[fid] || []).map((id) => ({ id, ...(skuMeta[id] || {}) })).filter((v) => v.availability === "available");
-    const inBudget = [];
-    for (const v of variants) {
+  const cards = [];
+  for (const fid of fams) {
+    const rows = (skusByFamily[fid] || []).map((id) => ({ id, ...(skuMeta[id] || {}) }));
+    const options = [], labeled = [];
+    for (const v of rows) {
+      const unavailable = v.availability !== "available";
       const over = useCeiling && budget.order.indexOf(bandOf(v.price, budget.thresholds)) > ceilIdx;
-      if (over) overCeiling.push(v.id); else inBudget.push(v);
+      const card = { sku_id: v.id, cta_url: v.buy_url || null, price: v.price, availability: v.availability, attributes: v.attributes || {} };
+      if (unavailable) { labeled.push({ ...card, cta_active: false, label: "unavailable" }); continue; }   // ق14: labeled, no CTA
+      if (over) { labeled.push({ ...card, cta_active: false, label: "over_budget_ceiling" }); continue; }   // over ceiling → not purchasable here
+      if (!validateCta({ sku_id: v.id, cta_url: v.buy_url }, skuMeta, budget, answers).valid) { labeled.push({ ...card, cta_active: false, label: "invalid_cta" }); continue; }
+      options.push({ ...card, cta_active: true, path_certified: true, selection_result_id: fnvId(`${leaf.node_id}|${v.id}`) }); // its OWN certificate
     }
-    if (!inBudget.length) continue; // no in-budget variant on this path — the family cannot be pinned here
-    inBudget.sort((a, b) => (a.price - b.price) || (a.id < b.id ? -1 : 1));
-    const pin = inBudget[0];
-    const card = { sku_id: pin.id, family_id: fid, cta_url: pin.buy_url || null, price: pin.price, attributes: pin.attributes || {}, tie_break_reason: fi < exact.length ? "exact match" : "closest available on the relaxed constraints" };
-    if (validateCta(card, skuMeta, budget, answers).valid) cards.push(card); // only a VALID CTA counts as surfaced
+    // DEFAULT variant = the KERNEL's choice over the in-budget variants (NOT a display rule); price is only the
+    // kernel's stable tie-break key (opts.tieBreak), never a selection override.
+    let default_sku_id = null, default_reason = null;
+    if (options.length) {
+      const fu = famUnit.get(fid);
+      const vunits = options.map((o) => ({ id: o.sku_id, values: { ...famValues(fu), budget: { value: bandOf(o.price, budget && budget.thresholds), grounded: o.price != null } } }));
+      const priceOf = new Map(options.map((o) => [o.sku_id, o.price]));
+      const sel = select(vunits, constraints, answers, { ...opts, tieBreak: (u) => priceOf.get(u.id) ?? 0 });
+      default_sku_id = sel.product_id; default_reason = sel.tie_break_reason;
+    }
+    cards.push({ family_id: fid, default_sku_id, default_reason, options, labeled });
   }
-  return { cards, overCeiling };
+  return { cards };
 }
 
 /**
  * @param {CertificationInput} cinput
  * @param {{units, constraints, opts?, activeSkus, surfaceReachable, versions, skuMeta?, skusByFamily?, budget?}} ctx
- *   When `skuMeta` + `skusByFamily` are provided, I3 is measured at SKU GRANULARITY (round-11, ADR-0062): each
- *   active sku needs a Surface+Purchase witness — a VALID, in-budget, sku-specific CTA in a reachable leaf.
- *   `budget` = { axis, thresholds, order } is the hard purchase-ceiling axis. Without `skuMeta`, I3 falls back
- *   to `surfaceReachable` (the family/cap-only number) — the legacy, blunter measure.
+ *   When `skuMeta` + `skusByFamily` are provided, I3 is measured at SKU GRANULARITY via the SIZE PICKER
+ *   (round-12, ADR-0063): each active sku needs a Surface witness (a selectable option in a reachable leaf) AND
+ *   a Purchase witness (its own valid, in-budget CTA). The default variant per family comes from the kernel.
+ *   `budget` = { axis, thresholds, order } is the variant-level purchase-ceiling axis. Without `skuMeta`, I3
+ *   falls back to `surfaceReachable` (the legacy family/cap-only number).
  */
 export function certify(cinput, ctx = {}) {
   const { units, constraints, opts = {}, activeSkus = 0, surfaceReachable = 0, versions = {}, skuMeta = null, skusByFamily = null, budget = null } = ctx;
@@ -136,37 +155,45 @@ export function certify(cinput, ctx = {}) {
   const checked = leaves.length;
   const mint_rate = expected > 0 ? certified / expected : 0;
 
-  // I3 measurement (round-11, ADR-0062): SKU-LEVEL when skuMeta is provided — each active sku needs a VALID,
-  // in-budget, sku-specific CTA in a reachable leaf (Surface + Purchase witness). A family being surfaced does
-  // NOT credit its buried variants. The runtime pins ONE variant per family card, so a multi-variant family's
-  // extra sizes strand as variant_unreachable (the variant/size picker is unbuilt).
+  // I3 measurement (round-12, ADR-0063): the SIZE PICKER surfaces EVERY in-budget purchasable variant as a
+  // SELECTABLE option (Surface witness), each with its own valid, in-budget CTA (Purchase witness). Matching is
+  // at the VARIANT level with a ceiling — an over-ceiling / unavailable variant is shown LABELED (no active CTA),
+  // never credited. A sku is accounted iff it is a selectable option in ≥1 reachable leaf.
   let grid = null;
   if (skuMeta && skusByFamily) {
-    const surfacedSkus = new Set(), overCeilingSkus = new Set(); const gridFindings = []; let invalidCta = 0, missingAttr = 0;
+    const surfacedSkus = new Set();      // selectable (Surface+Purchase witness) anywhere
+    const labeledSkus = new Set();        // shown labeled (over-ceiling / unavailable) in ≥1 leaf
+    const gridFindings = []; let invalidCta = 0, missingAttr = 0, defaultsNotFromKernel = 0, defaultOutsideOptions = 0;
     for (const leaf of leaves) {
-      const { cards, overCeiling } = resolveLeafSkus(leaf, units, constraints, opts, skuMeta, skusByFamily, budget);
-      for (const id of overCeiling) overCeilingSkus.add(id);
-      for (const c of cards) { surfacedSkus.add(c.sku_id); if (!c.attributes || !c.attributes.title) missingAttr++; }
+      const { cards } = resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget);
+      for (const card of cards) {
+        for (const o of card.options) { surfacedSkus.add(o.sku_id); if (!o.attributes || !o.attributes.title) missingAttr++; if (!o.selection_result_id || o.path_certified !== true) invalidCta++; }
+        for (const l of card.labeled) labeledSkus.add(l.sku_id);
+        if (card.options.length) {
+          if (card.default_sku_id == null || card.default_reason == null) defaultsNotFromKernel++;      // default must come from the kernel select
+          else if (!card.options.some((o) => o.sku_id === card.default_sku_id)) defaultOutsideOptions++; // and be one of the selectable options
+        }
+      }
     }
     const allSkus = new Set(Object.values(skusByFamily).flat());
     const notArrived = [...allSkus].filter((s) => !surfacedSkus.has(s));
-    const pinnedFamilies = new Set([...surfacedSkus].map((s) => skuMeta[s] && skuMeta[s].family_id));
-    // WHY a sku didn't arrive: family never pinned anywhere = family_buried; else over-ceiling in every path it
-    // could appear = variant_over_ceiling; else the family surfaced but this variant is not individually
-    // selectable (the size/variant picker is unbuilt) = variant_unreachable.
+    // WHY a sku didn't arrive: family never surfaced anywhere = family_buried; else only ever shown labeled
+    // (over-ceiling in every path it could appear) = variant_over_ceiling; else band-exact locked it out of every
+    // path where it would be in-budget = band_locked_out.
+    const surfacedFamilies = new Set([...surfacedSkus].map((s) => skuMeta[s] && skuMeta[s].family_id));
     const reasonOf = (s) => {
       const f = skuMeta[s] && skuMeta[s].family_id;
-      if (!pinnedFamilies.has(f)) return "family_buried";
-      if (overCeilingSkus.has(s) && !surfacedSkus.has(s)) return "variant_over_ceiling";
-      return "variant_unreachable";
+      if (!surfacedFamilies.has(f)) return "family_buried";
+      if (labeledSkus.has(s)) return "variant_over_ceiling";
+      return "band_locked_out";
     };
     const notArrivedDetail = notArrived.map((s) => ({ sku_id: s, reason: reasonOf(s) }));
     const reasonTally = notArrivedDetail.reduce((m, d) => ((m[d.reason] = (m[d.reason] || 0) + 1), m), {});
     grid = {
-      level: "sku", cta_from_certificate: true, hide_ties: false,
-      invalid_cta: invalidCta, missing_attributes: missingAttr, findings: gridFindings,
-      surface_reachable_with_grid: surfacedSkus.size, not_arrived: notArrived, not_arrived_detail: notArrivedDetail,
-      not_arrived_by_reason: reasonTally, over_ceiling: [...overCeilingSkus],
+      level: "sku-picker", one_card_per_family: true, cta_from_certificate: true, defaults_from_kernel: defaultsNotFromKernel === 0,
+      invalid_cta: invalidCta, missing_attributes: missingAttr, defaults_not_from_kernel: defaultsNotFromKernel, default_outside_options: defaultOutsideOptions,
+      findings: gridFindings, surface_reachable_with_grid: surfacedSkus.size, not_arrived: notArrived,
+      not_arrived_detail: notArrivedDetail, not_arrived_by_reason: reasonTally, labeled_count: labeledSkus.size,
     };
   }
 
@@ -176,7 +203,9 @@ export function certify(cinput, ctx = {}) {
   //  I3: every ACTIVE sku has a Surface+Purchase witness. SKU-level (skuMeta) ⇒ accounted =
   //  surface_reachable_with_grid AND no invalid CTA / grid finding; else the legacy family/cap-only surfaceReachable.
   const accounted = grid ? grid.surface_reachable_with_grid : surfaceReachable;
-  const I3_no_active_sku_without_accounting_or_witness = grid ? (accounted >= activeSkus && grid.invalid_cta === 0 && grid.findings.length === 0) : (surfaceReachable >= activeSkus);
+  const I3_no_active_sku_without_accounting_or_witness = grid
+    ? (accounted >= activeSkus && grid.invalid_cta === 0 && grid.findings.length === 0 && grid.defaults_not_from_kernel === 0 && grid.default_outside_options === 0)
+    : (surfaceReachable >= activeSkus);
   const invariants = { I1_no_dead_end, I2_input_completeness_and_provenance, I3_no_active_sku_without_accounting_or_witness };
 
   const tally = { expected_reachable_paths: expected, checked, certified, valid_terminals: validTerminals, unresolved, terminal, display };
