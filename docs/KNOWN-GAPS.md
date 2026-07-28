@@ -116,16 +116,19 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
   scoring funnels to decision-table).
 
 
-## GAP-7 — `surface_reachable_with_expansion` (oversized-leaf grid, ق20) — ✅ CLOSED / BUILT (round-10, ADR-0061)
+## GAP-7 — SKU-level reach (oversized-leaf grid, ق20) — 🔴 REOPEN / PUBLISH BLOCKER (round-11, ADR-0062)
 
-> **RESOLVED 2026-07-28 (ADR-0061).** The comparison grid is built (data layer). The Certifier's `resolveGrid`
-> surfaces EVERY candidate of an oversized display leaf, each card carrying its REAL CTA (from the certificate,
-> ق21), descriptive attributes, and a declared `tie_break_reason`; no tie hidden. On oud this closes I3 from
-> **61/80 → 80/80**: `surface_reachable_with_grid == with_expansion == active == 80`, `not_arrived = []`,
-> `missing_cta = 0`. Proven red-first in `tests/certifier.gap7.test.mjs`; mint rate stays 100% and the compiled
-> artifact is byte-identical (GAP-7 is a display surface, not a decision change). **PUBLISH is unblocked** on
-> oud. Remaining out of scope (not a GAP-7 item): the live render of the grid UI + wiring/delivery. The
-> original analysis is kept below for the record.
+> **REOPENED 2026-07-28 (ADR-0062) — the round-10 "closed at 80/80" was a FAMILY metric, RETRACTED.** The
+> family measure counted a family as accounted and credited ALL its variants, so `variant_unreachable = 0` was
+> true *by construction*, not by measurement. Re-measured **per SKU** (each active SKU needs a Surface witness =
+> individually selectable, AND a Purchase witness = a valid, in-budget, sku-specific CTA): on oud I3 is
+> **50/80**, `not_arrived = 30` — all `variant_unreachable` (the extra sizes of the 11 multi-variant families;
+> e.g. 5 of the `5-tola-wood-box`'s 6 sizes). **PUBLISH is BLOCKED.** The CTA guard was tightened from existence
+> to validity (`validateCta`: resolves to a specific SKU in the shipped snapshot, satisfying the path's hard
+> budget ceiling; a family url and an over-ceiling variant are rejected). The real fix is the **variant/size
+> picker** (surface every in-budget variant as selectable, each with its own valid CTA) — deliberately not built
+> yet. Proven red-first in `tests/certifier.gap7.test.mjs`. Mint rate stays 100% (equivalence unchanged; the gap
+> is display reach, not the pick). The original (family-level) analysis is kept below for the record.
 
 
 The full oracle-authored tree (4-b, ADR-0051) measures TWO reach numbers: `surface_reachable@cap`

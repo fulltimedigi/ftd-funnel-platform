@@ -1,26 +1,26 @@
 /**
- * tests/certifier.gap7.test.mjs — GAP-7: the ق20 OVERSIZED-LEAF COMPARISON GRID, red-first (round-10).
+ * tests/certifier.gap7.test.mjs — GAP-7 re-measured at SKU LEVEL, red-first (round-11, ADR-0062).
  * ===========================================================================================
- * The publish blocker. The Certifier (certifier.equivalence) proved the artifact faithfully represents the
- * kernel (mint 100%), but I3 (NoActiveSKUWithoutAccountingOrWitness) was RED at 61/80: the runtime shows only
- * a capped surface (leaf_total_cap), so 19 real SKUs — every one `family_buried`, 0 `variant_unreachable` —
- * are neither surfaced, grid-accounted, nor witnessed. GAP-7 closes it: an oversized display leaf is NOT
- * pruned — it surfaces EVERY candidate (surface=all_candidates, hide_ties=false), each card carrying the
- * product's REAL CTA (ق21, from the certificate) + descriptive attributes + a declared tie_break_reason.
- * ⇒ surface_reachable_with_grid == with_expansion (in_candidate_pool) == 80/80 ⇒ I3 green ⇒ publish unblocked.
+ * The family-level "unblock" (round-10) was WRONG: it counted a family as accounted and silently credited ALL
+ * its variants — so `variant_unreachable = 0` was true BY CONSTRUCTION, never by measurement. It hid the size
+ * gap since Part 1 (it is why deferring the variant/size picker looked safe — it was UNMEASURED, not safe).
  *
- * Binding pledges (operator, GAP-7 command):
- *  1. SCOPE is bounded by the MEASURED cause (family_buried). No new axis-rule touch, no reach beyond it.
- *  2. RECORDED RULES: no pruning · no hidden tie · declared order + tie_break_reason · descriptive attributes
- *     on every card · EVERY CTA from the certificate (ق21) — no generic button, no fallback.
- *  3. GOVERNING METRIC: I3 61→80/80 AND surface@cap-with-grid == with_expansion. If it does NOT reach 80/80,
- *     STOP and show the reason per remaining SKU — do NOT patch around it. (Gold frozen; nothing softened.)
+ * The honest measure is per active SKU (operator, round-11):
+ *  • Surface Witness — the sku appears as a SELECTABLE option in a reachable leaf (its family showing is NOT
+ *    enough); the runtime pins ONE variant per family card, so a family's extra sizes have no selection path.
+ *  • Purchase Witness (available) — a CTA that resolves to THAT sku (its own buy_url + price), present in the
+ *    shipped catalog snapshot, and satisfying the path's HARD budget ceiling. A family url is not a per-variant
+ *    CTA; a variant priced over the answered band's ceiling is a broken purchase promise (not surfaced).
+ *
+ * Binding pledges: show the number AS IT FALLS OUT (expected < 80/80); DO NOT fix — the size picker is not
+ * built here. I3 is RED until measured at SKU level AND reaching 80/80 with both witnesses ⇒ publish RE-BLOCKED.
+ * Gold frozen by hash, never re-signed; nothing softened.
  */
 import assert from "node:assert/strict";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { buildFullTree } from "../authoring/brain2/tree.js";
 import { compileTree, canonicalBytes } from "../authoring/compiler/structuralCompiler.js";
-import { certify } from "../engine/kernel/certifier.js";
+import { certify, validateCta } from "../engine/kernel/certifier.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 let passed = 0;
@@ -34,77 +34,71 @@ const oracle = new AuthoringOracle({ units: inputs.units, resolvedContracts: inp
 const tree = buildFullTree(oracle, { limits });
 const cinput = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, leafTotalCap: inputs.leafCaps.total });
 
-const skusOf = (fams) => fams.flatMap((f) => inputs.skusByFamily[f] || []);
-const CAP = inputs.leafCaps.total;
-
-// surface@cap (the runtime display truth BEFORE GAP-7) — the capped surface, measured.
-const surfacedCap = new Set();
-for (const leaf of tree.leaves) { const shown = [...oracle.membersOf(leaf.pools.exact_ref).slice().sort(), ...oracle.membersOf(leaf.pools.compromise_ref).slice().sort()].slice(0, CAP); for (const s of skusOf(shown)) surfacedCap.add(s); }
-// with_expansion (in_candidate_pool) — union of EVERY leaf's FULL candidate pool (no cap). GAP-7's target.
-const inPool = new Set();
-for (const leaf of tree.leaves) { const all = [...oracle.membersOf(leaf.pools.exact_ref), ...oracle.membersOf(leaf.pools.compromise_ref)]; for (const s of skusOf(all)) inPool.add(s); }
-const ACTIVE = inputs.skuCount, SURFACE_CAP = surfacedCap.size, WITH_EXPANSION = inPool.size;
-
-const baseCtx = {
+const ACTIVE = inputs.skuCount; // 80
+const ctx = {
   units: inputs.units, constraints: kernelConstraints, opts: {},
-  activeSkus: ACTIVE, surfaceReachable: SURFACE_CAP,
+  activeSkus: ACTIVE, surfaceReachable: 0,
+  skuMeta: inputs.skuMeta, skusByFamily: inputs.skusByFamily, budget: inputs.budget,
   versions: { compiler_version: cinput.version, kernel_version: inputs.context.kernel_version, policy_version: inputs.context.policy_version, artifact_version: fnv(canonicalBytes(cinput)), catalog_version_structural: inputs.context.structural_catalog_version, catalog_version_runtime: "oud_runtime_1" },
 };
+const result = certify(cinput, ctx);
+const g = result.grid;
 
-// BEFORE — cap-only (no grid): I3 is red at SURFACE_CAP/ACTIVE (the state that blocks publish today).
-const before = certify(cinput, baseCtx);
-// AFTER — GAP-7 grid wired (catalogMeta + skusByFamily provided): every candidate surfaced with a real CTA.
-const after = certify(cinput, { ...baseCtx, catalogMeta: inputs.catalogMeta, skusByFamily: inputs.skusByFamily });
-
-check("1. BEFORE GAP-7 — I3 RED at surface@cap (publish blocked); this is the state GAP-7 must close", () => {
-  console.log(`  · surface@cap = ${SURFACE_CAP}/${ACTIVE} · with_expansion(in_candidate_pool) = ${WITH_EXPANSION}/${ACTIVE}`);
-  assert.equal(before.invariants.I3_no_active_sku_without_accounting_or_witness, false, `I3 must be red before GAP-7 (surface@cap ${SURFACE_CAP} < active ${ACTIVE})`);
-  assert.ok(SURFACE_CAP < ACTIVE, "the cap genuinely buries SKUs (else GAP-7 is moot)");
+check("1. SKU-LEVEL I3 is RED and BELOW 80/80 (shown as it falls out — NOT fixed)", () => {
+  console.log(`  · surface_reachable_with_grid (SKU-level) = ${g.surface_reachable_with_grid}/${ACTIVE}`);
+  console.log(`  · not_arrived = ${g.not_arrived.length} · by reason = ${JSON.stringify(g.not_arrived_by_reason)}`);
+  assert.equal(result.invariants.I3_no_active_sku_without_accounting_or_witness, false, "I3 MUST be red at the SKU level (the family metric hid the gap)");
+  assert.ok(g.surface_reachable_with_grid < ACTIVE, `SKU-level surface (${g.surface_reachable_with_grid}) must be below active (${ACTIVE}) — the buried variants are real`);
 });
 
-check("2. AFTER GAP-7 — every candidate surfaced: surface_reachable_with_grid == with_expansion == ACTIVE (80/80)", () => {
-  const g = after.invariants && after; // grid lives on the result
-  const swg = after.grid ? after.grid.surface_reachable_with_grid : null;
-  console.log(`  · surface_reachable_with_grid = ${swg}/${ACTIVE} · with_expansion = ${WITH_EXPANSION}/${ACTIVE}`);
-  assert.ok(after.grid, "GAP-7 grid block resolved (catalogMeta + skusByFamily provided)");
-  assert.equal(swg, WITH_EXPANSION, `grid surface (${swg}) must equal with_expansion (${WITH_EXPANSION}) — no candidate left in the pool`);
-  assert.equal(swg, ACTIVE, `grid surface must reach every active SKU (${ACTIVE})`);
-  // GOVERNING METRIC pledge 3: if it did NOT reach 80/80, show the reason PER remaining SKU.
-  if (swg !== ACTIVE) console.error(`  ⛔ NOT ARRIVED (${ACTIVE - swg}): ${JSON.stringify(after.grid.not_arrived)} — STOP, do not patch.`);
+check("2. WHY each SKU didn't arrive — every not-arrived sku carries a reason (family_buried | variant_unreachable | variant_over_ceiling)", () => {
+  const REASONS = new Set(["family_buried", "variant_unreachable", "variant_over_ceiling"]);
+  for (const d of g.not_arrived_detail) assert.ok(REASONS.has(d.reason), `sku ${d.sku_id} has a classified reason (got ${d.reason})`);
+  // the dominant cause is the unbuilt size picker: a family surfaces, but its extra variants are not selectable.
+  const sample = g.not_arrived_detail.slice(0, 8).map((d) => `${d.sku_id.split("::")[0]}#…:${d.reason}`);
+  console.log(`  · sample not-arrived: ${JSON.stringify(sample)}`);
+  console.log(`  · variant_unreachable = the family shows but the variant/size picker (unbuilt) makes extra sizes unselectable`);
 });
 
-check("3. NO SKU LEFT BEHIND — not_arrived == [] (each active SKU accounted by the grid)", () => {
-  console.log(`  · not_arrived = ${JSON.stringify(after.grid.not_arrived)}`);
-  assert.deepEqual(after.grid.not_arrived, [], "every active SKU must be grid-accounted: " + JSON.stringify(after.grid.not_arrived));
+check("3. THE FAMILY-METRIC BLINDNESS, recorded: variant_unreachable was 0 BY CONSTRUCTION, not by measurement", () => {
+  // Under the old family metric EVERY variant of a surfaced family was credited ⇒ variant_unreachable≡0 always.
+  // Now, measured per sku, the buried variants surface as a real, non-zero count.
+  const stranded = (g.not_arrived_by_reason.variant_unreachable || 0) + (g.not_arrived_by_reason.variant_over_ceiling || 0);
+  assert.ok(stranded > 0, "the SKU-level measure exposes real stranded variants the family metric hid (>0)");
+  console.log(`  · stranded variants now VISIBLE = ${stranded} (were silently 0 under the family metric)`);
 });
 
-check("4. EVERY CTA FROM THE CERTIFICATE (ق21) — no missing CTA, cta_from_certificate=true (no generic/fallback)", () => {
-  console.log(`  · cta_from_certificate = ${after.grid.cta_from_certificate} · missing_cta = ${after.grid.missing_cta} · missing_attributes = ${after.grid.missing_attributes}`);
-  assert.equal(after.grid.cta_from_certificate, true, "grid CTAs are authorized by the certificate");
-  assert.equal(after.grid.missing_cta, 0, "no card without a real CTA (ق21): a card with no CTA is not counted as surfaced");
-  assert.equal(after.grid.missing_attributes, 0, "every card carries descriptive attributes (title)");
+check("4. CTA VALIDITY GUARD — a CTA to a variant OVER the path's budget ceiling FAILS (existence ≠ validity)", () => {
+  const budget = inputs.budget;
+  // find a real over-ceiling variant: a sku whose band exceeds a mid-budget path.
+  const overSku = Object.entries(inputs.skuMeta).find(([, m]) => m.price != null && budget.order.indexOf(m.price <= budget.thresholds[0] ? "low" : m.price <= budget.thresholds[1] ? "mid" : "high") > budget.order.indexOf("mid"));
+  assert.ok(overSku, "the catalog has a variant above a mid ceiling to test with");
+  const [id, m] = overSku;
+  const answersMid = { budget: "mid" };
+  const good = validateCta({ sku_id: id, cta_url: m.buy_url }, inputs.skuMeta, budget, answersMid);
+  assert.equal(good.valid, false, "a CTA to an over-ceiling variant must be REJECTED");
+  assert.equal(good.reason, "cta_over_budget_ceiling", "with the over-ceiling reason: " + good.reason);
+  // and: a family url (not a specific sku's buy_url) is rejected as not resolving to a sku.
+  const famUrl = validateCta({ sku_id: id, cta_url: "https://www.oudfactory.com/products/" + m.family_id }, inputs.skuMeta, budget, {});
+  assert.equal(famUrl.valid, false, "a family url is not a per-variant CTA");
+  assert.equal(famUrl.reason, "cta_does_not_resolve_to_sku", "rejected as not resolving to the sku: " + famUrl.reason);
+  // sanity: the sku's OWN buy_url with no budget ceiling is valid.
+  const ok = validateCta({ sku_id: id, cta_url: m.buy_url }, inputs.skuMeta, budget, {});
+  assert.equal(ok.valid, true, "the sku's own buy_url with no ceiling is valid: " + ok.reason);
+  console.log(`  · over-ceiling variant ${id.split("::")[0]}#… (${m.price}) on a mid path → REJECTED (cta_over_budget_ceiling) ✓`);
 });
 
-check("5. NO HIDDEN TIE — hide_ties=false and zero grid findings (a hidden tie would be a finding)", () => {
-  console.log(`  · hide_ties = ${after.grid.hide_ties} · grids = ${after.grid.grids} · findings = ${JSON.stringify(after.grid.findings)}`);
-  assert.equal(after.grid.hide_ties, false, "ties are never hidden");
-  assert.deepEqual(after.grid.findings, [], "no grid finding (each grid surfaced exactly its declared candidates): " + JSON.stringify(after.grid.findings));
+check("5. PUBLISH RE-BLOCKED — the previous unblock was a family metric; reverted. I1 & I2 stay green; I3 red", () => {
+  assert.equal(result.invariants.I1_no_dead_end, true, "I1 stays green");
+  assert.equal(result.invariants.I2_input_completeness_and_provenance, true, "I2 stays green");
+  assert.equal(result.invariants.I3_no_active_sku_without_accounting_or_witness, false, "I3 red at the SKU level ⇒ PUBLISH BLOCKED (reverted the family-metric unblock)");
+  console.log(`  · PUBLISH BLOCKED: ${ACTIVE - g.surface_reachable_with_grid} SKUs lack a Surface/Purchase witness. The unblock awaits the variant/size picker (unbuilt) — not a metric change.`);
 });
 
-check("6. PUBLISH UNBLOCKED — I3 flips green with GAP-7; I1 & I2 stay green; the certificate still mints", () => {
-  console.log(`  · I3 before = ${before.invariants.I3_no_active_sku_without_accounting_or_witness} → after = ${after.invariants.I3_no_active_sku_without_accounting_or_witness}`);
-  assert.equal(after.invariants.I1_no_dead_end, true, "I1 stays green");
-  assert.equal(after.invariants.I2_input_completeness_and_provenance, true, "I2 stays green");
-  assert.equal(after.invariants.I3_no_active_sku_without_accounting_or_witness, true, "I3 green with GAP-7 (all SKUs grid-accounted, all CTAs real) ⇒ PUBLISH unblocked");
-  assert.ok(after.certificate && !after.certificate_error, "certificate still mints (equivalence unchanged by the display grid): " + after.certificate_error);
-  assert.equal(after.mint_rate, 1, "mint rate unchanged (GAP-7 is a DISPLAY surface; it never re-derives the pick)");
+check("6. THE CERTIFICATE still mints — equivalence (tree↔runtime) is UNCHANGED; the gap is DISPLAY reach, not the pick", () => {
+  assert.equal(result.mint_rate, 1, "mint stays 100% — the artifact still faithfully represents the kernel");
+  assert.ok(result.certificate && !result.certificate_error, "certificate issued (equivalence holds): " + result.certificate_error);
 });
 
-check("7. GRID IS DISPLAY-ONLY — the artifact bytes are unchanged (GAP-7 does not touch the compiled tree)", () => {
-  // GAP-7 lives in policy + the Certifier's grid resolution, NOT in the compiled artifact's decision structure.
-  const reCompiled = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, leafTotalCap: inputs.leafCaps.total });
-  assert.equal(canonicalBytes(reCompiled), canonicalBytes(cinput), "the compiled artifact is stable — GAP-7 adds a display surface, not a decision change");
-});
-
-if (process.exitCode === 1) console.error("\nFAIL — GAP-7 did not close I3 truthfully, or a recorded rule was violated. Do NOT patch around it.\n");
-else console.log(`\nPASS — all ${passed} GAP-7 checks. I3 ${SURFACE_CAP}/${ACTIVE} (cap) → ${after.grid.surface_reachable_with_grid}/${ACTIVE} (grid) == with_expansion ${WITH_EXPANSION}. Publish UNBLOCKED. Every CTA from the certificate; no tie hidden; nothing softened.\n`);
+if (process.exitCode === 1) console.error("\nFAIL — the SKU-level I3 measure or the CTA guard did not behave as required.\n");
+else console.log(`\nPASS — all ${passed} GAP-7(SKU) checks. I3 SKU-level ${g.surface_reachable_with_grid}/${ACTIVE} (RED) — reverted the family-metric unblock; ${ACTIVE - g.surface_reachable_with_grid} variants stranded (${JSON.stringify(g.not_arrived_by_reason)}); CTA guard rejects over-ceiling + family-url; certificate still mints. PUBLISH BLOCKED. Nothing softened.\n`);

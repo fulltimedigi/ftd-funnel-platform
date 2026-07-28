@@ -1,7 +1,15 @@
 # ADR-0061 — GAP-7: the ق20 oversized-leaf comparison grid (publish unblocked)
 
-- **Status:** Accepted (built + proven, red-first). STOPPED after GAP-7 (operator: "توقّف بعدها"). Delivery /
-  render / wiring / pull NOT started.
+> **⚠️ CORRECTED by [ADR-0062](0062-sku-level-i3-and-node-kind-integrity.md) (round-11).** The "publish
+> unblocked / I3 80/80" claim below was measured at the **FAMILY** level — it counted a family as accounted and
+> silently credited ALL its variants, so `variant_unreachable = 0` was true *by construction*, not by
+> measurement. Re-measured per SKU, I3 is **50/80** and **publish is RE-BLOCKED** (30 variants stranded; the
+> variant/size picker is unbuilt). The grid *structure* here stands; the *metric* and the unblock are retracted.
+> Read ADR-0062 for the corrected measure. The text below is kept for the record.
+
+- **Status:** **Superseded by ADR-0062** (family-level metric retracted). Grid structure retained; publish
+  status reverted to BLOCKED. STOPPED after GAP-7 (operator: "توقّف بعدها"). Delivery / render / wiring / pull
+  NOT started.
 - **Date:** 2026-07-28
 - **Related:** ADR-0058 (freeze v10), ADR-0059 (compiler), ADR-0060 (certifier), `config/policy.json`
   (`display_contract.grid`), `engine/kernel/certifier.js` (`resolveGrid`), `tests/certifier.gap7.test.mjs`,

@@ -59,13 +59,27 @@ export async function oudOneLevelInputs(thresholdsOverride) {
   const skusByFamily = {};
   for (const s of skuMatrix) (skusByFamily[s.family_id] ||= []).push(s.sku_id);
 
-  // catalogMeta (family_id → real URL + descriptive attributes) — the runtime/display source for GAP-7 grid
-  // cards: the CTA is the product's REAL url, and the descriptive attributes ride on the card.
+  // catalogMeta (family_id → real URL + descriptive attributes) — kept for the family-level display source.
   const catalogMeta = {};
   for (const f of familyMatrix) catalogMeta[f.family_id] = {
     url: f.url || null,
     attributes: { title: (f.text && f.text.title) || null, type: (f.structured && f.structured.product_type) || null },
   };
+
+  // skuMeta (sku_id → the SHIPPED CATALOG SNAPSHOT of one VARIANT) — the ground truth for the SKU-LEVEL I3
+  // witness (round-11). A grid CTA must resolve to a SPECIFIC sku here (its own buy_url + price), be present
+  // in this snapshot, and satisfy the path's hard budget ceiling; a family url is NOT a per-variant CTA.
+  const titleByFamily = {};
+  for (const f of familyMatrix) titleByFamily[f.family_id] = (f.text && f.text.title) || null;
+  const skuMeta = {};
+  for (const s of skuMatrix) skuMeta[s.sku_id] = {
+    family_id: s.family_id, price: s.price, buy_url: s.buy_url, availability: s.availability,
+    attributes: { title: titleByFamily[s.family_id], option: s.option_values || {} },
+  };
+  // budget = the HARD purchase-ceiling axis (resolved thresholds + ordinal order) — from the SAME contract the
+  // brain used, so the ceiling check is not a test literal.
+  const budgetContract = resolvedContracts.find((c) => c.axis_id === "budget");
+  const budget = budgetContract ? { axis: "budget", thresholds: budgetContract.resolved.thresholds, order: budgetContract.order } : null;
 
   // Leaf display caps + full-tree limits come from POLICY, never a test literal (4-b corrections 3 & ruling 4).
   const pol = JSON.parse(fs.readFileSync(path.join(HERE, "..", "..", "config", "policy.json"), "utf8"));
@@ -74,5 +88,5 @@ export async function oudOneLevelInputs(thresholdsOverride) {
   const treeLimits = { ...pol.authoring_tree, max_published_options_per_question: pol.display_contract.max_published_options_per_question, policy_version: pol.policy_version };
 
   const context = { structural_catalog_version: "oud_cat_1", policy_version: "oud_pol_1", kernel_version: "k_1" };
-  return { units, resolvedContracts, context, skusByFamily, catalogMeta, displayContract: pol.display_contract, thresholds, leafCaps, treeLimits, familyCount: familyMatrix.length, skuCount: skuMatrix.length };
+  return { units, resolvedContracts, context, skusByFamily, catalogMeta, skuMeta, budget, displayContract: pol.display_contract, thresholds, leafCaps, treeLimits, familyCount: familyMatrix.length, skuCount: skuMatrix.length };
 }
