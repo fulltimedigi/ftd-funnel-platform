@@ -32,9 +32,14 @@ export class OracleSession {
     this._constraints = constraints;
     this._units = units;
     this._context = context;
-    // context_ref (C1, round-3): binds every edge to the CONTEXT its child was evaluated under.
+    // context_ref (C1) — binds every edge to the CONTEXT its child was evaluated under. Round-3 (#3):
+    // it also folds an axis_contract_digest, so two contexts with the SAME three versions but DIFFERENT
+    // axis contracts (thresholds/predicates) never collide on one ref (cache/indexing safety).
+    const axis_contract_digest = fnvHex(JSON.stringify(constraints.map((c) => ({
+      id: String(c.id), type: c.type || null, mode: c.mode || null, order: c.order || null, resolved: c.resolved || null,
+    })).sort((a, b) => (a.id < b.id ? -1 : 1))));
     this._contextRef = "ctx_" + fnvHex(JSON.stringify({
-      s: context.structural_catalog_version ?? null, p: context.policy_version ?? null, k: context.kernel_version ?? null,
+      s: context.structural_catalog_version ?? null, p: context.policy_version ?? null, k: context.kernel_version ?? null, a: axis_contract_digest,
     }));
     this._registry = new PoolRegistry();
     this._cache = new Map();      // evaluation_hash → { ev, pools, sets }
@@ -44,21 +49,29 @@ export class OracleSession {
     this.cacheHitCount = 0;
   }
 
-  evaluate(answers = {}, { opts } = {}) { return this._commit(answers, opts, null, "ROOT"); }
+  evaluate(answers = {}, { opts, meta } = {}) { return this._commit(answers, opts, null, "ROOT", { meta }); }
 
   /** REFINE — a monotone narrowing. Throws (NOT silently accepts) if any monotonicity clause breaks. */
-  refine(parent, answers = {}, { opts } = {}) {
+  refine(parent, answers = {}, { opts, meta } = {}) {
     this._assertNode(parent);
     const child = this._sets(answers, opts);
     const p = this._cache.get(parent.evaluation_hash).sets;
     const v = monotoneViolation(p, child);
-    if (v) throw new Error("illegal REFINE (" + v + ") — a REFINE must only narrow; use branch() for a non-monotone move");
-    return this._commit(answers, opts, parent, "REFINE");
+    if (v) throw new Error("illegal REFINE (" + v + ") — a REFINE must only narrow; use branch()/relax() for a non-monotone move");
+    return this._commit(answers, opts, parent, "REFINE", { meta });
   }
 
-  branch(parent, answers = {}, { opts } = {}) {
+  branch(parent, answers = {}, { opts, meta } = {}) {
     this._assertNode(parent);
-    return this._commit(answers, opts, parent, "BRANCH");
+    return this._commit(answers, opts, parent, "BRANCH", { meta });
+  }
+
+  /** RELAX — a deliberately NON-monotone move (drops/loosens a promise). transition_kind is enforced in
+   *  code: the four-part monotonicity check runs on REFINE ONLY, so a RELAX that grows the eligible pool
+   *  is accepted (it would be wrongly rejected if monotonicity were assumed for every transition). */
+  relax(parent, answers = {}, { opts, meta } = {}) {
+    this._assertNode(parent);
+    return this._commit(answers, opts, parent, "RELAX", { meta });
   }
 
   /**
@@ -67,13 +80,13 @@ export class OracleSession {
    * enforces REFINE monotonicity, but mints no edge — a probed-but-not-published option leaves a transcript
    * mark, never an authorized tree edge. Returns the same handle shape minus `lineage_receipt`.
    */
-  probe(parent, answers = {}, { opts } = {}) {
+  probe(parent, answers = {}, { opts, meta } = {}) {
     this._assertNode(parent);
     const child = this._sets(answers, opts);
     const p = this._cache.get(parent.evaluation_hash).sets;
     const v = monotoneViolation(p, child);
     if (v) throw new Error("illegal PROBE as REFINE (" + v + ")");
-    return this._commit(answers, opts, parent, "PROBE", { mintEdge: false });
+    return this._commit(answers, opts, parent, "PROBE", { mintEdge: false, meta });
   }
 
   /** SERVER-ONLY: resolve an opaque pool ref to member ids (certifier / differential). */
@@ -141,7 +154,8 @@ export class OracleSession {
     return { exact: new Set(ev.exact_ids), eligible: new Set([...ev.exact_ids, ...ev.compromise_ids]), rejected: new Set(ev.rejected_ids), compromise: new Set(ev.compromise_ids) };
   }
 
-  _commit(answers, opts, parent, transition_kind, { mintEdge = true } = {}) {
+  _commit(answers, opts, parent, transition_kind, { mintEdge = true, meta = {} } = {}) {
+    meta = meta || {};
     const evaluation_hash = oracleHash({ units: this._units, constraints: this._constraints, answers, context: this._context, opts });
     this._considered.push({ evaluation_hash, transition_kind }); // EVERY option considered leaves a minted call
 
@@ -172,7 +186,17 @@ export class OracleSession {
       ? this._registry.mintEdge({ parent_pool_ref: parent.pools.eligible_ref, child_pool_ref: entry.pools.eligible_ref, transition_ref: qualified_option_ref, transition_kind, child_evaluation_hash: evaluation_hash, context_ref: this._contextRef })
       : null;
 
-    this._transcript.push({ evaluation_hash, transition_kind, parent_hash, state_outcome: entry.ev.state_outcome, published: !!lineage_receipt });
+    // Round-3 (#1): every transcript entry carries NODE IDENTITY (parent_pool_ref + context_ref + axis_id +
+    // option_ref) + exact_count, so option-completeness and the two-ledger link can be measured PER NODE.
+    this._transcript.push({
+      evaluation_hash, transition_kind, parent_hash, state_outcome: entry.ev.state_outcome,
+      published: !!lineage_receipt,
+      parent_pool_ref: parent ? parent.pools.eligible_ref : null,
+      context_ref: this._contextRef,
+      axis_id: meta.axis_id ?? null,
+      option_ref: meta.option_ref ?? null,
+      exact_count: entry.sets.exact.size,
+    });
 
     return Object.freeze({
       projection: projectForAuthoring(entry.ev),

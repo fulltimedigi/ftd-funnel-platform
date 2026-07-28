@@ -55,22 +55,27 @@ export class AuthoringOracle {
     });
   }
 
-  _answerFor(option_ref) {
+  _answerFor(parent, option_ref) {
     const o = this._optionRefs.get(option_ref);
     if (!o) throw new Error("unknown option_ref (enumerate first — the brain cannot fabricate one): " + option_ref);
-    return { [o.axis_id]: o.value };
+    // constraint accumulation: child answers = parent answers + this ONE option, exactly.
+    return { answers: { ...this._session.answersOf(parent), [o.axis_id]: o.value }, meta: { axis_id: o.axis_id, option_ref } };
   }
 
   /** PROBE an option by ref (evaluate, no edge). Returns the brain-facing handle (projection + counts). */
-  probeByRef(parent, option_ref) { return this._session.probe(parent, this._answerFor(option_ref)); }
+  probeByRef(parent, option_ref) { const { answers, meta } = this._answerFor(parent, option_ref); return this._session.probe(parent, answers, { meta }); }
 
   /** PUBLISH an option by ref (REFINE — mints the tree edge). Returns the child node. */
-  publishByRef(parent, option_ref) { return this._session.refine(parent, this._answerFor(option_ref)); }
+  publishByRef(parent, option_ref) { const { answers, meta } = this._answerFor(parent, option_ref); return this._session.refine(parent, answers, { meta }); }
 
   /** SERVER-ONLY passthroughs (the verifier/certifier use these; phase B does not). */
   verifyTree(nodes) { return this._session.verifyTree(nodes); }
   transcript() { return this._session.transcript(); }
   membersOf(ref) { return this._session.membersOf(ref); }
+  answersOf(node) { return this._session.answersOf(node); }
+  /** SERVER-ONLY: the qualified-option COUNT for an axis at a node (for re-running the counts-only rule). */
+  optionCount(node, axisId) { const a = this._session.answersOf(node); return enumerateQualifiedOptions(this._units, this._constraints, a, axisId).length; }
+  axisIds() { return this._constraints.map((c) => String(c.id)); }
   get calls() { return this._session.callCount; }
   get cacheHits() { return this._session.cacheHitCount; }
   get session() { return this._session; }
