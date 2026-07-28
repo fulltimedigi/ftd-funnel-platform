@@ -83,3 +83,34 @@ ref is rejected), a cache keyed to include `kernel_version`, and the OracleTrans
   provenance requirement knows to key lineage by `(parent, child)` rather than child alone.
 - **Not in this step (stop point):** the structural compiler + certifier (4-b/4-c), wiring the brain to
   production, and the variant-picker UI remain deferred. 4-a delivers the oracle and its proofs only.
+
+## Round-2 corrections (post-build second-mind review — folded in, proven by code)
+
+The first cut shipped two real flaws; both are fixed and now guarded:
+
+- **Lineage authenticated the wrong thing (fixed).** The receipt was keyed by the child's
+  `evaluation_hash` (first-write-wins), so it could record a parent that was not the one traversed —
+  degrading the guarantee to "reached somehow" instead of "authorized". Now **pool** (membership) and
+  **edge** (authorization) are separate: an edge is keyed by `(parent_pool_ref, transition_ref)`, one
+  receipt per edge; the same child from two parents yields two distinct edges. Pools are still shared by
+  membership. `verifyLineage` catches both a poisoned roster (pool MAC) and a forged parent (edge MAC).
+- **Monotonicity was too weak (fixed).** A REFINE now must satisfy `exact(child) ⊆ exact(parent)`
+  (the key clause — adding a promise can never promote compromise→exact), `eligible(child) ⊆
+  eligible(parent)`, `rejected(child) ⊇ rejected(parent)`, and no `compromise→exact` movement; any
+  breach throws.
+
+Three more corrections are now binding (see the contract's round-2 section):
+
+- **Hash completeness is proven mechanically** (`tests/oracle.hashcomplete.test.mjs`): each input class is
+  perturbed in isolation and the hash must move. **Recorded for when they enter the pipeline:** merchant
+  edits (signed exclusions / approved axis roles / evidence grade) and currency/locale normalization must
+  be folded into the hash and get a perturbation row then.
+- **No pruning by prediction + stateless between funnels** (`tests/oracle.antipredict.test.mjs`): every
+  considered option leaves a minted call (considered ≡ transcript); the session exposes no drop/hide API
+  and no cross-funnel memory. Pruning happens ONLY via the kernel's `rejected` partition.
+- **Two-phase brain (4-b architecture, pinned now):** axis-proposal (reads evidence/catalog, emits axis
+  contracts, sees no pools/counts) and tree-assembly (reads only oracle projections + axis contracts,
+  sees no catalog) are separate modules with per-phase input allowlists — so "build a matcher from
+  projection data" is unrepresentable. The biggest 4-b trap is speed masquerading as optimization:
+  pruning is legal only via minted transitions; the only legitimate optimization is state-signature
+  memoization, never guessing; and question-selection metrics consume counts only, never "which candidates".

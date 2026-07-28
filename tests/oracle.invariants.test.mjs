@@ -65,19 +65,22 @@ check("4. RUNTIME MEMBERSHIP DIFFERENTIAL — equal pools ⇒ empty; a planted p
   assert.ok(!dPoison.equal && dPoison.onlyInRuntime.includes("C"), "the differential canary bites on an unadmitted SKU");
 });
 
-check("5. MONOTONICITY (REFINE only) — each REFINE shrinks the eligible pool; a BRANCH is exempt", () => {
+check("5. MONOTONICITY (REFINE only) — ALL three inclusions + no compromise→exact; a BRANCH is exempt", () => {
   const S = session();
-  const root = S.evaluate({});                                   // nothing asked ⇒ all eligible
+  const root = S.evaluate({});                                   // nothing asked ⇒ all eligible, all exact
   const r1 = S.refine(root, { type: "oil" });                   // drop the sprays
   const r2 = S.refine(r1, { type: "oil", budget: 0 });          // drop the over-cap oud
-  const elig = (n) => new Set(S.membersOf(n.pools.eligible_ref));
-  const isSubset = (a, b) => [...a].every((x) => b.has(x));
-  assert.ok(isSubset(elig(r1), elig(root)), "REFINE r1 ⊆ root");
-  assert.ok(isSubset(elig(r2), elig(r1)), "REFINE r2 ⊆ r1");
-  assert.ok(elig(r2).size < elig(root).size, "refinement actually narrowed");
-  // a BRANCH to a different type is NOT required to be a subset — and indeed isn't
+  const M = (n) => ({ elig: new Set(S.membersOf(n.pools.eligible_ref)), exact: new Set(S.membersOf(n.pools.exact_ref)), rej: new Set(S.membersOf(n.pools.rejected_ref)) });
+  const sub = (a, b) => [...a].every((x) => b.has(x));
+  for (const [c, p] of [[r1, root], [r2, r1]]) {
+    const cc = M(c), pp = M(p);
+    assert.ok(sub(cc.exact, pp.exact), "exact(child) ⊆ exact(parent) — no compromise→exact promotion");
+    assert.ok(sub(cc.elig, pp.elig), "eligible(child) ⊆ eligible(parent)");
+    assert.ok(sub(pp.rej, cc.rej), "rejected(parent) ⊆ rejected(child)");
+  }
+  assert.ok(M(r2).elig.size < M(root).elig.size, "refinement actually narrowed");
   const b1 = S.branch(root, { type: "spray" });
-  assert.ok(![...elig(b1)].every((x) => elig(r1).has(x)), "a BRANCH may leave the REFINE subtree (not monotone) — as designed");
+  assert.ok(![...M(b1).elig].every((x) => M(r1).elig.has(x)), "a BRANCH may leave the REFINE subtree (not monotone) — as designed");
   assert.equal(r1.transition.kind, "REFINE");
   assert.equal(b1.transition.kind, "BRANCH");
 });
@@ -104,15 +107,28 @@ check("7. SINGLE EVALUATION ORIGIN — an independent code path re-derives the S
   assert.equal(node.evaluation_hash, independent, "the hash is a function of the primary inputs alone");
 });
 
-check("LINEAGE — every non-root pool carries a MAC'd receipt with parent + transition_kind; tamper is caught", () => {
+check("LINEAGE — an EDGE receipt authorizes parent→child; membership tamper AND forged parent are caught", () => {
   const S = session();
   const root = S.evaluate({});
   const r1 = S.refine(root, { type: "oil" });
   const rec = r1.transition.lineage_receipt;
-  assert.ok(rec && rec.ref && rec.mac, "a lineage receipt with a MAC exists");
-  assert.equal(r1.transition.parent_hash, root.evaluation_hash, "lineage names the true parent");
-  assert.ok(S.verifyLineage(r1), "an untampered receipt verifies");
-  assert.ok(!S.verifyLineage(r1, { tamperMembers: ["A", "B", "C", "D", "E"] }), "tampering the pool membership breaks the MAC (canary)");
+  assert.ok(rec && rec.ref && rec.mac, "a MAC'd edge receipt exists");
+  assert.equal(rec.parent_pool_ref, root.pools.eligible_ref, "the edge names the TRUE parent pool (authorization, not just membership)");
+  assert.equal(r1.transition.parent_hash, root.evaluation_hash);
+  assert.ok(S.verifyLineage(r1), "an untampered edge verifies");
+  assert.ok(!S.verifyLineage(r1, { tamperMembers: ["A", "B", "C", "D", "E"] }), "tampering the pool membership breaks the POOL mac (canary)");
+  assert.ok(!S.verifyLineage(r1, { tamperParent: true }), "forging the edge's parent breaks the EDGE mac (unauthorized path canary)");
+});
+
+check("AUTHORIZATION (#3 fix) — the SAME child state from two different parents yields TWO distinct edges", () => {
+  const S = session();
+  const root = S.evaluate({});
+  const other = S.evaluate({ budget: 0 });                       // a different parent state
+  const e1 = S.branch(root, { type: "spray" }).transition.lineage_receipt;
+  const e2 = S.branch(other, { type: "spray" }).transition.lineage_receipt;
+  assert.equal(e1.child_pool_ref, e2.child_pool_ref, "both reach the identical child pool (pools are shared by membership)");
+  assert.notEqual(e1.ref, e2.ref, "but each EDGE is distinct — keyed by (parent, transition), not by the child's hash");
+  assert.notEqual(e1.parent_pool_ref, e2.parent_pool_ref, "each edge records the parent actually traversed (no first-write-wins)");
 });
 
 check("qualified_option_ref — a transition is named by a kernel-minted ref; a fabricated ref is rejected", () => {

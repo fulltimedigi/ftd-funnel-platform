@@ -1,64 +1,88 @@
 /**
- * engine/kernel/authoringOracle/poolRegistry.js — kernel-minted OPAQUE pools with LINEAGE (ADR-0046).
+ * engine/kernel/authoringOracle/poolRegistry.js — kernel-minted OPAQUE pools + AUTHORIZED edges (ADR-0046).
  * ===========================================================================================
- * SERVER-ONLY (uses node:crypto for the MAC). Pools are MINTED here, never assembled by the brain —
- * an id-set is itself a manipulation channel, so the brain receives an opaque `ref` and a `count`,
- * never a roster. Every minted pool carries a LINEAGE receipt MAC'd under a per-session secret:
- *   { ref, klass, members, evaluation_hash, parent_ref, transition_kind } → HMAC.
- * Tampering the membership (or any lineage field) breaks the MAC — a poison canary. `resolve()` is a
- * server-only escape hatch (used by the certifier / differential), never handed to the brain.
+ * SERVER-ONLY (node:crypto MAC). Two DISTINCT things, deliberately separated (consultation round-2, #3):
  *
- * The browser runtime does NOT use this registry: it consumes a CertifiedArtifact and re-verifies via
- * the kernel on load (no registry, no MAC, no shipped secret) — see certified-pipeline-contract.md.
+ *   • A POOL authenticates MEMBERSHIP. Its ref/opaque_id is a pure function of (klass, members,
+ *     evaluation_hash); near states legitimately SHARE a pool (same opaque_id). The pool MAC covers
+ *     membership ONLY — tampering the roster breaks it (poison canary).
+ *   • An EDGE authenticates AUTHORIZATION: "this child pool is a legitimate descendant of THIS parent
+ *     via THIS minted transition." An edge is keyed by (parent_pool_ref, transition_ref) — NOT by the
+ *     child's hash — so the SAME child state reached from two different parents yields TWO distinct
+ *     edges. This is the fix for "first-write-wins by hash", which recorded a parent that may not be
+ *     the one actually traversed and degraded the guarantee to "reached somehow" instead of "authorized".
+ *
+ * The browser runtime uses NEITHER: it consumes a CertifiedArtifact and re-verifies via the kernel on
+ * load (no registry, no MAC, no shipped secret).
  */
 
 import { createHmac, randomBytes } from "node:crypto";
 import { poolRef } from "./hash.js";
 
-function canonicalMembers(members) {
-  return [...(members || [])].map(String).sort();
-}
+const canonicalMembers = (m) => [...(m || [])].map(String).sort();
 
 export class PoolRegistry {
   constructor(secret) {
     this._secret = secret || randomBytes(32); // per-session MAC secret — never leaves the server
-    this._pools = new Map();                  // ref → { klass, members, evaluation_hash, parent_ref, transition_kind, mac }
+    this._pools = new Map(); // ref → { klass, members, evaluation_hash, mac }
+    this._edges = new Map();  // "parent::transition" → { parent_pool_ref, child_pool_ref, transition_ref, transition_kind, mac }
   }
 
-  _mac(fields) {
-    const h = createHmac("sha256", this._secret);
-    h.update(JSON.stringify(fields));
-    return h.digest("hex");
+  _mac(tag, fields) {
+    return createHmac("sha256", this._secret).update(tag + ":" + JSON.stringify(fields)).digest("hex");
   }
 
-  /** Mint (or return the already-minted) opaque pool. Deterministic ref = poolRef(klass, ids, hash). */
-  mint(klass, members, { evaluation_hash, parent_ref = null, transition_kind = "ROOT" }) {
+  // ── POOLS (membership) ───────────────────────────────────────────────────────────────────────
+  /** Mint (or return) an opaque pool. Identity = members; the MAC covers MEMBERSHIP only. */
+  mintPool(klass, members, { evaluation_hash }) {
     const sorted = canonicalMembers(members);
     const ref = poolRef(klass, sorted, evaluation_hash);
-    if (this._pools.has(ref)) return this._pools.get(ref).receipt;
-    const macFields = { ref, klass, members: sorted, evaluation_hash, parent_ref, transition_kind };
-    const mac = this._mac(macFields);
-    const receipt = Object.freeze({ ref, mac, klass, evaluation_hash, parent_ref, transition_kind });
-    this._pools.set(ref, { klass, members: sorted, evaluation_hash, parent_ref, transition_kind, mac, receipt });
-    return receipt;
-  }
-
-  /** SERVER-ONLY: resolve a ref back to its member ids (certifier / differential use only). */
-  resolve(ref) {
+    if (!this._pools.has(ref)) {
+      const mac = this._mac("pool", { ref, klass, members: sorted, evaluation_hash });
+      this._pools.set(ref, { klass, members: sorted, evaluation_hash, mac });
+    }
     const p = this._pools.get(ref);
-    return p ? [...p.members] : null;
+    return Object.freeze({ ref, mac: p.mac, klass, evaluation_hash });
   }
 
-  /**
-   * Verify a pool's lineage receipt. With `override.members` supplied, verify AS IF the pool held
-   * those members — a mismatch with the MAC'd membership fails (this is the tamper canary).
-   */
-  verify(ref, override = {}) {
+  /** SERVER-ONLY: resolve a ref to its member ids (certifier / differential use only). */
+  resolve(ref) { const p = this._pools.get(ref); return p ? [...p.members] : null; }
+
+  /** Verify a pool's MEMBERSHIP integrity. `override.members` simulates a poisoned roster (MAC rejects). */
+  verifyPool(ref, override = {}) {
     const p = this._pools.get(ref);
     if (!p) return false;
     const members = override.members ? canonicalMembers(override.members) : p.members;
-    const expect = this._mac({ ref, klass: p.klass, members, evaluation_hash: p.evaluation_hash, parent_ref: p.parent_ref, transition_kind: p.transition_kind });
-    return expect === p.mac;
+    return this._mac("pool", { ref, klass: p.klass, members, evaluation_hash: p.evaluation_hash }) === p.mac;
+  }
+
+  // ── EDGES (authorization) ──────────────────────────────────────────────────────────────────────
+  /** Mint a transition edge. Keyed by (parent_pool_ref, transition_ref) — one receipt PER EDGE. */
+  mintEdge({ parent_pool_ref, child_pool_ref, transition_ref, transition_kind }) {
+    const key = parent_pool_ref + "::" + transition_ref;
+    if (!this._edges.has(key)) {
+      const mac = this._mac("edge", { parent_pool_ref, child_pool_ref, transition_ref, transition_kind });
+      this._edges.set(key, { parent_pool_ref, child_pool_ref, transition_ref, transition_kind, mac });
+    }
+    const e = this._edges.get(key);
+    return Object.freeze({ ref: key, mac: e.mac, parent_pool_ref, child_pool_ref, transition_ref, transition_kind });
+  }
+
+  /**
+   * Verify an edge AUTHORIZES parent → child via the named transition. `override` can substitute a
+   * forged parent/child/transition to prove the MAC catches an unauthorized path (canary).
+   */
+  verifyEdge(receipt, override = {}) {
+    if (!receipt || !receipt.ref) return false;
+    const e = this._edges.get(receipt.ref);
+    if (!e) return false;
+    const fields = {
+      parent_pool_ref: override.parent_pool_ref ?? e.parent_pool_ref,
+      child_pool_ref: override.child_pool_ref ?? e.child_pool_ref,
+      transition_ref: override.transition_ref ?? e.transition_ref,
+      transition_kind: override.transition_kind ?? e.transition_kind,
+    };
+    return this._mac("edge", fields) === e.mac;
   }
 }
 
