@@ -29,10 +29,10 @@ const oracle = new AuthoringOracle({ units: inputs.units, resolvedContracts: inp
 const tree = buildTwoLevelTree(oracle, { maxDepth: 2 });
 const byHash = new Map(tree.nodes.map((n) => [n.evaluation_hash, n]));
 const S = (ref) => new Set(oracle.membersOf(ref));
-const constraintsFor = (thr) => [
-  { id: "type", type: "nominal", mode: "NEVER_RELAX", priority: 1 },
-  { id: "budget", type: "ordinal", mode: "RELAXABLE", priority: 2, order: ["low", "mid", "high"], resolved: { thresholds: thr } },
-];
+const constraintsFor = (thr) => inputs.resolvedContracts.map((c) => ({
+  id: c.axis_id, type: c.type, mode: c.mode, priority: c.priority, order: c.order,
+  resolved: c.axis_id === "budget" ? { thresholds: thr } : c.resolved,
+}));
 
 console.log(`  · two-level tree: ${tree.nodes.length} nodes · ${tree.internalChoices.length} internal · ${tree.leaves.length} leaves · calls=${oracle.calls} cacheHits=${oracle.cacheHits}`);
 

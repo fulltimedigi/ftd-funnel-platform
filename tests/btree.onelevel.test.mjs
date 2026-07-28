@@ -24,10 +24,10 @@ const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catc
 
 const AXIS = "type";
 const inputs = await oudOneLevelInputs();
-const constraintsFor = (ins) => [
-  { id: "type", type: "nominal", mode: "NEVER_RELAX", priority: 1 },
-  { id: "budget", type: "ordinal", mode: "RELAXABLE", priority: 2, order: ["low", "mid", "high"], resolved: { thresholds: ins.thresholds } },
-];
+const constraintsFor = (thr) => inputs.resolvedContracts.map((c) => ({
+  id: c.axis_id, type: c.type, mode: c.mode, priority: c.priority, order: c.order,
+  resolved: c.axis_id === "budget" ? { thresholds: thr } : c.resolved,
+}));
 
 const oracle = new AuthoringOracle({ units: inputs.units, resolvedContracts: inputs.resolvedContracts, context: inputs.context });
 const tree = buildOneLevelTree(oracle, AXIS);
@@ -47,7 +47,7 @@ check("1. every PUBLISHED option has a minted edge with non-empty exact + tree e
 });
 
 check("2. OPTION COMPLETENESS — every kernel-enumerated option was evaluated; publish = every non-empty exact", () => {
-  const enumerated = enumerateQualifiedOptions(inputs.units, constraintsFor(inputs), {}, AXIS);
+  const enumerated = enumerateQualifiedOptions(inputs.units, constraintsFor(inputs.thresholds), {}, AXIS);
   assert.equal(tree.options.length, enumerated.length, "every enumerated option appears in the tree (probed)");
   assert.equal(tree.axisSelectionRule, AXIS_SELECTION_RULE, "the declared axis-selection rule is followed");
   // reverse check: no option with a non-empty exact set was left unpublished (that would be a silent drop)
@@ -89,9 +89,9 @@ check("4b. PROJECTION PURITY — the brain-facing projection carries no ids/vect
 });
 
 check("5. HASH COMPLETENESS — changing a budget-contract threshold changes the evaluation hash", () => {
-  const base = oracleHash({ units: inputs.units, constraints: constraintsFor(inputs), answers: {}, context: inputs.context });
+  const base = oracleHash({ units: inputs.units, constraints: constraintsFor(inputs.thresholds), answers: {}, context: inputs.context });
   // perturb ONLY the resolved threshold in the axis contract (round-3 C2): the hash MUST move.
-  const perturbed = constraintsFor({ ...inputs, thresholds: [inputs.thresholds[0] + 1, inputs.thresholds[1] + 1] });
+  const perturbed = constraintsFor([inputs.thresholds[0] + 1, inputs.thresholds[1] + 1]);
   const moved = oracleHash({ units: inputs.units, constraints: perturbed, answers: {}, context: inputs.context });
   assert.notEqual(base, moved, "a threshold change in the resolved axis contract must change the hash");
 });

@@ -196,6 +196,8 @@ export class OracleSession {
       axis_id: meta.axis_id ?? null,
       option_ref: meta.option_ref ?? null,
       exact_count: entry.sets.exact.size,
+      compromise_count: entry.sets.compromise.size,
+      eligible_count: entry.sets.exact.size + entry.sets.compromise.size,
     });
 
     return Object.freeze({

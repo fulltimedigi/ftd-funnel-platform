@@ -15,5 +15,10 @@
       { "key": "subscription", "pattern": "\\bsubscription\\b" }
     ],
     "_exclusion_note": "ONLY these explicit policy categories may auto-grant signed_exclusion (path ب, still reviewable). Deliberately NO set/gift/box/pack/sample/tester patterns — those risk excluding a real sellable bundle (ق4: bundles are independent results). Any ambiguity -> merchant review queue (ق19, path أ), never auto-exclude."
+  },
+  "surface": {
+    "_comment": "Leaf display caps for surface_reachable (4-b): how many SKUs a leaf actually SURFACES (1 primary + N alternates). Read from policy, never hardcoded in a test — a test-written cap is an estimate, not a measure. Stamped with policy_version.",
+    "leaf_primary_cap": 1,
+    "leaf_total_cap": 4
   }
 }
