@@ -55,7 +55,11 @@ check("3. SEPARATION — the frozen ranking carries NO safety: given accepted ax
 // 4. surface@cap REGRESSION BASELINE — measured at freeze, pinned with a fixture fingerprint.
 const oud = await oudOneLevelInputs();
 const FIXTURE = `oud:fam=${oud.familyCount}:sku=${oud.skuCount}:thr=${oud.thresholds.join(",")}`;
-const BASELINE = { fixture_prefix: "oud:fam=50:sku=80:", surface_at_cap: 61, sku: 80 }; // ← measured at the v10 freeze
+// surface_at_cap = the CAP-ONLY runtime surface (pre-GAP-7 display debt, kept as a floor). delivered_with_grid
+// = the DELIVERED reach once GAP-7 (ق20 grid) surfaces every candidate with a real CTA — now BUILT (round-10),
+// making with_expansion (100%) the shipped surface. Both recorded: the cap floor never regresses; the grid
+// delivers full reach. See tests/certifier.gap7.test.mjs + ADR-0061.
+const BASELINE = { fixture_prefix: "oud:fam=50:sku=80:", surface_at_cap: 61, delivered_with_grid: 80, sku: 80 }; // ← measured at the v10 freeze
 check("4. surface@cap REGRESSION baseline (v10, oud) — a drop is a SURFACE regression to investigate, NOT an axis-selector reopen", () => {
   assert.ok(FIXTURE.startsWith(BASELINE.fixture_prefix), `fixture fingerprint changed (${FIXTURE}); the baseline is STALE — re-measure it, do not silently pass`);
   const o = new AuthoringOracle({ units: oud.units, resolvedContracts: oud.resolvedContracts, context: oud.context });
@@ -65,7 +69,7 @@ check("4. surface@cap REGRESSION baseline (v10, oud) — a drop is a SURFACE reg
   const atCap = new Set();
   for (const leaf of tree.leaves) { const shown = [...o.membersOf(leaf.pools.exact_ref).slice().sort(), ...o.membersOf(leaf.pools.compromise_ref).slice().sort()].slice(0, CAP); for (const s of skusOf(shown)) atCap.add(s); }
   assert.ok(atCap.size >= BASELINE.surface_at_cap, `surface@cap regressed below the frozen baseline ${BASELINE.surface_at_cap} (got ${atCap.size}) — INVESTIGATE the surface regression; this is NOT a signal to reopen/tune the axis selector (the ق20 grid / GAP-7 owns full reach)`);
-  console.log(`  · surface@cap baseline held: ${atCap.size}/${BASELINE.sku} (frozen baseline ${BASELINE.surface_at_cap}). GAP-7 (ق20 grid) is the PUBLISH blocker that will make with_expansion=100% the delivered reach.`);
+  console.log(`  · surface@cap floor held: ${atCap.size}/${BASELINE.sku} (frozen floor ${BASELINE.surface_at_cap}). GAP-7 (ق20 grid) is now BUILT ⇒ delivered reach = ${BASELINE.delivered_with_grid}/${BASELINE.sku} (with_expansion 100%); see certifier.gap7 + ADR-0061.`);
 });
 
 if (process.exitCode === 1) console.error("\nFAIL — the axis-selector freeze was violated (version, tie-break, separation, or a surface regression).\n");

@@ -59,6 +59,14 @@ export async function oudOneLevelInputs(thresholdsOverride) {
   const skusByFamily = {};
   for (const s of skuMatrix) (skusByFamily[s.family_id] ||= []).push(s.sku_id);
 
+  // catalogMeta (family_id → real URL + descriptive attributes) — the runtime/display source for GAP-7 grid
+  // cards: the CTA is the product's REAL url, and the descriptive attributes ride on the card.
+  const catalogMeta = {};
+  for (const f of familyMatrix) catalogMeta[f.family_id] = {
+    url: f.url || null,
+    attributes: { title: (f.text && f.text.title) || null, type: (f.structured && f.structured.product_type) || null },
+  };
+
   // Leaf display caps + full-tree limits come from POLICY, never a test literal (4-b corrections 3 & ruling 4).
   const pol = JSON.parse(fs.readFileSync(path.join(HERE, "..", "..", "config", "policy.json"), "utf8"));
   const leafCaps = { primary: pol.surface.leaf_primary_cap, total: pol.surface.leaf_total_cap, policy_version: pol.policy_version };
@@ -66,5 +74,5 @@ export async function oudOneLevelInputs(thresholdsOverride) {
   const treeLimits = { ...pol.authoring_tree, max_published_options_per_question: pol.display_contract.max_published_options_per_question, policy_version: pol.policy_version };
 
   const context = { structural_catalog_version: "oud_cat_1", policy_version: "oud_pol_1", kernel_version: "k_1" };
-  return { units, resolvedContracts, context, skusByFamily, thresholds, leafCaps, treeLimits, familyCount: familyMatrix.length, skuCount: skuMatrix.length };
+  return { units, resolvedContracts, context, skusByFamily, catalogMeta, displayContract: pol.display_contract, thresholds, leafCaps, treeLimits, familyCount: familyMatrix.length, skuCount: skuMatrix.length };
 }

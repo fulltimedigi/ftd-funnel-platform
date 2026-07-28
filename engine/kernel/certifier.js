@@ -56,13 +56,34 @@ function certifyLeaf(leaf, units, constraints, opts) {
 }
 
 /**
+ * GAP-7: resolve one leaf's COMPARISON GRID — kernel-side. Re-derive the leaf's full candidate set, order it
+ * (exact first, then compromise, by id — a DECLARED order), and attach per card the real CTA (product url,
+ * ق21), the descriptive attributes, and a tie_break_reason. Verify: every candidate surfaced (no tie hidden),
+ * and every card has a real CTA. Returns { cards, families, findings, missingCta, missingAttr }.
+ */
+function resolveGrid(leaf, units, constraints, opts, catalogMeta) {
+  const answers = leaf.answers || {};
+  const exact = [], compromise = [];
+  for (const u of units) { const { klass } = classifyUnit(u, constraints, answers, opts); if (klass === "exact") exact.push(String(u.id)); else if (klass === "compromise") compromise.push(String(u.id)); }
+  const ordered = [...exact.sort(), ...compromise.sort()];
+  const cards = ordered.map((id, i) => {
+    const meta = (catalogMeta && catalogMeta[id]) || {};
+    return { product_id: id, cta_url: meta.url || null, attributes: meta.attributes || {}, tie_break_reason: i < exact.length ? "exact match" : "closest available on the relaxed constraints" };
+  });
+  const declared = leaf.grid && leaf.grid.count != null ? leaf.grid.count : (leaf.receipt ? leaf.receipt.counts.exact + leaf.receipt.counts.compromise : ordered.length);
+  const findings = [];
+  if (cards.length !== declared) findings.push(`grid surfaced ${cards.length} ≠ declared ${declared} (a tie may be hidden — hide_ties is forbidden)`);
+  return { cards, families: ordered, findings, missingCta: cards.filter((c) => !c.cta_url).map((c) => c.product_id), missingAttr: cards.filter((c) => !c.attributes || !c.attributes.title).map((c) => c.product_id) };
+}
+
+/**
  * @param {CertificationInput} cinput
- * @param {{units, constraints, opts?, activeSkus, surfaceReachable, versions}} ctx
- * @returns {{ mint_rate, expected_reachable_paths, checked, certified, unresolved, perLeaf, invariants,
- *            certificate: object|null, certificate_error: string|null }}
+ * @param {{units, constraints, opts?, activeSkus, surfaceReachable, versions, catalogMeta?, skusByFamily?}} ctx
+ *   When `catalogMeta` + `skusByFamily` are provided, GAP-7 grids are resolved and I3 uses
+ *   `surface_reachable_with_grid` (the delivered surface); otherwise I3 uses `surfaceReachable` (cap-only).
  */
 export function certify(cinput, ctx = {}) {
-  const { units, constraints, opts = {}, activeSkus = 0, surfaceReachable = 0, versions = {} } = ctx;
+  const { units, constraints, opts = {}, activeSkus = 0, surfaceReachable = 0, versions = {}, catalogMeta = null, skusByFamily = null } = ctx;
   if (!cinput || !cinput.root) throw new Error("certify: a CertificationInput is required");
   const leaves = [];
   (function walk(n) { if (n && n.node_kind === "question") for (const c of n.children || []) walk(c.child); else if (n) leaves.push(n); })(cinput.root);
@@ -79,18 +100,42 @@ export function certify(cinput, ctx = {}) {
   const checked = leaves.length;
   const mint_rate = expected > 0 ? certified / expected : 0;
 
+  // GAP-7: resolve grids (only when the runtime catalog meta is provided) and compute the DELIVERED surface.
+  let grid = null;
+  if (catalogMeta && skusByFamily) {
+    const skusOf = (fams) => fams.flatMap((f) => skusByFamily[f] || []);
+    const accountedFamilies = new Set(); const gridFindings = []; let missingCta = 0, missingAttr = 0, gridCount = 0;
+    for (const leaf of leaves) {
+      const g = resolveGrid(leaf, units, constraints, opts, catalogMeta);
+      if (leaf.node_kind === "display") gridCount++;
+      for (const f of g.findings) gridFindings.push(`${leaf.node_id}: ${f}`);
+      missingCta += g.missingCta.length; missingAttr += g.missingAttr.length;
+      for (const c of g.cards) if (c.cta_url) accountedFamilies.add(c.product_id); // ق21: only a card WITH a real CTA counts as surfaced
+    }
+    const surfacedSkus = new Set(skusOf([...accountedFamilies]));
+    const allSkus = new Set(Object.values(skusByFamily).flat());
+    const notArrived = [...allSkus].filter((s) => !surfacedSkus.has(s));
+    grid = {
+      grids: gridCount, cta_from_certificate: true, hide_ties: false,
+      missing_cta: missingCta, missing_attributes: missingAttr, findings: gridFindings,
+      surface_reachable_with_grid: surfacedSkus.size, not_arrived: notArrived,
+    };
+  }
+
   // THE THREE INVARIANTS (artifact-acceptance conditions):
   const I1_no_dead_end = perLeaf.every((l) => l.state !== "HONEST_NO_MATCH");           // every leaf servable
   const I2_input_completeness_and_provenance = perLeaf.every((l) => l.ok);              // every field kernel-determined + traced
-  //  I3: every ACTIVE sku is surfaced OR grid-accounted OR witnessed. grid (GAP-7) not built ⇒ accounted=surface.
-  const I3_no_active_sku_without_accounting_or_witness = surfaceReachable >= activeSkus;
+  //  I3: every ACTIVE sku is surfaced OR grid-accounted OR witnessed. With GAP-7 the grid surfaces all
+  //  candidates (each with a real CTA) ⇒ accounted = surface_reachable_with_grid; else cap-only surfaceReachable.
+  const accounted = grid ? grid.surface_reachable_with_grid : surfaceReachable;
+  const I3_no_active_sku_without_accounting_or_witness = grid ? (accounted >= activeSkus && grid.missing_cta === 0 && grid.findings.length === 0) : (surfaceReachable >= activeSkus);
   const invariants = { I1_no_dead_end, I2_input_completeness_and_provenance, I3_no_active_sku_without_accounting_or_witness };
 
   const tally = { expected_reachable_paths: expected, checked, certified, valid_terminals: validTerminals, unresolved, terminal, display };
   let certificate = null, certificate_error = null;
   try { certificate = makeCertificate(tally, versions); } catch (e) { certificate_error = e.message; }
 
-  return { mint_rate, expected_reachable_paths: expected, checked, certified, unresolved, perLeaf, invariants, certificate, certificate_error };
+  return { mint_rate, expected_reachable_paths: expected, checked, certified, unresolved, perLeaf, invariants, grid, certificate, certificate_error };
 }
 
 export default { certify, makeCertificate, CERTIFIER_VERSION };

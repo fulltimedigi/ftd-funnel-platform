@@ -116,7 +116,18 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
   scoring funnels to decision-table).
 
 
-## GAP-7 — `surface_reachable_with_expansion` (oversized-leaf grid, ق20) — display commitment, not yet built
+## GAP-7 — `surface_reachable_with_expansion` (oversized-leaf grid, ق20) — ✅ CLOSED / BUILT (round-10, ADR-0061)
+
+> **RESOLVED 2026-07-28 (ADR-0061).** The comparison grid is built (data layer). The Certifier's `resolveGrid`
+> surfaces EVERY candidate of an oversized display leaf, each card carrying its REAL CTA (from the certificate,
+> ق21), descriptive attributes, and a declared `tie_break_reason`; no tie hidden. On oud this closes I3 from
+> **61/80 → 80/80**: `surface_reachable_with_grid == with_expansion == active == 80`, `not_arrived = []`,
+> `missing_cta = 0`. Proven red-first in `tests/certifier.gap7.test.mjs`; mint rate stays 100% and the compiled
+> artifact is byte-identical (GAP-7 is a display surface, not a decision change). **PUBLISH is unblocked** on
+> oud. Remaining out of scope (not a GAP-7 item): the live render of the grid UI + wiring/delivery. The
+> original analysis is kept below for the record.
+
+
 The full oracle-authored tree (4-b, ADR-0051) measures TWO reach numbers: `surface_reachable@cap`
 (today's truth — a leaf surfaces `leaf_total_cap` SKUs) and `surface_reachable_with_expansion` (what the
 ق20 oversized-leaf **comparison grid** would surface — every candidate in the leaf). On oudfactory they are

@@ -23,9 +23,16 @@
   },
   "display_contract": {
     "_owner": "the DISPLAY / render layer (ق20) — NOT the brain. The brain READS these values; it never derives them. They are versioned WITH the display contract.",
-    "_status": "PROVISIONAL with a declared owner: the render/display layer (GAP-7) is not built yet, so these are placeholders owned by the display layer until it exists — not a brain-derived number.",
+    "version": "display-1.0.0",
     "max_published_options_per_question": 8,
-    "_max_published_options_note": "how many options a single-select question (ق20 d*=1 one-step selector) can show. EXCEEDING it does NOT reject the axis — it ROUTES that NODE to a ق20 display mode (grid/selector). ق20 is a PER-NODE decision, not a whole-tree one."
+    "_max_published_options_note": "how many options a single-select question (ق20 d*=1 one-step selector) can show. EXCEEDING it does NOT reject the axis — it ROUTES that NODE to a ق20 display mode (grid/selector). ق20 is a PER-NODE decision, not a whole-tree one.",
+    "grid": {
+      "_note": "GAP-7 (round-10, BUILT): the oversized-leaf COMPARISON GRID. An oversized display leaf is NOT pruned — it surfaces EVERY candidate (surface = all_candidates), NO tie hidden (hide_ties=false). Declared order + a tie_break_reason per card; descriptive attributes visible on cards (PRODUCT_DECISIONS); every card's CTA is the product's real URL, authorized by the certificate (ق21) — no generic button, no fallback. This makes surface_reachable_with_grid = with_expansion, closing GAP-7.",
+      "surface": "all_candidates",
+      "hide_ties": false,
+      "require_cta_from_certificate": true,
+      "require_descriptive_attributes": true
+    }
   },
   "authoring_tree": {
     "_comment": "Full-tree build limits (4-b). SEMANTIC stops (exact_pool<=leaf_primary_cap; no axis passes the gate) end branching for a REASON (ق12). The min_exact_option_ratio gate rejects a mostly-compromise (weakly-grounded) axis for BRANCHING — below it the axis is descriptive, not a question. The hard limits are a SAFETY NET only: exceeding them FAILS the build explicitly (never a silent truncation).",

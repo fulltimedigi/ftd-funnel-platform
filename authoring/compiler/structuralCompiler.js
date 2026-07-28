@@ -67,7 +67,11 @@ export function compileTree(oracle, tree, opts = {}) {
       counts: { exact: proj.counts.exact, compromise: proj.counts.compromise },
       exact_pool_ref: proj.exact_pool_ref, compromise_pool_ref: proj.compromise_pool_ref,
     };
-    return { ...base, node_kind: resolved <= leafPrimaryCap ? "terminal" : "display", receipt };
+    const node_kind = resolved <= leafPrimaryCap ? "terminal" : "display";
+    // GAP-7: a display (oversized) leaf DECLARES a comparison grid that surfaces EVERY candidate (structural
+    // commitment; the compiler does not order/CTA/phrase — the Certifier resolves the grid from the kernel).
+    if (node_kind === "display") return { ...base, node_kind, receipt, grid: { surface: "all_candidates", hide_ties: false, count: resolved } };
+    return { ...base, node_kind, receipt };
   };
 
   const root = nodeInput(tree.root, {});
