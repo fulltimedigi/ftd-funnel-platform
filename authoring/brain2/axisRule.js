@@ -323,4 +323,49 @@ export function diagnoseAxesV8(axisStats = {}, { S, minExactRatio = 0.5, maxOpti
 /** v8 — the pure chooser (builder + verifier). */
 export function chooseAxisByInfoGainV8(axisStats = {}, cfg = {}) { return diagnoseAxesV8(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7, chooseAxisByInfoGainV8, AXIS_RULE_ID_V8, diagnoseAxesV8 };
+// v9 — mirror-vs-grid becomes a DISPLAY-MODE routing, not a rejection (consultation round-9). Rejecting an
+// all-singleton or over-cap axis loses legitimate information; a legit unique-per-product axis is a GRID, and
+// a product-naming was already rejected upstream at the authoring gates (semantic-type + evidence-basis).
+// So the counts-only brain, when it cannot BRANCH an axis for a display reason, ROUTES the node to a ق20
+// display mode (per node) instead of rejecting:
+//   • options count > display cap ⇒ display mode (too many options for one selector).
+//   • all-singleton (max sᵢ < 2)  ⇒ display mode (a grid — every answer isolates one).
+// Genuine non-viability (no split; mostly-compromise) stays a `rejected` semantic stop. The ranking is
+// unchanged. The mirror share is still reported (value-confirming options only).
+export const AXIS_RULE_ID_V9 = "max-info-gain@v9";
+
+export function diagnoseAxesV9(axisStats = {}, { S, minExactRatio = 0.5, maxOptions = null } = {}) {
+  const rejected = [], displayMode = [], signals = [];
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected, displayMode, signals };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const confirms = (stat && stat.confirms) || sizes.map(() => true);
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`diagnoseAxesV9: partition invariant Σsᵢ+u₀=S broken on axis "${ax}" — Σsᵢ (${sumS}) > S (${S})`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0;
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; } // genuine non-viability
+    // OPTIONS CAP → route the NODE to a ق20 display mode (grid/selector), NOT reject (keeps the information).
+    if (Number.isInteger(maxOptions) && k > maxOptions) { displayMode.push({ ax, reason: `options-cap ${k}>${maxOptions} → ق20 display mode (selector/grid), not a branch`, mode: "grid" }); continue; }
+    // ALL-SINGLETON → display mode (a legit unique-per-product axis is a grid; a naming was rejected upstream).
+    if (Math.max(...sizes) < 2) { displayMode.push({ ax, reason: "all-singleton → ق20 display mode (grid), not a branch", mode: "grid" }); continue; }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    let confDenom = 0, confSingletons = 0;
+    for (let i = 0; i < k; i++) { if (!confirms[i]) continue; confDenom += sizes[i]; if (sizes[i] === 1) confSingletons++; }
+    const mirror_singleton_share = confDenom > 0 ? Number((confSingletons / confDenom).toFixed(3)) : 0;
+    signals.push({ ax, mirror_singleton_share, published_options: k });
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0, mirror_singleton_share, published_options: k });
+  }
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected, displayMode, signals };
+}
+
+/** v9 — the pure chooser (builder + verifier). */
+export function chooseAxisByInfoGainV9(axisStats = {}, cfg = {}) { return diagnoseAxesV9(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7, chooseAxisByInfoGainV8, AXIS_RULE_ID_V8, diagnoseAxesV8, chooseAxisByInfoGainV9, AXIS_RULE_ID_V9, diagnoseAxesV9 };

@@ -31,16 +31,38 @@ check("RELATION: every value is name_token∧support==1 ⇒ the WHOLE axis drops
   assert.ok(r.axisRejected && /all values dropped/.test(r.axisRejected.reason));
 });
 
-check("RELATION: |distinct values| == |grounded products| ⇒ a one-to-one NAMING of products ⇒ axis rejected", () => {
-  // 3 distinct values over exactly 3 grounded products, 1:1 — a naming, not an axis (even if basis isn't name_token)
-  const r = gateAxisCandidate({ axis_key: "sku", values: [
-    { value: "v1", families: ["p1"], basis: "title token" },
-    { value: "v2", families: ["p2"], basis: "title token" },
-    { value: "v3", families: ["p3"], basis: "title token" },
+check("SEMANTIC-TYPE HOMOGENEITY: a product-line disguised as an origin value (katana, 2 SKU/line) ⇒ axis REJECTED regardless of counts", () => {
+  // THE katana case: escapes all three counting layers (support=2, |values|≠|products|). Only the
+  // semantic-type guard catches it: 'hindi' is an origin, 'katana' is a product line — two dimensions.
+  const r = gateAxisCandidate({ axis_key: "origin", values: [
+    { value: "hindi", families: ["f1", "f2"], basis: "structured", semantic_type: "origin" },
+    { value: "borneo", families: ["f3", "f4"], basis: "structured", semantic_type: "origin" },
+    { value: "katana", families: ["f5", "f6"], basis: "name_token", semantic_type: "product_line" }, // 2 SKU/line
   ] });
-  // note: with basis "title token" (not exactly "name_token") the value-drop rule doesn't fire, so the
-  // AXIS-level relation is what catches it:
-  assert.ok(r.axisRejected && /naming of products/.test(r.axisRejected.reason), JSON.stringify(r));
+  assert.ok(r.axisRejected && /semantic-type mix/.test(r.axisRejected.reason), "caught by the type guard, not by counts: " + JSON.stringify(r.axisRejected));
+});
+
+check("EVIDENCE-BASIS: all values product-identity-derived (name_token/title token) ⇒ a NAMING ⇒ axis rejected", () => {
+  const r = gateAxisCandidate({ axis_key: "sku", values: [
+    { value: "v1", families: ["p1"], basis: "title token", semantic_type: "name" },
+    { value: "v2", families: ["p2"], basis: "title token", semantic_type: "name" },
+    { value: "v3", families: ["p3"], basis: "title token", semantic_type: "name" },
+  ] });
+  assert.ok(r.axisRejected && /naming/.test(r.axisRejected.reason), JSON.stringify(r));
+});
+
+check("EVIDENCE-BASIS: a UNIQUE-per-product axis on an INDEPENDENT vocabulary (variant option) ⇒ ACCEPTED (count-equality is only a signal)", () => {
+  // each value unique to one product, 1:1 — but the vocabulary (colors) is catalog-independent (a variant
+  // option), so it is a REAL axis. It must NOT be rejected; count-equality is a reported signal; the brain
+  // routes it to a display mode.
+  const r = gateAxisCandidate({ axis_key: "color", values: [
+    { value: "red", families: ["p1"], basis: "variant_option", semantic_type: "color" },
+    { value: "green", families: ["p2"], basis: "variant_option", semantic_type: "color" },
+    { value: "blue", families: ["p3"], basis: "variant_option", semantic_type: "color" },
+  ] });
+  assert.equal(r.axisRejected, null, "an independent vocabulary is a real axis even if unique-per-product");
+  assert.ok(r.signals.some((s) => s.signal === "count_equality"), "count-equality is reported as a signal, not a rejection");
+  assert.equal(r.kept.length, 3);
 });
 
 check("REVIEW not rejection: a value resembling its product title ⇒ ق19 merchant review queue", () => {

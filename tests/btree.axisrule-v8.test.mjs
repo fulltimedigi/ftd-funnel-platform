@@ -22,7 +22,7 @@ import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
 const pol = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "config", "policy.json"), "utf8"));
-const MINR = pol.authoring_tree.min_exact_option_ratio, MAXOPT = pol.authoring_tree.max_published_options_per_question;
+const MINR = pol.authoring_tree.min_exact_option_ratio, MAXOPT = pol.display_contract.max_published_options_per_question;
 const dg = (stat, S, maxOptions = MAXOPT) => diagnoseAxesV8({ x: stat }, { S, minExactRatio: MINR, maxOptions });
 
 // ── decisive bound kept ─────────────────────────────────────────────────────────────────────────────────

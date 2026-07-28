@@ -11,8 +11,8 @@ import { dirname, join } from "node:path";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { oracleHash } from "../engine/kernel/authoringOracle/hash.js";
-import { buildTree, buildFullTree, RULE_V6, RULE_V7, RULE_V8 } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV8 } from "../authoring/brain2/axisRule.js";
+import { buildTree, buildFullTree, RULE_V7, RULE_V8, RULE_V9 } from "../authoring/brain2/tree.js";
+import { chooseAxisByInfoGainV9 } from "../authoring/brain2/axisRule.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -30,8 +30,8 @@ const constraintsFor = (thr) => inputs.resolvedContracts.map((c) => ({ id: c.axi
 
 console.log(`  · FULL tree (rule ${tree.ruleId}): depth=${tree.depth} · ${tree.nodes.length} nodes · ${tree.internalChoices.length} internal · ${tree.leaves.length} leaves · calls=${oracle.calls} cacheHits=${oracle.cacheHits}`);
 console.log(`  · axes chosen for branching: ${[...new Set(tree.internalChoices.map((c) => c.axisId))].join(", ")} (origin gated out if mostly-compromise)`);
-console.log(`  · v8 decisive/options-cap rejections (${(tree.guardRejections || []).length}): ${[...new Set((tree.guardRejections || []).map((r) => r.axis))].join(",") || "(none)"} — options-cap inert on oud (max opts/axis=5 < ${MAXOPT}); see ADR-0056`);
-console.log(`  · v8 signals (reported, not gated): ${(tree.mirrorSignals || []).map((s) => `${s.axis}@S${s.S}=share ${s.mirror_singleton_share}/opts ${s.published_options}`).join(", ") || "(none)"}`);
+console.log(`  · v9 nodes routed to ق20 DISPLAY MODE (not rejected): ${(tree.displayModeNodes || []).length} — ${[...new Set((tree.displayModeNodes || []).map((r) => r.axis + ":" + (r.reason.includes("options-cap") ? "options-cap" : "all-singleton")))].join(", ") || "(none)"} (options-cap inert on oud, max opts/axis=5 < ${MAXOPT}; see ADR-0057)`);
+console.log(`  · v9 signals (reported): ${(tree.mirrorSignals || []).map((s) => `${s.axis}@S${s.S}=share ${s.mirror_singleton_share}/opts ${s.published_options}`).join(", ") || "(none)"}`);
 
 function statsAtNode(poolRef) {
   const t = oracle.transcript().filter((e) => e.transition_kind === "PROBE" && e.parent_pool_ref === poolRef);
@@ -40,8 +40,8 @@ function statsAtNode(poolRef) {
   return Object.fromEntries(Object.entries(byAxis).map(([ax, m]) => [ax, { sizes: [...m.values()], evidence: oracle.groundedCount(ax) }]));
 }
 
-check("SC1. AXIS RULE v8 (score + decisive mirror bound + options cap, counts-only) re-runs from transcript to the SAME axis", () => {
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV8(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, maxOptions: MAXOPT }), axisId, `rule picks "${axisId}" at a node`);
+check("SC1. AXIS RULE v9 (score + display-mode routing for all-singleton/over-cap, counts-only) re-runs from transcript to the SAME axis", () => {
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV9(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, maxOptions: MAXOPT }), axisId, `rule picks "${axisId}" at a node`);
 });
 
 check("SC8. u₀-REACHABILITY — no exact candidate is dropped by branching (v5 invariant, server-side)", () => {
@@ -130,10 +130,10 @@ check("SC5. REACH — two numbers (@cap vs with_expansion) split by cause + comp
   const cfgV6 = { leafTotalCap: TOTAL };
   const measure = (t, orc) => { const surf = new Set(); let comp = 0; for (const leaf of t.leaves) { const shown = [...orc.membersOf(leaf.pools.exact_ref).slice().sort(), ...orc.membersOf(leaf.pools.compromise_ref).slice().sort()].slice(0, CAP); for (const s of skusOf(shown)) surf.add(s); if ((t.meta.get(leaf.evaluation_hash) || {}).compromiseOnly) comp++; } return { surf: surf.size, rate: t.leaves.length ? Math.round(comp / t.leaves.length * 100) : 0, root: t.internalChoices[0] && t.internalChoices[0].axisId, leaves: t.leaves.length }; };
   for (const d of [1, 2, 3]) {
-    const o6 = fresh(), m6 = measure(buildTree(o6, { maxDepth: d, rule: RULE_V6, ruleCfg: cfgV6 }), o6);
     const o7 = fresh(), m7 = measure(buildTree(o7, { maxDepth: d, rule: RULE_V7 }), o7);
     const o8 = fresh(), m8 = measure(buildTree(o8, { maxDepth: d, rule: RULE_V8, ruleCfg: { maxOptions: MAXOPT } }), o8);
-    console.log(`  · level ${d}: v6 surf=${m6.surf} comp=${m6.rate}% lv=${m6.leaves} │ v7 surf=${m7.surf} comp=${m7.rate}% lv=${m7.leaves} │ v8 surf=${m8.surf} comp=${m8.rate}% lv=${m8.leaves} (root ${m8.root})`);
+    const o9 = fresh(), m9 = measure(buildTree(o9, { maxDepth: d, rule: RULE_V9, ruleCfg: { maxOptions: MAXOPT } }), o9);
+    console.log(`  · level ${d}: v7 surf=${m7.surf} comp=${m7.rate}% lv=${m7.leaves} │ v8 surf=${m8.surf} comp=${m8.rate}% lv=${m8.leaves} │ v9 surf=${m9.surf} comp=${m9.rate}% lv=${m9.leaves} (root ${m9.root})`);
   }
   assert.equal(dropped.length, variant_unreachable + family_buried, "every drop classified by cause");
   assert.equal(withExp.size, cand.size, "with_expansion surfaces every candidate (grid)");
