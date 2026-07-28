@@ -57,20 +57,26 @@ export class PoolRegistry {
   }
 
   // ── EDGES (authorization) ──────────────────────────────────────────────────────────────────────
-  /** Mint a transition edge. Keyed by (parent_pool_ref, transition_ref) — one receipt PER EDGE. */
-  mintEdge({ parent_pool_ref, child_pool_ref, transition_ref, transition_kind }) {
+  /** Mint a transition edge. Keyed by (parent_pool_ref, transition_ref) — one receipt PER EDGE.
+   *  C1 (round-3): the MAC also binds `child_evaluation_hash` + `context_ref` — pool identity by
+   *  membership is weaker than evaluation identity (same members, different state/policy = different
+   *  meaning), so the edge authorizes a specific CHILD EVALUATION under a specific CONTEXT, not just a roster. */
+  mintEdge({ parent_pool_ref, child_pool_ref, transition_ref, transition_kind, child_evaluation_hash, context_ref }) {
     const key = parent_pool_ref + "::" + transition_ref;
     if (!this._edges.has(key)) {
-      const mac = this._mac("edge", { parent_pool_ref, child_pool_ref, transition_ref, transition_kind });
-      this._edges.set(key, { parent_pool_ref, child_pool_ref, transition_ref, transition_kind, mac });
+      const rec = { parent_pool_ref, child_pool_ref, transition_ref, transition_kind, child_evaluation_hash: child_evaluation_hash || null, context_ref: context_ref || null };
+      this._edges.set(key, { ...rec, mac: this._mac("edge", rec) });
     }
     const e = this._edges.get(key);
-    return Object.freeze({ ref: key, mac: e.mac, parent_pool_ref, child_pool_ref, transition_ref, transition_kind });
+    return Object.freeze({ ref: key, mac: e.mac, parent_pool_ref, child_pool_ref, transition_ref, transition_kind, child_evaluation_hash: e.child_evaluation_hash, context_ref: e.context_ref });
   }
 
+  /** SERVER-ONLY: every minted edge key — for the TREE-level bijection check (tree edges = minted edges). */
+  allEdgeRefs() { return [...this._edges.keys()]; }
+
   /**
-   * Verify an edge AUTHORIZES parent → child via the named transition. `override` can substitute a
-   * forged parent/child/transition to prove the MAC catches an unauthorized path (canary).
+   * Verify an edge AUTHORIZES parent → child (a specific child evaluation + context) via the named
+   * transition. `override` can substitute a forged field to prove the MAC catches an unauthorized path.
    */
   verifyEdge(receipt, override = {}) {
     if (!receipt || !receipt.ref) return false;
@@ -81,6 +87,8 @@ export class PoolRegistry {
       child_pool_ref: override.child_pool_ref ?? e.child_pool_ref,
       transition_ref: override.transition_ref ?? e.transition_ref,
       transition_kind: override.transition_kind ?? e.transition_kind,
+      child_evaluation_hash: override.child_evaluation_hash ?? e.child_evaluation_hash,
+      context_ref: override.context_ref ?? e.context_ref,
     };
     return this._mac("edge", fields) === e.mac;
   }

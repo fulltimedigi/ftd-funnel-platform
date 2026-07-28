@@ -32,6 +32,10 @@ export class OracleSession {
     this._constraints = constraints;
     this._units = units;
     this._context = context;
+    // context_ref (C1, round-3): binds every edge to the CONTEXT its child was evaluated under.
+    this._contextRef = "ctx_" + fnvHex(JSON.stringify({
+      s: context.structural_catalog_version ?? null, p: context.policy_version ?? null, k: context.kernel_version ?? null,
+    }));
     this._registry = new PoolRegistry();
     this._cache = new Map();      // evaluation_hash → { ev, pools, sets }
     this._transcript = [];
@@ -57,8 +61,51 @@ export class OracleSession {
     return this._commit(answers, opts, parent, "BRANCH");
   }
 
+  /**
+   * PROBE (round-3, C3) — evaluate an option under `parent` WITHOUT publishing a tree edge. It records a
+   * transcript entry (so option-completeness can require an evaluation for every enumerated option) and
+   * enforces REFINE monotonicity, but mints no edge — a probed-but-not-published option leaves a transcript
+   * mark, never an authorized tree edge. Returns the same handle shape minus `lineage_receipt`.
+   */
+  probe(parent, answers = {}, { opts } = {}) {
+    this._assertNode(parent);
+    const child = this._sets(answers, opts);
+    const p = this._cache.get(parent.evaluation_hash).sets;
+    const v = monotoneViolation(p, child);
+    if (v) throw new Error("illegal PROBE as REFINE (" + v + ")");
+    return this._commit(answers, opts, parent, "PROBE", { mintEdge: false });
+  }
+
   /** SERVER-ONLY: resolve an opaque pool ref to member ids (certifier / differential). */
   membersOf(ref) { return this._registry.resolve(ref); }
+
+  /** SERVER-ONLY: the answers that produced a node (for option enumeration; never exposed to the brain). */
+  answersOf(node) { this._assertNode(node); return { ...(this._cache.get(node.evaluation_hash).answers || {}) }; }
+
+  /**
+   * TREE-level verification (round-3, C1). Given the published nodes of a tree, assert:
+   *   • every non-root node's edge MAC verifies (parent + child_pool + transition + child_hash + context),
+   *   • each edge's `child_evaluation_hash` equals the node's actual hash and `parent_pool_ref` equals the
+   *     node's actual parent pool, and
+   *   • the SET of tree edges equals the SET of ALL minted edges EXACTLY (no valid edge assembled into an
+   *     unauthorized tree; no minted edge silently dropped).
+   */
+  verifyTree(nodes = []) {
+    const childNodes = nodes.filter((n) => n && n.transition && n.transition.lineage_receipt);
+    const treeEdgeRefs = [...new Set(childNodes.map((n) => n.transition.lineage_receipt.ref))].sort();
+    const mintedRefs = [...this._registry.allEdgeRefs()].sort();
+    const findings = [];
+    const bijection = treeEdgeRefs.length === mintedRefs.length && treeEdgeRefs.every((r, i) => r === mintedRefs[i]);
+    if (!bijection) findings.push(`tree edges (${treeEdgeRefs.length}) ≠ minted edges (${mintedRefs.length}) — set mismatch`);
+    for (const n of childNodes) {
+      const rec = n.transition.lineage_receipt;
+      if (!this._registry.verifyEdge(rec)) findings.push("edge MAC invalid: " + rec.ref);
+      if (rec.child_evaluation_hash !== n.evaluation_hash) findings.push("edge child_evaluation_hash ≠ node hash: " + rec.ref);
+      const parentEntry = this._cache.get(n.transition.parent_hash);
+      if (!parentEntry || rec.parent_pool_ref !== parentEntry.pools.eligible_ref) findings.push("edge parent_pool_ref ≠ actual parent pool: " + rec.ref);
+    }
+    return { ok: findings.length === 0, findings, treeEdges: treeEdgeRefs.length, mintedEdges: mintedRefs.length };
+  }
 
   /**
    * Verify a node's lineage. Two independent authentications:
@@ -94,7 +141,7 @@ export class OracleSession {
     return { exact: new Set(ev.exact_ids), eligible: new Set([...ev.exact_ids, ...ev.compromise_ids]), rejected: new Set(ev.rejected_ids), compromise: new Set(ev.compromise_ids) };
   }
 
-  _commit(answers, opts, parent, transition_kind) {
+  _commit(answers, opts, parent, transition_kind, { mintEdge = true } = {}) {
     const evaluation_hash = oracleHash({ units: this._units, constraints: this._constraints, answers, context: this._context, opts });
     this._considered.push({ evaluation_hash, transition_kind }); // EVERY option considered leaves a minted call
 
@@ -112,19 +159,20 @@ export class OracleSession {
         eligible_ref: this._registry.mintPool("eligible", eligibleMembers, { evaluation_hash }).ref,
       };
       const sets = { exact: new Set(ev.exact_ids), eligible: new Set(eligibleMembers), rejected: new Set(ev.rejected_ids), compromise: new Set(ev.compromise_ids) };
-      entry = { ev, pools, sets };
+      entry = { ev, pools, sets, answers: { ...answers } };
       this._cache.set(evaluation_hash, entry);
     }
 
     const parent_hash = parent ? parent.evaluation_hash : null;
     // qualified_option_ref — the kernel names the transition; the brain cannot fabricate one that verifies.
     const qualified_option_ref = "qopt_" + fnvHex([parent_hash || "root", transition_kind, JSON.stringify(canonicalAnswers(answers)), evaluation_hash].join("|"));
-    // EDGE receipt — authorizes THIS parent → THIS child via THIS transition (keyed by parent+transition).
-    const lineage_receipt = parent
-      ? this._registry.mintEdge({ parent_pool_ref: parent.pools.eligible_ref, child_pool_ref: entry.pools.eligible_ref, transition_ref: qualified_option_ref, transition_kind })
+    // EDGE receipt — authorizes THIS parent → THIS child evaluation, under THIS context (C1), keyed by
+    // (parent, transition). A PROBE mints NO edge (mintEdge:false) — evaluated, not published.
+    const lineage_receipt = parent && mintEdge
+      ? this._registry.mintEdge({ parent_pool_ref: parent.pools.eligible_ref, child_pool_ref: entry.pools.eligible_ref, transition_ref: qualified_option_ref, transition_kind, child_evaluation_hash: evaluation_hash, context_ref: this._contextRef })
       : null;
 
-    this._transcript.push({ evaluation_hash, transition_kind, parent_hash, state_outcome: entry.ev.state_outcome });
+    this._transcript.push({ evaluation_hash, transition_kind, parent_hash, state_outcome: entry.ev.state_outcome, published: !!lineage_receipt });
 
     return Object.freeze({
       projection: projectForAuthoring(entry.ev),

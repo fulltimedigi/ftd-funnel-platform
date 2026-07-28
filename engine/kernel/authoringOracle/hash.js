@@ -41,6 +41,10 @@ function canonicalConstraints(constraints) {
       requireProof: !!c.requireProof,
       strict: !!c.strict,
       descendants: c.descendants || null,
+      // C2 (round-3): the RESOLVED axis-contract predicate (numeric thresholds/cap) is a hashed input,
+      // so changing a contract threshold changes the evaluation identity even when serialized values are
+      // labels ("low"). This closes "same hash / different matching" for label-serialized constraint state.
+      resolved: c.resolved || null,
     }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
