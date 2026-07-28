@@ -6,9 +6,10 @@
  *
  * HISTORY: under the v3 axis rule this gate FOUND a collapse — a single-value axis (budget in C) was
  * branched as a useless one-answer question, because uniform partitions all scored 0 and the tie-break was
- * alphabetical. That collapse was SHOWN (not silently fixed) and, on the operator's ruling, corrected by the
- * v4 axis rule (max-info-gain@v4: integer Σsᵢ²+u₀² with reduction>0 + mirror + ratio guards). This gate now
- * runs GREEN under v4 (buildFullTree default) — the COLLAPSE SCAN below is the standing regression guard.
+ * alphabetical. That collapse was SHOWN (not silently fixed) and, on the operator's rulings, corrected by the
+ * v4→v5 axis rule (integer Σsᵢ²+u₀² with reduction>0 + per-option mirror + ratio guards + a u₀-reachability
+ * invariant). This gate now runs GREEN under v5 (buildFullTree default) — the COLLAPSE SCAN + reachability
+ * assertion below are the standing regression guards.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,14 +18,15 @@ import { dirname, join } from "node:path";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { buildFullTree } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV4 } from "../authoring/brain2/axisRule.js";
+import { chooseAxisByInfoGainV5 } from "../authoring/brain2/axisRule.js";
 
 let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
 const pol = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "config", "policy.json"), "utf8"));
 const LIMITS = { ...pol.authoring_tree, leaf_primary_cap: pol.surface.leaf_primary_cap };
 const MINR = pol.authoring_tree.min_exact_option_ratio;
-const MDM = pol.authoring_tree.mirror_option_density_max;
+const MSS = pol.authoring_tree.mirror_singleton_share_max;
+const EX = pol.surface.leaf_primary_cap + 1;
 
 const CONTRACTS = [
   { axis_id: "type", type: "nominal", mode: "NEVER_RELAX", priority: 1 },
@@ -62,9 +64,11 @@ function verify7(name, cat) {
 
   // COLLAPSE signal: a catalog with a discriminating axis must produce ≥1 branch (not a trivial root-only tree)
   assert.ok(tree.internalChoices.length >= 1, "tree is not trivial (at least one branch)");
-  // SC1 axis rule re-run (v4, from transcript counts + node exact pool + axis grounding evidence)
+  // SC1 axis rule re-run (v5, from transcript counts + node exact pool + axis grounding evidence)
   const statsAt = (poolRef) => { const t = oracle.transcript().filter((e) => e.transition_kind === "PROBE" && e.parent_pool_ref === poolRef); const byAxis = {}; for (const e of t) (byAxis[e.axis_id] ||= new Map()).set(e.option_ref, e.exact_count); return Object.fromEntries(Object.entries(byAxis).map(([a, m]) => [a, { sizes: [...m.values()], evidence: oracle.groundedCount(a) }])); };
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV4(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, mirrorDensityMax: MDM }), axisId, "SC1 rule re-run");
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV5(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, mirrorSingletonShareMax: MSS, exemptBound: EX }), axisId, "SC1 rule re-run");
+  // v5 u₀-reachability: no exact candidate is dropped by branching (all three catalogs use RELAXABLE softs)
+  assert.ok(oracle.verifyReachability(tree.nodes).ok, "u₀-reachability: every exact candidate stays reachable");
   // SC2 accumulation
   for (const n of tree.nodes) { if (n.transition.kind === "ROOT") continue; const ca = oracle.answersOf(n), pa = oracle.answersOf(byHash.get(n.transition.parent_hash)); assert.equal(Object.keys(ca).length, Object.keys(pa).length + 1, "SC2 one new axis"); for (const k of Object.keys(pa)) assert.equal(String(ca[k]), String(pa[k]), "SC2 parent unchanged"); }
   // SC3 identity + two-ledger link (scoped)

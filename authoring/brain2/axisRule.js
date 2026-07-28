@@ -141,4 +141,45 @@ export function diagnoseAxesV4(axisStats = {}, { S, minExactRatio = 0.5, mirrorD
  */
 export function chooseAxisByInfoGainV4(axisStats = {}, cfg = {}) { return diagnoseAxesV4(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4 };
+// v5 — same expected-residual SCORE as v4, but (consultation round-5): (1) the partition invariant
+// Σsᵢ + u₀ = S is asserted per axis (else the cross-axis denominator differs and the comparison is
+// undefined); (2) the MIRROR guard is PER-OPTION not distributional — reject when the SINGLETON SHARE
+// (options of size 1 / Σsᵢ) exceeds mirror_singleton_share_max, because a minority of singletons planted
+// among legitimate buckets (median & density both innocent) still reveals those items individually; and
+// (3) the guard is NOT applied when S ≤ exemptBound (an honest final binary on a tiny pool must not be
+// rejected). The v4 median/density criteria are retired. The u₀-REACHABILITY invariant is enforced
+// server-side (oracle.verifyReachability) because the counts-only brain cannot see an axis's relax mode.
+export const AXIS_RULE_ID_V5 = "max-info-gain@v5";
+
+export function diagnoseAxesV5(axisStats = {}, { S, minExactRatio = 0.5, mirrorSingletonShareMax = 0.2, exemptBound = 1 } = {}) {
+  const rejected = [];
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    // (1) PARTITION invariant: the buckets {sᵢ} ∪ {u₀} must partition the node's exact pool exactly.
+    if (u0 < 0) throw new Error(`diagnoseAxesV5: partition invariant Σsᵢ+u₀=S broken on axis "${ax}" — Σsᵢ (${sumS}) > S (${S}); an exact unit counted in >1 option (multi-membership) makes the cross-axis denominator undefined`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0;
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; } // reduction>0 strictly
+    // (3) MIRROR (per-option): exempt tiny pools; else reject on singleton share over the exact pool.
+    if (S > exemptBound) {
+      const singletonShare = sumS > 0 ? sizes.filter((n) => n === 1).length / sumS : 0;
+      if (singletonShare > mirrorSingletonShareMax) { rejected.push({ ax, reason: `mirror:singleton-share ${singletonShare.toFixed(3)}>${mirrorSingletonShareMax}` }); continue; }
+    }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0 });
+  }
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected };
+}
+
+/** v5 — the pure chooser (used by the builder AND re-run by the verifier). */
+export function chooseAxisByInfoGainV5(axisStats = {}, cfg = {}) { return diagnoseAxesV5(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5 };

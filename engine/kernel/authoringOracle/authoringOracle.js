@@ -68,6 +68,30 @@ export class AuthoringOracle {
   /** PUBLISH an option by ref (REFINE — mints the tree edge). Returns the child node. */
   publishByRef(parent, option_ref) { const { answers, meta } = this._answerFor(parent, option_ref); return this._session.refine(parent, answers, { meta }); }
 
+  /**
+   * SERVER-ONLY: u₀-REACHABILITY invariant (consultation round-5). For every INTERNAL node, the union of its
+   * published children's ELIGIBLE pools must cover the node's EXACT pool — i.e. no exact candidate is dropped
+   * by branching. A parent-exact unit is lost only when it is UNGROUNDED on the chosen axis (u₀) AND that
+   * axis is NEVER_RELAX (every option rejects it); that is a dead-end (ق2), so it FAILS the build. RELAXABLE
+   * unknowns compromise into every child and are covered. The counts-only brain cannot see the axis mode, so
+   * this check is enforced here, on the built tree, from the roster (membersOf) — never exposed to the brain.
+   */
+  verifyReachability(nodes = []) {
+    const byHash = new Map(nodes.map((n) => [n.evaluation_hash, n]));
+    const kids = new Map();
+    for (const n of nodes) { const ph = n.transition && n.transition.parent_hash; if (ph) (kids.get(ph) || kids.set(ph, []).get(ph)).push(n); }
+    const findings = []; let internalChecked = 0;
+    for (const [ph, cs] of kids) {
+      const parent = byHash.get(ph); if (!parent) continue;
+      internalChecked++;
+      const parentExact = new Set(this._session.membersOf(parent.pools.exact_ref));
+      const covered = new Set(cs.flatMap((c) => this._session.membersOf(c.pools.eligible_ref)));
+      const lost = [...parentExact].filter((x) => !covered.has(x));
+      if (lost.length) findings.push({ parent_hash: ph, lost_count: lost.length, lost: lost.slice(0, 8) });
+    }
+    return { ok: findings.length === 0, findings, internalChecked };
+  }
+
   /** SERVER-ONLY passthroughs (the verifier/certifier use these; phase B does not). */
   verifyTree(nodes) { return this._session.verifyTree(nodes); }
   transcript() { return this._session.transcript(); }
