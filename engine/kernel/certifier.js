@@ -101,7 +101,7 @@ export function validateCta(card, skuMeta, budget, answers) {
  */
 function famValues(u) { const out = {}; const v = u && u.values; if (v) for (const k of Object.keys(v)) out[k] = v[k]; return out; }
 
-function resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget) {
+function resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget, catalogSnapshot) {
   const answers = leaf.answers || {};
   const exact = [], compromise = [];
   for (const u of units) { const { klass } = classifyUnit(u, constraints, answers, opts); if (klass === "exact") exact.push(String(u.id)); else if (klass === "compromise") compromise.push(String(u.id)); }
@@ -112,6 +112,10 @@ function resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, 
   // model ONE variant as a kernel unit (family axes + its OWN budget band) so the kernel can mint a real
   // SelectionResult for THIS sku on THIS path.
   const vunitOf = (fid, row) => ({ id: row.id, values: { ...famValues(famUnit.get(fid)), budget: { value: bandOf(row.price, budget && budget.thresholds), grounded: row.price != null } } });
+  // the mint opts carry the CATALOG SNAPSHOT — verify() refuses a unit absent from it, so MEMBERSHIP is folded
+  // INTO the mint (not a separate downstream check). catalogUrls must be a Set of the shipped sku ids.
+  const mintOpts = { ...opts, catalogUrls: catalogSnapshot };
+  const mint = (fid, row) => { try { return select([vunitOf(fid, row)], constraints, answers, mintOpts); } catch { return null; } };
   const cards = [];
   for (const fid of fams) {
     const rows = (skusByFamily[fid] || []).map((id) => ({ id, ...(skuMeta[id] || {}) }));
@@ -124,23 +128,28 @@ function resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, 
       if (unavailable) { labeled.push({ ...card, cta_active: false, label: "unavailable" }); continue; }   // ق14: labeled, no CTA
       if (over) { labeled.push({ ...card, cta_active: false, label: "over_budget_ceiling" }); continue; }   // over ceiling → not purchasable here
       if (!validateCta({ sku_id: v.id, cta_url: v.buy_url }, skuMeta, budget, answers).valid) { labeled.push({ ...card, cta_active: false, label: "invalid_cta" }); continue; }
-      // MINT a REAL per-size certificate from the kernel (no derived hash). NO_MATCH / mismatch ⇒ not certified.
-      const cert = select([vunitOf(fid, v)], constraints, answers, opts);
-      if (!isMintedCertificate(cert, v.id)) { labeled.push({ ...card, cta_active: false, label: "uncertified" }); continue; }
+      // MINT a REAL per-size certificate — membership (catalogSnapshot) + verify are folded in. Absent sku /
+      // NO_MATCH / mismatch ⇒ not certified (no certificate, not surfaced).
+      const cert = mint(fid, v);
+      if (!isMintedCertificate(cert, v.id)) { labeled.push({ ...card, cta_active: false, label: cert ? "uncertified" : "not_in_snapshot" }); continue; }
       options.push({ ...card, cta_active: true, path_certified: true, certificate: cert });
     }
     // DEFAULT variant = the KERNEL's choice over the in-budget variants (NOT a display rule); price is only the
     // kernel's stable tie-break key (opts.tieBreak), never a selection override.
-    let default_sku_id = null, default_reason = null;
+    let default_sku_id = null, default_reason = null, comparative_leak = false;
     if (options.length) {
       const priceOf = new Map(options.map((o) => [o.sku_id, o.price]));
-      const sel = select(options.map((o) => vunitOf(fid, { id: o.sku_id, price: o.price })), constraints, answers, { ...opts, tieBreak: (u) => priceOf.get(u.id) ?? 0 });
+      const sel = select(options.map((o) => vunitOf(fid, { id: o.sku_id, price: o.price })), constraints, answers, { ...mintOpts, tieBreak: (u) => priceOf.get(u.id) ?? 0 });
       default_sku_id = sel.product_id; default_reason = sel.tie_break_reason;
+      // SINGLETON-SOUNDNESS guard: singleton mint == group eval is only valid while NO COMPARATIVE rule exists
+      // (one that excludes/promotes a candidate BECAUSE of another). The group winner, evaluated ALONE, must be
+      // identical (same pick, same match_state); a divergence ⇒ a comparative rule leaked in ⇒ flag it.
+      if (default_sku_id != null) { const alone = mint(fid, { id: default_sku_id, price: priceOf.get(default_sku_id) }); if (!alone || alone.product_id !== default_sku_id || alone.match_state !== sel.match_state) comparative_leak = true; }
     }
     // PRICE DISPLAY HONESTY: a multi-size family spans a range — the card shows "from"/range, never a single
     // price masquerading as THE product price.
     const price_from = prices.length ? Math.min(...prices) : null, price_to = prices.length ? Math.max(...prices) : null;
-    cards.push({ family_id: fid, default_sku_id, default_reason, options, labeled, price_from, price_to, price_is_range: price_from != null && price_from !== price_to });
+    cards.push({ family_id: fid, default_sku_id, default_reason, comparative_leak, options, labeled, price_from, price_to, price_is_range: price_from != null && price_from !== price_to });
   }
   return { cards };
 }
@@ -178,18 +187,23 @@ export function certify(cinput, ctx = {}) {
   // never credited. A sku is accounted iff it is a selectable option in ≥1 reachable leaf.
   let grid = null;
   if (skuMeta && skusByFamily) {
+    // the referenced CATALOG SNAPSHOT (shipped sku ids). Membership is enforced INSIDE the mint (verify), so a
+    // sku absent here is never certified — regardless of its offer data (skuMeta) or validateCta.
+    const catalogSnapshot = ctx.catalogSnapshot instanceof Set ? ctx.catalogSnapshot : new Set(Object.keys(skuMeta));
     const surfacedSkus = new Set();      // selectable AND kernel-certified (Surface+Purchase witness) anywhere
     const labeledSkus = new Set();        // shown labeled (over-ceiling / unavailable / uncertified) in ≥1 leaf
-    const gridFindings = []; let uncertified = 0, missingAttr = 0, defaultsNotFromKernel = 0, defaultOutsideOptions = 0, missingRange = 0;
+    const labeledReason = new Map();      // sku → why it was labeled (for a legible not-arrived reason)
+    const gridFindings = []; let uncertified = 0, missingAttr = 0, defaultsNotFromKernel = 0, defaultOutsideOptions = 0, missingRange = 0, comparativeLeak = 0;
     for (const leaf of leaves) {
-      const { cards } = resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget);
+      const { cards } = resolveLeafGrid(leaf, units, constraints, opts, skuMeta, skusByFamily, budget, catalogSnapshot);
       for (const card of cards) {
+        if (card.comparative_leak) comparativeLeak++;
         for (const o of card.options) {
           if (isMintedCertificate(o.certificate, o.sku_id)) surfacedSkus.add(o.sku_id);   // a REAL minted cert — not a hash
           else uncertified++;                                                              // an option without a real certificate is rejected
           if (!o.attributes || !o.attributes.title) missingAttr++;
         }
-        for (const l of card.labeled) labeledSkus.add(l.sku_id);
+        for (const l of card.labeled) { labeledSkus.add(l.sku_id); if (!surfacedSkus.has(l.sku_id)) labeledReason.set(l.sku_id, l.label); }
         // PRICE DISPLAY HONESTY: a multi-size family must show a range/from, never a single price.
         const distinctPrices = new Set(card.options.map((o) => o.price)).size + new Set(card.labeled.map((l) => l.price)).size;
         if (distinctPrices > 1 && !card.price_is_range) missingRange++;
@@ -205,19 +219,23 @@ export function certify(cinput, ctx = {}) {
     // (over-ceiling in every path it could appear) = variant_over_ceiling; else band-exact locked it out of every
     // path where it would be in-budget = band_locked_out.
     const surfacedFamilies = new Set([...surfacedSkus].map((s) => skuMeta[s] && skuMeta[s].family_id));
+    const LABEL_REASON = { over_budget_ceiling: "variant_over_ceiling", unavailable: "variant_unavailable", not_in_snapshot: "not_in_snapshot", uncertified: "uncertified", invalid_cta: "invalid_cta" };
     const reasonOf = (s) => {
       const f = skuMeta[s] && skuMeta[s].family_id;
       if (!surfacedFamilies.has(f)) return "family_buried";
-      if (labeledSkus.has(s)) return "variant_over_ceiling";
+      if (labeledReason.has(s)) return LABEL_REASON[labeledReason.get(s)] || "variant_over_ceiling";
       return "band_locked_out";
     };
-    const notArrivedDetail = notArrived.map((s) => ({ sku_id: s, reason: reasonOf(s) }));
+    // NAME the family + size for every not-arrived sku, so a band_locked_out failure is legible on sight.
+    const notArrivedDetail = notArrived.map((s) => ({ sku_id: s, family_id: skuMeta[s] && skuMeta[s].family_id, price: skuMeta[s] && skuMeta[s].price, reason: reasonOf(s) }));
     const reasonTally = notArrivedDetail.reduce((m, d) => ((m[d.reason] = (m[d.reason] || 0) + 1), m), {});
+    const bandLockedOut = notArrivedDetail.filter((d) => d.reason === "band_locked_out");
+    const bandLockedOutMessage = bandLockedOut.length ? `band_locked_out (${bandLockedOut.length}): ` + bandLockedOut.slice(0, 10).map((d) => `${d.family_id}·${d.sku_id.split("::").pop()}@${d.price}`).join(", ") : null;
     grid = {
       level: "sku-picker", one_card_per_family: true, certificates_minted_by_kernel: uncertified === 0, defaults_from_kernel: defaultsNotFromKernel === 0,
       uncertified, missing_attributes: missingAttr, defaults_not_from_kernel: defaultsNotFromKernel, default_outside_options: defaultOutsideOptions, missing_range: missingRange,
-      findings: gridFindings, surface_reachable_with_grid: surfacedSkus.size, not_arrived: notArrived,
-      not_arrived_detail: notArrivedDetail, not_arrived_by_reason: reasonTally, labeled_count: labeledSkus.size,
+      comparative_leak: comparativeLeak, membership_in_mint: true, findings: gridFindings, surface_reachable_with_grid: surfacedSkus.size, not_arrived: notArrived,
+      not_arrived_detail: notArrivedDetail, not_arrived_by_reason: reasonTally, band_locked_out_message: bandLockedOutMessage, labeled_count: labeledSkus.size,
     };
   }
 
@@ -228,7 +246,7 @@ export function certify(cinput, ctx = {}) {
   //  surface_reachable_with_grid AND no invalid CTA / grid finding; else the legacy family/cap-only surfaceReachable.
   const accounted = grid ? grid.surface_reachable_with_grid : surfaceReachable;
   const I3_no_active_sku_without_accounting_or_witness = grid
-    ? (accounted >= activeSkus && grid.uncertified === 0 && grid.findings.length === 0 && grid.defaults_not_from_kernel === 0 && grid.default_outside_options === 0 && grid.missing_range === 0)
+    ? (accounted >= activeSkus && grid.uncertified === 0 && grid.findings.length === 0 && grid.defaults_not_from_kernel === 0 && grid.default_outside_options === 0 && grid.missing_range === 0 && grid.comparative_leak === 0)
     : (surfaceReachable >= activeSkus);
   const invariants = { I1_no_dead_end, I2_input_completeness_and_provenance, I3_no_active_sku_without_accounting_or_witness };
 

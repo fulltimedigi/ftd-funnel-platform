@@ -92,6 +92,27 @@ check("4c. PRICE-DISPLAY HONESTY — a multi-size family card shows a price RANG
   console.log(`  · missing_range = ${g.missing_range} (every multi-size card carries price_from..price_to)`);
 });
 
+check("4d. MEMBERSHIP FOLDED INTO THE MINT — a sku removed from the catalog snapshot FAILS the mint (not validateCta)", () => {
+  // remove ONE sku from the referenced snapshot but KEEP its offer data (skuMeta) — so validateCta still passes.
+  const victim = Object.keys(inputs.skuMeta)[10];
+  const snapshot = new Set(Object.keys(inputs.skuMeta)); snapshot.delete(victim);
+  const r2 = certify(cinput, { ...ctx, catalogSnapshot: snapshot });
+  assert.ok(r2.grid.membership_in_mint, "membership is enforced inside the mint");
+  assert.equal(r2.grid.surface_reachable_with_grid, ACTIVE - 1, `the out-of-snapshot sku is NOT certified ⇒ surface drops to ${ACTIVE - 1}`);
+  assert.ok(r2.grid.not_arrived.includes(victim), "the victim is not-arrived");
+  assert.equal((r2.grid.not_arrived_detail.find((d) => d.sku_id === victim) || {}).reason, "not_in_snapshot", "reason is not_in_snapshot (named, legible)");
+  assert.equal(r2.invariants.I3_no_active_sku_without_accounting_or_witness, false, "I3 goes red — a missing sku is not silently accounted");
+  // PROOF the gate is the MINT, not validateCta: validateCta STILL passes for the victim (offer data intact).
+  const vt = validateCta({ sku_id: victim, cta_url: inputs.skuMeta[victim].buy_url }, inputs.skuMeta, inputs.budget, {});
+  assert.equal(vt.valid, true, "validateCta still passes — so the membership gate is the MINT, independent of validateCta");
+  console.log(`  · removed ${victim.split("::").pop()} from snapshot → surface ${r2.grid.surface_reachable_with_grid}/${ACTIVE}, reason=not_in_snapshot, I3 red; validateCta still valid ⇒ gate is the MINT`);
+});
+
+check("4e. SINGLETON-SOUNDNESS GUARD — no comparative rule leaked (group winner alone == in-group)", () => {
+  assert.equal(g.comparative_leak, 0, "the singleton mint equals the in-group evaluation (no candidate excluded/promoted because of another)");
+  console.log(`  · comparative_leak = ${g.comparative_leak} (singleton per-size mint is sound: the kernel evaluates each candidate independently)`);
+});
+
 check("5. CTA VALIDITY GUARD — a size OVER the path's budget ceiling is not purchasable there (labeled, no active CTA)", () => {
   const budget = inputs.budget;
   const bandOf = (p) => p <= budget.thresholds[0] ? "low" : p <= budget.thresholds[1] ? "mid" : "high";
