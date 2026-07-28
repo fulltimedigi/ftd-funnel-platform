@@ -30,7 +30,7 @@ const limits = { ...inputs.treeLimits, leaf_primary_cap: inputs.leafCaps.primary
 const kernelConstraints = inputs.resolvedContracts.map((c) => ({ id: c.axis_id, type: c.type, mode: c.mode, priority: c.priority, order: c.order, resolved: c.resolved || null }));
 const oracle = new AuthoringOracle({ units: inputs.units, resolvedContracts: inputs.resolvedContracts, context: inputs.context });
 const tree = buildFullTree(oracle, { limits });
-const cinput = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, leafTotalCap: inputs.leafCaps.total });
+const cinput = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, displayPrimaryCap: inputs.leafCaps.display_primary, leafTotalCap: inputs.leafCaps.total });
 
 // surface@cap (the runtime display truth today) + active SKUs — measured, then passed in as CONTEXT (the
 // Certifier does not compute display; it consumes the honest runtime numbers).

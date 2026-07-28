@@ -83,7 +83,9 @@ export async function oudOneLevelInputs(thresholdsOverride) {
 
   // Leaf display caps + full-tree limits come from POLICY, never a test literal (4-b corrections 3 & ruling 4).
   const pol = JSON.parse(fs.readFileSync(path.join(HERE, "..", "..", "config", "policy.json"), "utf8"));
-  const leafCaps = { primary: pol.surface.leaf_primary_cap, total: pol.surface.leaf_total_cap, policy_version: pol.policy_version };
+  // primary = the TREE's semantic-stop (frozen-fixture-load-bearing); display_primary = the DISPLAY node_kind
+  // cap (constitution: primary ≤ 3), owned by the display contract — DECOUPLED (ADR-0063).
+  const leafCaps = { primary: pol.surface.leaf_primary_cap, total: pol.surface.leaf_total_cap, display_primary: pol.display_contract.primary_cap, policy_version: pol.policy_version };
   // v9: the options cap is OWNED by the display contract (the brain reads it, never derives it).
   const treeLimits = { ...pol.authoring_tree, max_published_options_per_question: pol.display_contract.max_published_options_per_question, policy_version: pol.policy_version };
 

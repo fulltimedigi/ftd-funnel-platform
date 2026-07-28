@@ -23,8 +23,10 @@
   },
   "display_contract": {
     "_owner": "the DISPLAY / render layer (ق20) — NOT the brain. The brain READS these values; it never derives them. They are versioned WITH the display contract.",
-    "version": "display-1.0.0",
+    "version": "display-1.1.0",
     "max_published_options_per_question": 8,
+    "primary_cap": 3,
+    "_primary_cap_note": "how many PRIMARY (equally-exact) picks a DECISIVE terminal result may show (constitution: primary ≤ 3). node_kind reads it: terminal ⟺ 1 ≤ exact ≤ primary_cap; exact > primary_cap ⇒ a display GRID; exact = 0 ⇒ COMPROMISE_ONLY display. This is a DISPLAY concept, owned here — DELIBERATELY DECOUPLED from surface.leaf_primary_cap (the TREE's semantic-stop, which the FROZEN axis-selector v10 fixture depends on; ADR-0063). A value of 1 was a config error (an ‘it’, not a definition); the constitutional default is 3.",
     "_max_published_options_note": "how many options a single-select question (ق20 d*=1 one-step selector) can show. EXCEEDING it does NOT reject the axis — it ROUTES that NODE to a ق20 display mode (grid/selector). ق20 is a PER-NODE decision, not a whole-tree one.",
     "grid": {
       "_note": "GAP-7 (round-10, BUILT): the oversized-leaf COMPARISON GRID. An oversized display leaf is NOT pruned — it surfaces EVERY candidate (surface = all_candidates), NO tie hidden (hide_ties=false). Declared order + a tie_break_reason per card; descriptive attributes visible on cards (PRODUCT_DECISIONS); every card's CTA is the product's real URL, authorized by the certificate (ق21) — no generic button, no fallback. This makes surface_reachable_with_grid = with_expansion, closing GAP-7.",

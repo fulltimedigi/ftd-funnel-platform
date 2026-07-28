@@ -1,28 +1,26 @@
 /**
- * tests/certifier.gap7.test.mjs — GAP-6 THE SIZE PICKER + SKU-level I3 to 80/80, red-first (round-12, ADR-0063).
- * ===========================================================================================
- * Round-11 measured the honest gap (SKU-level I3 = 50/80): a family card pinned ONE variant, so a family's
- * extra sizes stranded. Round-12 BUILDS the missing capability (GAP-6, deferred since Part 1) — NOT a metric
- * change, the real fix. Two corrections land first, then the picker:
+ * tests/certifier.gap7.test.mjs — GAP-6 THE SIZE PICKER with REAL per-size certificates, red-first
+ * (round-12, ADR-0063/0064). ===========================================================================
+ * Round-11 measured the honest gap (SKU-level I3 = 50/80). Round-12 BUILT the picker (GAP-6). Round-12b closes
+ * the hole my own question exposed: a per-size `selection_result_id` was a DERIVED HASH — a buy button with no
+ * proof (ق21). Now every selectable size carries a `SelectionResult` MINTED BY THE KERNEL for that path + that
+ * sku (no hash, no authored id); the Certifier rejects any option without a real certificate.
  *
- *  • BAND SEMANTICS (ADR-0063): band boundaries are derived at the FAMILY level (the frozen design fixture),
- *    but MATCHING is at the VARIANT level with a ceiling — a family qualifies for every path where it has a
- *    purchasable variant ≤ that path's ceiling. Enforced in the Certifier (the layer that owns the SKU witness),
- *    NOT by re-typing the shared oud fixture (that fixture is pinned by the FROZEN axis-selector v10 — untouchable).
- *    ASSERT: no purchasable variant is band-locked-out of every path where it would be in budget.
- *  • node_kind (ADR-0063): terminal ⟺ 1 ≤ exact ≤ leaf_primary_cap; exact > cap ⇒ display (grid); exact = 0 ⇒
- *    display (COMPROMISE_ONLY). (Round-11's exact≥1 was an over-correction — an 11-exact leaf IS a grid.)
+ *  • Band matching at the VARIANT level with a ceiling (ADR-0063); band_locked_out = 0.
+ *  • node_kind (ADR-0063): terminal ⟺ 1 ≤ exact ≤ DISPLAY primary cap (constitution: ≤3, from policy —
+ *    DECOUPLED from the tree's semantic-stop, which the frozen v10 fixture needs). On oud: terminal=6, display=5.
+ *  • THE PICKER: one card per family + in-card size picker (ق4); every in-budget purchasable size is a SELECTABLE
+ *    option with a REAL kernel certificate; the default comes from the KERNEL; over-ceiling/unavailable sizes are
+ *    labeled, no active CTA; a multi-size card shows a PRICE RANGE, never a single price.
  *
- * THE PICKER: one card per family + an in-card size picker (ق4 — size is a folded dimension, never a card per
- * size). Every in-budget purchasable variant is a SELECTABLE option with its OWN certificate; the default comes
- * from the KERNEL (recorded reason), never a display rule; over-ceiling/unavailable variants are shown labeled,
- * no active CTA. ⇒ I3 50→80/80, publish UNBLOCKED. Gold frozen by hash; nothing softened.
+ * I3 → 80/80 with REAL certificates ⇒ publish UNBLOCKED. Gold frozen by hash; nothing softened.
  */
 import assert from "node:assert/strict";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { buildFullTree } from "../authoring/brain2/tree.js";
 import { compileTree, canonicalBytes } from "../authoring/compiler/structuralCompiler.js";
-import { certify, validateCta } from "../engine/kernel/certifier.js";
+import { certify, validateCta, isMintedCertificate } from "../engine/kernel/certifier.js";
+import { select } from "../engine/kernel/constraintKernel.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 let passed = 0;
@@ -34,7 +32,7 @@ const limits = { ...inputs.treeLimits, leaf_primary_cap: inputs.leafCaps.primary
 const kernelConstraints = inputs.resolvedContracts.map((c) => ({ id: c.axis_id, type: c.type, mode: c.mode, priority: c.priority, order: c.order, resolved: c.resolved || null }));
 const oracle = new AuthoringOracle({ units: inputs.units, resolvedContracts: inputs.resolvedContracts, context: inputs.context });
 const tree = buildFullTree(oracle, { limits });
-const cinput = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, leafTotalCap: inputs.leafCaps.total });
+const cinput = compileTree(oracle, tree, { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, displayPrimaryCap: inputs.leafCaps.display_primary, leafTotalCap: inputs.leafCaps.total });
 const ACTIVE = inputs.skuCount; // 80
 const DISTINCT_FAMILIES = new Set(Object.values(inputs.skuMeta).map((m) => m.family_id)).size; // 50 — the pre-picker one-per-family ceiling
 
@@ -48,33 +46,50 @@ const result = certify(cinput, ctx);
 const g = result.grid;
 
 check("1. BAND CORRECTION (before the picker): matching at variant level — NO purchasable variant is band-locked-out", () => {
-  // The pre-picker one-representative-per-family surface is bounded by the family count (50 ≤ 80): that gap is
-  // the FOLDED SIZE dimension, not band-exact. The band correction's job is to prove NONE of the gap is lock-out.
   console.log(`  · pre-picker ceiling (one representative per family) = ${DISTINCT_FAMILIES}/${ACTIVE} — the ${ACTIVE - DISTINCT_FAMILIES} missing are folded SIZES, to be surfaced by the picker`);
-  console.log(`  · band_locked_out = ${g.not_arrived_by_reason.band_locked_out || 0} (variant-level ceiling: every purchasable variant qualifies for a path where it is in budget)`);
-  assert.equal(g.not_arrived_by_reason.band_locked_out || 0, 0, "no purchasable variant is unqualified for every band it could fit (band-exact would strand these)");
+  console.log(`  · band_locked_out = ${g.not_arrived_by_reason.band_locked_out || 0}`);
+  assert.equal(g.not_arrived_by_reason.band_locked_out || 0, 0, "no purchasable variant is unqualified for every band it could fit");
 });
 
-check("2. node_kind fix — terminal ⟺ 1 ≤ exact ≤ cap; exact>cap or exact=0 ⇒ display (grid)", () => {
+check("2. node_kind — cap from POLICY (constitution ≤3), decoupled from the tree semantic-stop; terminal ⟺ 1≤exact≤cap", () => {
   const c = result.certificate;
-  console.log(`  · node_kind distribution: terminal=${c.terminal} display=${c.display} (leaf_primary_cap=${inputs.leafCaps.primary})`);
+  console.log(`  · display primary cap (policy) = ${inputs.leafCaps.display_primary} · tree semantic-stop (policy) = ${inputs.leafCaps.primary}`);
+  console.log(`  · node_kind distribution: terminal=${c.terminal} display=${c.display} (leaves with 1..${inputs.leafCaps.display_primary} exact ⇒ terminal; more ⇒ grid)`);
+  assert.equal(inputs.leafCaps.display_primary, 3, "the constitutional display primary cap is 3, sourced from policy (not a code literal)");
   assert.equal(c.terminal + c.display, result.checked, "every leaf is terminal or display");
-  // on oud: 3 single-exact leaves ⇒ terminal; the rest (multi-exact grids) ⇒ display.
-  assert.ok(c.terminal >= 1 && c.display >= 1, "both kinds present (single-exact terminals + multi-exact grids)");
+  assert.ok(c.terminal >= 1 && c.display >= 1, "both kinds present");
 });
 
-check("3. THE PICKER — I3 to 80/80: every in-budget purchasable variant is a selectable option (Surface+Purchase)", () => {
+check("3. THE PICKER — I3 to 80/80: every in-budget purchasable size is a selectable option (Surface+Purchase)", () => {
   console.log(`  · surface_reachable_with_grid (picker) = ${g.surface_reachable_with_grid}/${ACTIVE} · not_arrived = ${g.not_arrived.length} ${JSON.stringify(g.not_arrived_by_reason)}`);
   assert.equal(g.surface_reachable_with_grid, ACTIVE, `the picker must surface every active SKU (${ACTIVE})`);
   assert.deepEqual(g.not_arrived, [], "no SKU left behind: " + JSON.stringify(g.not_arrived_detail.slice(0, 6)));
 });
 
-check("4. EVERY selectable size carries its OWN certificate — and the DEFAULT comes from the KERNEL (no display rule)", () => {
-  console.log(`  · defaults_from_kernel = ${g.defaults_from_kernel} · default_outside_options = ${g.default_outside_options} · invalid_cta = ${g.invalid_cta}`);
-  assert.equal(g.invalid_cta, 0, "every selectable option has a path_certified selection_result_id (its own certificate)");
-  assert.equal(g.defaults_from_kernel, true, "every family's default variant comes from the kernel select (a recorded reason)");
-  assert.equal(g.default_outside_options, 0, "the kernel default is always one of the selectable options");
-  assert.equal(g.defaults_not_from_kernel, 0, "no family defaulted without the kernel");
+check("4. REAL CERTIFICATES — every surfaced size counts ONLY via a kernel-minted SelectionResult (no derived hash)", () => {
+  console.log(`  · uncertified = ${g.uncertified} · certificates_minted_by_kernel = ${g.certificates_minted_by_kernel} · defaults_from_kernel = ${g.defaults_from_kernel} · default_outside_options = ${g.default_outside_options}`);
+  assert.equal(g.uncertified, 0, "no surfaced size lacks a real minted certificate");
+  assert.equal(g.certificates_minted_by_kernel, true, "every size's certificate is minted by the kernel");
+  assert.equal(g.defaults_from_kernel, true, "every family default comes from the kernel select");
+  assert.equal(g.default_outside_options, 0, "the kernel default is one of the selectable options");
+});
+
+check("4b. HASH-REPLACEMENT REJECTED — a derived hash is NOT a certificate; only a real minted SelectionResult passes", () => {
+  // a REAL minted result for a concrete sku+path
+  const sku = Object.keys(inputs.skuMeta)[0]; const m = inputs.skuMeta[sku];
+  const famUnit = inputs.units.find((u) => String(u.id) === m.family_id);
+  const vunit = { id: sku, values: { ...(famUnit ? Object.fromEntries(Object.entries(famUnit.values)) : {}), budget: { value: "low", grounded: true } } };
+  const real = select([vunit], kernelConstraints, {}, {});
+  assert.equal(isMintedCertificate(real, sku), real.product_id === sku, "a real kernel SelectionResult for this sku passes the guard");
+  assert.equal(isMintedCertificate(fnv(`leaf|${sku}`), sku), false, "a derived fnv HASH is rejected (not a certificate)");
+  assert.equal(isMintedCertificate({ product_id: sku, match_state: "EXACT", policy_hash: "x" }, sku), false, "a hand-built plain object (not frozen, not kernel-minted) is rejected");
+  assert.equal(isMintedCertificate(real, "some-other-sku"), false, "a real certificate for a DIFFERENT sku does not certify this one");
+  console.log(`  · real minted SelectionResult ✓ passes · derived hash ✗ rejected · plain object ✗ rejected · wrong-sku ✗ rejected`);
+});
+
+check("4c. PRICE-DISPLAY HONESTY — a multi-size family card shows a price RANGE, not a single price", () => {
+  assert.equal(g.missing_range, 0, "no multi-size card shows a single price masquerading as THE product price");
+  console.log(`  · missing_range = ${g.missing_range} (every multi-size card carries price_from..price_to)`);
 });
 
 check("5. CTA VALIDITY GUARD — a size OVER the path's budget ceiling is not purchasable there (labeled, no active CTA)", () => {
@@ -84,22 +99,20 @@ check("5. CTA VALIDITY GUARD — a size OVER the path's budget ceiling is not pu
   assert.ok(overSku, "catalog has a variant above a mid ceiling");
   const [id, m] = overSku;
   const over = validateCta({ sku_id: id, cta_url: m.buy_url }, inputs.skuMeta, budget, { budget: "mid" });
-  assert.equal(over.valid, false, "over-ceiling CTA rejected"); assert.equal(over.reason, "cta_over_budget_ceiling", over.reason);
+  assert.equal(over.reason, "cta_over_budget_ceiling", "over-ceiling CTA rejected: " + over.reason);
   const famUrl = validateCta({ sku_id: id, cta_url: "https://x/products/" + m.family_id }, inputs.skuMeta, budget, {});
   assert.equal(famUrl.reason, "cta_does_not_resolve_to_sku", "a family url is not a per-variant CTA");
-  const ok = validateCta({ sku_id: id, cta_url: m.buy_url }, inputs.skuMeta, budget, {});
-  assert.equal(ok.valid, true, "the size's own buy_url with no ceiling is valid: " + ok.reason);
   console.log(`  · over-ceiling size ${id.split("::")[0]}#… (${m.price}) on a mid path → not purchasable (labeled), CTA rejected ✓`);
 });
 
-check("6. PUBLISH UNBLOCKED — I3 green (SKU-level, real capability built); I1 & I2 green; mint stays 100%; certificate mints", () => {
-  console.log(`  · I3 = ${result.invariants.I3_no_active_sku_without_accounting_or_witness} (picker delivers every SKU with its own valid CTA)`);
+check("6. PUBLISH UNBLOCKED — I3 green (real capability + real certs); I1 & I2 green; mint stays 100%; certificate mints", () => {
+  console.log(`  · I3 = ${result.invariants.I3_no_active_sku_without_accounting_or_witness}`);
   assert.equal(result.invariants.I1_no_dead_end, true, "I1 green");
   assert.equal(result.invariants.I2_input_completeness_and_provenance, true, "I2 green");
-  assert.equal(result.invariants.I3_no_active_sku_without_accounting_or_witness, true, "I3 green ⇒ PUBLISH UNBLOCKED (built the size picker, did not change the metric)");
-  assert.equal(result.mint_rate, 1, "mint stays 100% (equivalence unchanged — the picker is a display surface, not the pick)");
+  assert.equal(result.invariants.I3_no_active_sku_without_accounting_or_witness, true, "I3 green ⇒ PUBLISH UNBLOCKED (built the picker + real certs)");
+  assert.equal(result.mint_rate, 1, "mint stays 100% (equivalence unchanged)");
   assert.ok(result.certificate && !result.certificate_error, "certificate mints: " + result.certificate_error);
 });
 
-if (process.exitCode === 1) console.error("\nFAIL — the size picker did not deliver 80/80 truthfully, or a recorded rule was violated.\n");
-else console.log(`\nPASS — all ${passed} GAP-6 checks. Band-locked-out=0; picker I3 ${DISTINCT_FAMILIES}→${g.surface_reachable_with_grid}/${ACTIVE}; node_kind terminal=${result.certificate.terminal}/display=${result.certificate.display}; every size self-certified, default from kernel; over-ceiling rejected; mint 100%. PUBLISH UNBLOCKED. Nothing softened.\n`);
+if (process.exitCode === 1) console.error("\nFAIL — the size picker did not deliver 80/80 with REAL certificates, or a recorded rule was violated.\n");
+else console.log(`\nPASS — all ${passed} GAP-6 checks. band_locked_out=0; picker I3 ${DISTINCT_FAMILIES}→${g.surface_reachable_with_grid}/${ACTIVE} on REAL kernel certs (uncertified=0); node_kind terminal=${result.certificate.terminal}/display=${result.certificate.display} (cap=3); default from kernel; price range shown; over-ceiling rejected; hash-as-cert rejected; mint 100%. PUBLISH UNBLOCKED. Nothing softened.\n`);

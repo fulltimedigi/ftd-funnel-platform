@@ -40,7 +40,9 @@ const CINPUT_VERSION = "cinput-1";
  */
 export function compileTree(oracle, tree, opts = {}) {
   if (!tree || !tree.root || !Array.isArray(tree.nodes)) throw new Error("compileTree: a built tree is required");
-  const leafPrimaryCap = opts.leafPrimaryCap ?? 1;
+  // node_kind + the oversized-grid declaration use the DISPLAY primary cap (constitution: primary ≤ 3), owned by
+  // the display contract and DECOUPLED from the tree's semantic-stop (ADR-0063). Constitutional default = 3.
+  const leafPrimaryCap = opts.displayPrimaryCap ?? opts.leafPrimaryCap ?? 3;
   // children index by parent hash — a STRUCTURAL fact of the tree (no reason involved).
   const kids = new Map();
   for (const n of tree.nodes) { const ph = n.transition && n.transition.parent_hash; if (ph) (kids.get(ph) || kids.set(ph, []).get(ph)).push(n); }

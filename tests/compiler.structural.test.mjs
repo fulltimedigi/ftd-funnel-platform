@@ -27,7 +27,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const inputs = await oudOneLevelInputs();
 const limits = { ...inputs.treeLimits, leaf_primary_cap: inputs.leafCaps.primary };
 const fresh = () => new AuthoringOracle({ units: inputs.units, resolvedContracts: inputs.resolvedContracts, context: inputs.context });
-const compileOpts = { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, leafTotalCap: inputs.leafCaps.total };
+const compileOpts = { catalogVersion: inputs.context.structural_catalog_version, policyVersion: inputs.context.policy_version, kernelVersion: inputs.context.kernel_version, leafPrimaryCap: inputs.leafCaps.primary, displayPrimaryCap: inputs.leafCaps.display_primary, leafTotalCap: inputs.leafCaps.total };
 
 const oracle = fresh();
 const tree = buildFullTree(oracle, { limits });

@@ -121,8 +121,11 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 > **RESOLVED 2026-07-28 (ADR-0063).** The deferred variant/size picker (GAP-6) is built at the data/certifier
 > layer: one card per family + an in-card size picker (ق4 — size folded, never a card per size); every in-budget
 > purchasable variant is a SELECTABLE option with its own certificate (`selection_result_id · buy_url · price ·
-> availability · path_certified`); the default comes from the KERNEL (recorded reason), not a display rule;
-> over-ceiling / unavailable sizes are shown labeled with no active CTA. Band matching moved to the VARIANT level
+> availability · path_certified`) — and **round-12b (ADR-0064)** made that certificate a REAL `SelectionResult`
+> MINTED BY THE KERNEL per (path, size), not a derived hash (a hash is an id, not a proof — ق21); the Certifier
+> rejects any size without a real minted certificate (`uncertified = 0`). The default comes from the KERNEL
+> (recorded reason), not a display rule; a multi-size card shows a PRICE RANGE, not a single price; node_kind's
+> primary cap is the constitutional 3 from policy (decoupled from the tree semantic-stop). Band matching is at the VARIANT level
 > with a ceiling (boundaries stay at the family level — the frozen fixture is untouched); `band_locked_out = 0`
 > (no purchasable variant is design-locked-out). Result on oud: **SKU-level I3 = 80/80**, `not_arrived = []`,
 > mint stays 100%. **PUBLISH is unblocked.** Remaining out of scope: the live render of the picker UI + wiring/
