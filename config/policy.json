@@ -20,5 +20,12 @@
     "_comment": "Leaf display caps for surface_reachable (4-b): how many SKUs a leaf actually SURFACES (1 primary + N alternates). Read from policy, never hardcoded in a test — a test-written cap is an estimate, not a measure. Stamped with policy_version.",
     "leaf_primary_cap": 1,
     "leaf_total_cap": 4
+  },
+  "authoring_tree": {
+    "_comment": "Full-tree build limits (4-b). SEMANTIC stops (exact_pool<=leaf_primary_cap; no axis passes the gate) end branching for a REASON (ق12). The min_exact_option_ratio gate rejects a mostly-compromise (weakly-grounded) axis for BRANCHING — below it the axis is descriptive, not a question. The hard limits are a SAFETY NET only: exceeding them FAILS the build explicitly (never a silent truncation).",
+    "min_exact_option_ratio": 0.5,
+    "max_tree_depth": 6,
+    "max_nodes": 5000,
+    "max_oracle_calls_per_funnel": 100000
   }
 }

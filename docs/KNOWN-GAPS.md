@@ -115,3 +115,12 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 - **What it takes to close:** extend the certificate mechanism to scoring funnels (or migrate catalog
   scoring funnels to decision-table).
 
+
+## GAP-7 — `surface_reachable_with_expansion` (oversized-leaf grid, ق20) — display commitment, not yet built
+The full oracle-authored tree (4-b, ADR-0051) measures TWO reach numbers: `surface_reachable@cap`
+(today's truth — a leaf surfaces `leaf_total_cap` SKUs) and `surface_reachable_with_expansion` (what the
+ق20 oversized-leaf **comparison grid** would surface — every candidate in the leaf). On oudfactory they are
+**60/80 (75%)** vs **80/80 (100%)** — a **display commitment of 20 SKUs**. Those 20 are all `family_buried`
+(beyond the leaf cap), **0 `variant_unreachable`**. The gap closes only when the oversized-leaf grid is built
+in the render layer (untouched here); **`with_expansion` must NOT be claimed as achieved until then** — a
+candidate is never *hidden* (it is in a leaf), only capped in the primary surface. Tracked as a render task.

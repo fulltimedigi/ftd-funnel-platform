@@ -45,4 +45,30 @@ export function chooseAxisByInfoGain(axisOptionSizes = {}) {
   return scored[0][0];
 }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2 };
+// v3 — "max-info-gain on EXACT, gated" (round-3 full-tree rulings 2+3). A decisive result cares about who
+// matches EXACTLY, so the expected reduction is computed on EXACT pool sizes, not eligible. AND a strict
+// FILTER runs BEFORE ranking: an axis whose fraction of options with exact≠0 is below `minExactRatio` is a
+// mostly-compromise (weakly-grounded) axis — it is rejected FOR BRANCHING (it becomes descriptive, not a
+// question), so a soft axis can never be chosen by "reducing" the pool while zeroing exact.
+export const AXIS_RULE_ID_V3 = "max-info-gain@v3";
+
+/** v3. @param {{[axisId:string]: {exact:number,eligible:number}[]}} axisOptionStats — counts only. */
+export function chooseAxisByInfoGainV3(axisOptionStats = {}, { minExactRatio = 0.5 } = {}) {
+  const scored = [];
+  for (const [ax, opts] of Object.entries(axisOptionStats)) {
+    if (!opts || !opts.length) continue;
+    const ratio = opts.filter((o) => o.exact > 0).length / opts.length; // ruling 2: exact-option ratio gate
+    if (ratio < minExactRatio) continue; // a mostly-compromise axis does NOT branch
+    const sizes = opts.map((o) => o.exact);
+    const S = sizes.reduce((a, b) => a + b, 0);
+    if (S <= 0) continue;
+    const N = Math.max(...sizes);
+    const residual = sizes.reduce((a, b) => a + (b * b) / S, 0); // ruling 3: info-gain on EXACT sizes
+    scored.push([ax, N - residual]);
+  }
+  if (!scored.length) return null;
+  scored.sort((a, b) => (b[1] - a[1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return scored[0][0];
+}
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3 };
