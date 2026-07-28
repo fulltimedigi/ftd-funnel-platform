@@ -11,8 +11,8 @@ import { dirname, join } from "node:path";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { oracleHash } from "../engine/kernel/authoringOracle/hash.js";
-import { buildTree, buildFullTree, RULE_V3, RULE_V4, RULE_V5 } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV5 } from "../authoring/brain2/axisRule.js";
+import { buildTree, buildFullTree, RULE_V4, RULE_V5, RULE_V6 } from "../authoring/brain2/tree.js";
+import { chooseAxisByInfoGainV6 } from "../authoring/brain2/axisRule.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,7 +20,7 @@ let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
 
 const inputs = await oudOneLevelInputs();
-const CAP = inputs.leafCaps.total, MINR = inputs.treeLimits.min_exact_option_ratio, MSS = inputs.treeLimits.mirror_singleton_share_max, EX = inputs.leafCaps.primary + 1;
+const CAP = inputs.leafCaps.total, MINR = inputs.treeLimits.min_exact_option_ratio, TOTAL = inputs.leafCaps.total;
 const fresh = () => new AuthoringOracle({ units: inputs.units, resolvedContracts: inputs.resolvedContracts, context: inputs.context });
 const oracle = fresh();
 const tree = buildFullTree(oracle, { limits: { ...inputs.treeLimits, leaf_primary_cap: inputs.leafCaps.primary } });
@@ -30,6 +30,7 @@ const constraintsFor = (thr) => inputs.resolvedContracts.map((c) => ({ id: c.axi
 
 console.log(`  · FULL tree (rule ${tree.ruleId}): depth=${tree.depth} · ${tree.nodes.length} nodes · ${tree.internalChoices.length} internal · ${tree.leaves.length} leaves · calls=${oracle.calls} cacheHits=${oracle.cacheHits}`);
 console.log(`  · axes chosen for branching: ${[...new Set(tree.internalChoices.map((c) => c.axisId))].join(", ")} (origin gated out if mostly-compromise)`);
+console.log(`  · v6 mirror gate-signals (reported to authoring, ${(tree.guardRejections || []).length}): ${[...new Set((tree.guardRejections || []).map((r) => r.axis))].join(",") || "(none)"} — on oud all `+"`origin`"+` (a /S sparsity false-positive; see ADR-0054)`);
 
 function statsAtNode(poolRef) {
   const t = oracle.transcript().filter((e) => e.transition_kind === "PROBE" && e.parent_pool_ref === poolRef);
@@ -38,8 +39,8 @@ function statsAtNode(poolRef) {
   return Object.fromEntries(Object.entries(byAxis).map(([ax, m]) => [ax, { sizes: [...m.values()], evidence: oracle.groundedCount(ax) }]));
 }
 
-check("SC1. AXIS RULE v5 (integer Σsᵢ²+u₀², per-option mirror, counts-only) re-runs from transcript to the SAME axis", () => {
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV5(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, mirrorSingletonShareMax: MSS, exemptBound: EX }), axisId, `rule picks "${axisId}" at a node`);
+check("SC1. AXIS RULE v6 (integer score + DERIVED mirror residual Σsᵢ²/S<cap, counts-only) re-runs from transcript to the SAME axis", () => {
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV6(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, leafTotalCap: TOTAL }), axisId, `rule picks "${axisId}" at a node`);
 });
 
 check("SC8. u₀-REACHABILITY — no exact candidate is dropped by branching (v5 invariant, server-side)", () => {
@@ -124,13 +125,14 @@ check("SC5. REACH — two numbers (@cap vs with_expansion) split by cause + comp
   // regression: it fixes v4's over-rejection of honest small-pool binaries (surface recovers) while keeping
   // 0% compromise and 80/80 reach. Surface changes are a byproduct of guard correctness — NOT counter-tuning
   // (ق11): no question is added and no ties are cut to move the number; depth is unchanged.
-  const cfgV5 = { mirrorSingletonShareMax: MSS, exemptBound: EX };
+  const cfgV5 = { mirrorSingletonShareMax: inputs.treeLimits.mirror_singleton_share_max, exemptBound: inputs.leafCaps.primary + 1 };
+  const cfgV6 = { leafTotalCap: TOTAL };
   const measure = (t, orc) => { const surf = new Set(); let comp = 0; for (const leaf of t.leaves) { const shown = [...orc.membersOf(leaf.pools.exact_ref).slice().sort(), ...orc.membersOf(leaf.pools.compromise_ref).slice().sort()].slice(0, CAP); for (const s of skusOf(shown)) surf.add(s); if ((t.meta.get(leaf.evaluation_hash) || {}).compromiseOnly) comp++; } return { surf: surf.size, rate: t.leaves.length ? Math.round(comp / t.leaves.length * 100) : 0, root: t.internalChoices[0] && t.internalChoices[0].axisId, leaves: t.leaves.length }; };
   for (const d of [1, 2, 3]) {
-    const o3 = fresh(), m3 = measure(buildTree(o3, { maxDepth: d, rule: RULE_V3 }), o3);
     const o4 = fresh(), m4 = measure(buildTree(o4, { maxDepth: d, rule: RULE_V4 }), o4);
     const o5 = fresh(), m5 = measure(buildTree(o5, { maxDepth: d, rule: RULE_V5, ruleCfg: cfgV5 }), o5);
-    console.log(`  · level ${d}: v3 surf=${m3.surf} comp=${m3.rate}% lv=${m3.leaves} │ v4 surf=${m4.surf} comp=${m4.rate}% lv=${m4.leaves} │ v5 surf=${m5.surf} comp=${m5.rate}% lv=${m5.leaves} (root ${m5.root})`);
+    const o6 = fresh(), m6 = measure(buildTree(o6, { maxDepth: d, rule: RULE_V6, ruleCfg: cfgV6 }), o6);
+    console.log(`  · level ${d}: v4 surf=${m4.surf} comp=${m4.rate}% lv=${m4.leaves} │ v5 surf=${m5.surf} comp=${m5.rate}% lv=${m5.leaves} │ v6 surf=${m6.surf} comp=${m6.rate}% lv=${m6.leaves} (root ${m6.root})`);
   }
   assert.equal(dropped.length, variant_unreachable + family_buried, "every drop classified by cause");
   assert.equal(withExp.size, cand.size, "with_expansion surfaces every candidate (grid)");

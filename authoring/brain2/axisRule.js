@@ -182,4 +182,48 @@ export function diagnoseAxesV5(axisStats = {}, { S, minExactRatio = 0.5, mirrorS
 /** v5 — the pure chooser (used by the builder AND re-run by the verifier). */
 export function chooseAxisByInfoGainV5(axisStats = {}, cfg = {}) { return diagnoseAxesV5(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5 };
+// v6 — same expected-residual SCORE; the MIRROR guard is now DERIVED in the score's own currency
+// (consultation round-6), replacing the free-floating v5 singleton-share (which was blind to all-size-2
+// distributions). A mirror = "each answer leaves ≈ one candidate", i.e. a small EXPECTED RESIDUAL POOL SIZE.
+//   metric = Σsᵢ²/S  (the score's residual, option buckets only). Reject for branching when metric < CAP.
+// Implemented as the integer comparison Σsᵢ² < CAP·S (no float). Exempt when S ≤ CAP (the whole pool already
+// fits one display grid, so any split is at worst redundant, never a mirror).
+//   CAP anchor: the operator's command said leaf_primary_cap, but leaf_primary_cap=1 makes the criterion
+//   INERT (Σsᵢ²/S ≥ 1 always) — it rejects nothing and fails the operator's own "all-size-2 ⇒ reject" test.
+//   leaf_total_cap is the anchor that satisfies all three stated tests and matches the concept (a mirror
+//   leaves fewer than a grid's worth per answer). Surfaced in policy._mirror_metric_note; confirm.
+// NOTE (denominator, per the operator's "justify the denominator" rule): S includes the u₀ unknowns, so a
+// SPARSE-but-legitimate soft axis (large u₀) is flagged as a mirror by Σsᵢ²/S though its options do not
+// fragment (Σsᵢ²/Σsᵢ would clear it). This is a KNOWN false-positive of the literal /S spec — surfaced, not
+// silently switched. Every mirror rejection is reported (rejected[]) as an axis GATE-FAILURE signal.
+export const AXIS_RULE_ID_V6 = "max-info-gain@v6";
+
+export function diagnoseAxesV6(axisStats = {}, { S, minExactRatio = 0.5, leafTotalCap = 4 } = {}) {
+  const rejected = [];
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`diagnoseAxesV6: partition invariant Σsᵢ+u₀=S broken on axis "${ax}" — Σsᵢ (${sumS}) > S (${S})`);
+    const sumSq = sizes.reduce((a, b) => a + b * b, 0);
+    const penalized = sumSq + u0 * u0;
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; } // reduction>0 strictly
+    // MIRROR (derived): expected residual Σsᵢ²/S < leafTotalCap ⟺ Σsᵢ² < leafTotalCap·S. Exempt when S ≤ cap.
+    if (S > leafTotalCap && sumSq < leafTotalCap * S) { rejected.push({ ax, reason: `mirror:residual ${(sumSq / S).toFixed(2)}<${leafTotalCap}` }); continue; }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0 });
+  }
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected };
+}
+
+/** v6 — the pure chooser (builder + verifier). */
+export function chooseAxisByInfoGainV6(axisStats = {}, cfg = {}) { return diagnoseAxesV6(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6 };

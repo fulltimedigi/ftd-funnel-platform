@@ -62,14 +62,14 @@ const LIM = { ...pol.authoring_tree, leaf_primary_cap: pol.surface.leaf_primary_
 
 check("REACHABILITY FAILS (build rejected): branching a NEVER_RELAX axis with u₀>0 drops the ungrounded units", () => {
   const o = synth("NEVER_RELAX");
-  const tree = buildFullTree(o, { limits: LIM });
+  const tree = buildFullTree(o, { limits: LIM, rule: RULE_V5 }); // pin v5 (v6's mirror guard would pre-empt the small branch)
   const r = o.verifyReachability(tree.nodes);
   assert.equal(r.ok, false, "verifyReachability must FAIL — the 2 ungrounded-type units are in no branch");
-  assert.equal(r.findings.reduce((a, f) => a + f.lost_count, 0), 2, "exactly the 2 ungrounded-type units are lost");
+  assert.equal(r.exact_drops, 2, "exactly the 2 ungrounded-type units are lost");
 });
 check("REACHABILITY PASSES when the same axis is RELAXABLE (unknowns compromise into every branch)", () => {
   const o = synth("RELAXABLE");
-  const tree = buildFullTree(o, { limits: LIM });
+  const tree = buildFullTree(o, { limits: LIM, rule: RULE_V5 });
   assert.equal(o.verifyReachability(tree.nodes).ok, true, "RELAXABLE unknowns are covered by every child → no drop");
 });
 

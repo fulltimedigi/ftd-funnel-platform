@@ -68,28 +68,53 @@ export class AuthoringOracle {
   /** PUBLISH an option by ref (REFINE — mints the tree edge). Returns the child node. */
   publishByRef(parent, option_ref) { const { answers, meta } = this._answerFor(parent, option_ref); return this._session.refine(parent, answers, { meta }); }
 
+  /** SERVER-ONLY: is `unitId` GROUNDED on `axisId`? (roster-side; for drop-reason attribution). */
+  _isGrounded(unitId, axisId) {
+    const u = this._units.find((x) => String(x.id) === String(unitId));
+    if (!u) return false;
+    const g = u.values && (u.values.get ? u.values.get(axisId) : u.values[axisId]);
+    if (g == null) return false;
+    if (typeof g === "object" && !Array.isArray(g) && "value" in g) return g.value != null && g.grounded !== false;
+    return true;
+  }
+
   /**
-   * SERVER-ONLY: u₀-REACHABILITY invariant (consultation round-5). For every INTERNAL node, the union of its
-   * published children's ELIGIBLE pools must cover the node's EXACT pool — i.e. no exact candidate is dropped
-   * by branching. A parent-exact unit is lost only when it is UNGROUNDED on the chosen axis (u₀) AND that
-   * axis is NEVER_RELAX (every option rejects it); that is a dead-end (ق2), so it FAILS the build. RELAXABLE
-   * unknowns compromise into every child and are covered. The counts-only brain cannot see the axis mode, so
-   * this check is enforced here, on the built tree, from the roster (membersOf) — never exposed to the brain.
+   * SERVER-ONLY: u₀-REACHABILITY (round-5) + ELIGIBLE-DROP ACCOUNTING (round-6). For every INTERNAL node:
+   *   • EXACT invariant (HARD): every parent-EXACT candidate must stay in some child's eligible pool. An
+   *     exact candidate lost by branching is a dead-end (ق2) → the build FAILS. (RELAXABLE unknowns
+   *     compromise into every child and are covered; only a NEVER_RELAX-ungrounded exact unit is lost.)
+   *   • ELIGIBLE ledger (round-6): every parent-ELIGIBLE candidate (exact ∪ compromise) must stay eligible
+   *     at ≥1 child OR be RECORDED in the drop ledger with a NAMED reason. An UNRECORDED drop → build FAILS.
+   *     The only legitimate named reason here is `unknown_on_axis:<A>` (ungrounded on the chosen axis; a
+   *     NEVER_RELAX axis then rejects it in every branch). A drop with no attributable reason is unrecorded.
+   * Enforced here (roster-side) because the counts-only brain cannot see relax mode. `ok` ⇔ zero exact drops
+   * AND zero unrecorded eligible drops. Recorded compromise drops are allowed (surfaced, never silent).
    */
   verifyReachability(nodes = []) {
     const byHash = new Map(nodes.map((n) => [n.evaluation_hash, n]));
     const kids = new Map();
     for (const n of nodes) { const ph = n.transition && n.transition.parent_hash; if (ph) (kids.get(ph) || kids.set(ph, []).get(ph)).push(n); }
-    const findings = []; let internalChecked = 0;
+    const findings = []; const recordedMap = new Map(); let internalChecked = 0, exactDrops = 0, unrecorded = 0;
     for (const [ph, cs] of kids) {
       const parent = byHash.get(ph); if (!parent) continue;
       internalChecked++;
+      // the axis this node branched on = the single answer key present in a child but not the parent
+      const pKeys = Object.keys(this.answersOf(parent));
+      const childAxis = Object.keys(this.answersOf(cs[0])).find((k) => !pKeys.includes(k)) || "(unknown-axis)";
       const parentExact = new Set(this._session.membersOf(parent.pools.exact_ref));
+      const parentElig = new Set(this._session.membersOf(parent.pools.eligible_ref));
       const covered = new Set(cs.flatMap((c) => this._session.membersOf(c.pools.eligible_ref)));
-      const lost = [...parentExact].filter((x) => !covered.has(x));
-      if (lost.length) findings.push({ parent_hash: ph, lost_count: lost.length, lost: lost.slice(0, 8) });
+      const lostExact = [...parentExact].filter((x) => !covered.has(x));
+      if (lostExact.length) { exactDrops += lostExact.length; findings.push({ node_hash: ph, axis: childAxis, lost_count: lostExact.length, lost: lostExact.slice(0, 8) }); }
+      for (const x of parentElig) {
+        if (covered.has(x)) continue;
+        const reason = this._isGrounded(x, childAxis) ? "unrecorded" : `unknown_on_axis:${childAxis}`;
+        if (reason === "unrecorded") unrecorded++;
+        else recordedMap.set(reason, (recordedMap.get(reason) || 0) + 1);
+      }
     }
-    return { ok: findings.length === 0, findings, internalChecked };
+    const recorded_drops = [...recordedMap.entries()].map(([reason, count]) => ({ reason, count }));
+    return { ok: exactDrops === 0 && unrecorded === 0, findings, exact_drops: exactDrops, unrecorded_eligible_drops: unrecorded, recorded_drops, internalChecked };
   }
 
   /** SERVER-ONLY passthroughs (the verifier/certifier use these; phase B does not). */
