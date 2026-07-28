@@ -10,7 +10,7 @@
  * `RULE_V1` (most-options) and `RULE_V2` (max-info-gain) are both counts-only; the builder is rule-agnostic.
  */
 
-import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3 } from "./axisRule.js";
+import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4 } from "./axisRule.js";
 
 export const RULE_V1 = {
   id: AXIS_RULE_ID,
@@ -81,6 +81,25 @@ export const RULE_V3 = {
   },
 };
 
+// v4 — the current LAW (consultation round-4). Gathers, per candidate axis, the per-option EXACT sizes and
+// the axis EVIDENCE degree; and the NODE's exact-pool size S = |E| (identical for every axis at the node).
+// Ranking is by MIN integer `Σsᵢ² + u₀²` (u₀ = S − Σsᵢ), with the mirror + reduction>0 + ratio guards. See
+// axisRule.chooseAxisByInfoGainV4. Counts-only: the sizes are projection counts, evidence is a count.
+export const RULE_V4 = {
+  id: AXIS_RULE_ID_V4,
+  pick(node, perAxisRefs, oracle, cfg = {}) {
+    const S = node.projection.counts.exact; // node exact-pool size |E| — the v4 baseline (node-constant)
+    const stats = {};
+    for (const [ax, refs] of Object.entries(perAxisRefs)) {
+      stats[ax] = {
+        sizes: refs.map(({ option_ref }) => oracle.probeByRef(node, option_ref).projection.counts.exact),
+        evidence: oracle.groundedCount(ax),
+      };
+    }
+    return chooseAxisByInfoGainV4(stats, { S, minExactRatio: cfg.minExactRatio, mirrorDensityMax: cfg.mirrorDensityMax });
+  },
+};
+
 /**
  * buildFullTree — the WHOLE tree (round-3 full-tree rulings). Branching ends for a REASON (semantic stops),
  * bounded by policy hard limits (a safety net that FAILS the build on exceed — never a silent truncation).
@@ -89,9 +108,10 @@ export const RULE_V3 = {
  *   • semantic stop 2: no axis passes the exact-ratio gate ⇒ leaf.
  *   • hard limits (policy): max_tree_depth · max_nodes · max_oracle_calls_per_funnel ⇒ throw on exceed.
  */
-export function buildFullTree(oracle, { limits = {}, rule = RULE_V3 } = {}) {
+export function buildFullTree(oracle, { limits = {}, rule = RULE_V4 } = {}) {
   const leafPrimaryCap = limits.leaf_primary_cap ?? 1;
   const minExactRatio = limits.min_exact_option_ratio ?? 0.5;
+  const mirrorDensityMax = limits.mirror_option_density_max ?? 0.5;
   const maxDepth = limits.max_tree_depth ?? 6;
   const maxNodes = limits.max_nodes ?? 5000;
   const maxCalls = limits.max_oracle_calls_per_funnel ?? 100000;
@@ -115,8 +135,8 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V3 } = {}) {
     for (const ax of axes) { if (used.has(ax)) continue; const refs = oracle.enumerate(node, ax); if (refs.length) perAxisRefs[ax] = refs; }
     if (!Object.keys(perAxisRefs).length) { leaves.push(node); return; }
 
-    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio });
-    if (!chosen) { leaves.push(node); return; } // semantic stop 2: no axis passes the exact-ratio gate
+    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio, mirrorDensityMax });
+    if (!chosen) { leaves.push(node); return; } // semantic stop 2: no axis passes the guards (gate/mirror/reduction)
 
     internalChoices.push({ node, axisId: chosen });
     let publishedAny = false;
@@ -139,4 +159,4 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V3 } = {}) {
   return { root, nodes, internalChoices, leaves, meta, ruleId: rule.id, depth: maxObservedDepth };
 }
 
-export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3 };
+export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3, RULE_V4 };

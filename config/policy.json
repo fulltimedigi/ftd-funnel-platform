@@ -23,7 +23,12 @@
   },
   "authoring_tree": {
     "_comment": "Full-tree build limits (4-b). SEMANTIC stops (exact_pool<=leaf_primary_cap; no axis passes the gate) end branching for a REASON (ق12). The min_exact_option_ratio gate rejects a mostly-compromise (weakly-grounded) axis for BRANCHING — below it the axis is descriptive, not a question. The hard limits are a SAFETY NET only: exceeding them FAILS the build explicitly (never a silent truncation).",
+    "axis_rule_id": "max-info-gain@v4",
     "min_exact_option_ratio": 0.5,
+    "mirror_option_density_max": 0.5,
+    "_axis_rule_note": "v4 axis-selection law (consultation round-4). reduction = S - (Σsᵢ² + u₀²)/S, where S = the node's EXACT-pool size |E| (a NODE property, identical for every candidate axis at the node), sᵢ = per-option EXACT count, and u₀ = S - Σsᵢ is the explicit UNKNOWN-on-axis residual bucket. Because S is node-constant, ranking axes by max reduction == ranking by MIN integer (Σsᵢ² + u₀²) — no division/float/log (determinism + hash safety). Justification is EXPECTED RESIDUAL POOL SIZE (Σsᵢ²/S = Σ(sᵢ/S)·sᵢ), not a Gini index. Guards (all counts-only): reduction>0 strictly (kills a no-split single-value axis); MIRROR guard (median option size == 1, OR options/Σsᵢ > mirror_option_density_max) — a per-option-identifier axis scores the MAXIMUM reduction, so it MUST be gated by density, not by info-gain; and the existing min_exact_option_ratio gate. Tie-break order: fewer options -> smaller max sᵢ -> higher axis evidence degree (grounding coverage count) -> canonical axis id (last resort, never removed).",
+    "unknown_axis_handling": "separate_residual_bucket",
+    "_unknown_axis_handling_note": "For the info-gain accounting an UNGROUNDED value on the candidate axis is a SEPARATE residual bucket u₀ (excluded from every option size sᵢ), never propagated into the options. This is well-defined because an ungrounded value is NEVER `exact` (exact requires SAT requires grounded). The kernel's downstream CLASSIFICATION of such a unit stays mode-dependent and UNCHANGED (a NEVER_RELAX axis rejects it; a RELAXABLE axis compromises it into every branch) — that is the runtime partition, separate from this design-time axis-selection accounting. Invariant asserted at every node: Σsᵢ + u₀ == S == node exact-pool size.",
     "max_tree_depth": 6,
     "max_nodes": 5000,
     "max_oracle_calls_per_funnel": 100000

@@ -76,6 +76,21 @@ export class AuthoringOracle {
   /** SERVER-ONLY: the qualified-option COUNT for an axis at a node (for re-running the counts-only rule). */
   optionCount(node, axisId) { const a = this._session.answersOf(node); return enumerateQualifiedOptions(this._units, this._constraints, a, axisId).length; }
   axisIds() { return this._constraints.map((c) => String(c.id)); }
+  /**
+   * SERVER-ONLY: the axis EVIDENCE DEGREE — how many units carry a GROUNDED value on the axis (a count,
+   * never identities). This is the v4 tie-break signal (a better-evidenced axis wins an exact tie). It is a
+   * property of the axis over the whole catalog, so it is node-independent and deterministic.
+   */
+  groundedCount(axisId) {
+    let n = 0;
+    for (const u of this._units) {
+      const g = u && u.values && (u.values.get ? u.values.get(axisId) : u.values[axisId]);
+      if (g == null) continue;
+      if (typeof g === "object" && !Array.isArray(g) && "value" in g) { if (g.value != null && g.grounded !== false) n++; }
+      else n++;
+    }
+    return n;
+  }
   get calls() { return this._session.callCount; }
   get cacheHits() { return this._session.cacheHitCount; }
   get session() { return this._session; }

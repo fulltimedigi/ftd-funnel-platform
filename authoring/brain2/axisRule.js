@@ -71,4 +71,74 @@ export function chooseAxisByInfoGainV3(axisOptionStats = {}, { minExactRatio = 0
   return scored[0][0];
 }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3 };
+// v4 — "expected-residual reduction, integer, guarded" (consultation round-4). Fixes the v3 COLLAPSE: on a
+// uniform partition v3's `N − Σsᵢ²/S` (N = max bucket) is 0 for BOTH an ideal even split AND a single-value
+// axis, so the alphabetical tie-break picked the useless axis. v4 restores the correct baseline:
+//
+//   reduction(axis) = S − (Σsᵢ² + u₀²)/S
+//
+// where S = the NODE's exact-pool size |E| (a NODE property — identical for every candidate axis at the
+// node), sᵢ = per-option EXACT count, and u₀ = S − Σsᵢ is the EXPLICIT unknown-on-axis residual bucket
+// (ungrounded values are never `exact`, so they leave every sᵢ and land here; policy.unknown_axis_handling).
+// The buckets {sᵢ} ∪ {u₀} PARTITION the node's exact pool, so Σsᵢ + u₀ = S exactly (asserted).
+//
+// Justification (record this, NOT "Gini"): Σsᵢ²/S = Σ(sᵢ/S)·sᵢ is literally the EXPECTED size of the pool
+// that REMAINS after the shopper answers — maximizing the reduction shrinks the candidate pool as fast as
+// possible, which is the actual goal (reach a leaf under the cap). Because S is node-constant, ranking axes
+// by max reduction == ranking by MIN of the integer `Σsᵢ² + u₀²` — no division, no float, no log
+// (determinism + hash safety). Guards are counts-only; tie-break never starts from the axis id.
+export const AXIS_RULE_ID_V4 = "max-info-gain@v4";
+
+/** lower-median of an integer array (deterministic, no float average). */
+function lowerMedian(nums) {
+  const s = [...nums].sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)] : 0;
+}
+
+/**
+ * v4. @param {{[axisId:string]: {sizes:number[], evidence:number}}} axisStats — per-option EXACT sizes +
+ *   the axis EVIDENCE degree (grounding-coverage count; counts only, no identities).
+ * @param {{S:number, minExactRatio?:number, mirrorDensityMax?:number}} cfg — S = node exact-pool size |E|
+ *   (identical for every axis at this node). Returns the chosen axisId or null (a leaf / no valid axis).
+ */
+export function diagnoseAxesV4(axisStats = {}, { S, minExactRatio = 0.5, mirrorDensityMax = 0.5 } = {}) {
+  const rejected = []; // { ax, reason } — for reporting (e.g. "which axes did the mirror guard drop, by name")
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`diagnoseAxesV4: Σsᵢ (${sumS}) > S (${S}) on axis "${ax}" — an exact unit counted in >1 option (multi-membership) is unsupported by the partition model; define the axis single-valued or extend the model`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0; // Σsᵢ² + u₀² (integer)
+    // guard 1 — reduction > 0 STRICTLY: reduction>0 ⟺ S² > penalized. Kills a no-split (single-value) axis.
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; }
+    // guard 2 — MIRROR (a per-option-identifier axis scores the MAX reduction, so info-gain can't gate it):
+    //   reject if the median option holds a single item, OR options are too dense over the exact pool.
+    if (lowerMedian(sizes) === 1) { rejected.push({ ax, reason: "mirror:median-1" }); continue; }
+    if (sumS > 0 && k / sumS > mirrorDensityMax) { rejected.push({ ax, reason: `mirror:density ${k}/${sumS}>${mirrorDensityMax}` }); continue; }
+    // guard 3 — the existing mostly-compromise gate (fraction of options with exact>0 below the floor).
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0 });
+  }
+  // Rank: MIN penalized (= max reduction) → tie-break: fewer options → smaller max bucket → higher evidence
+  // → canonical axis id (LAST resort, never removed — determinism). The id is never the FIRST criterion.
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) ||
+    (a.k - b.k) ||
+    (a.maxSize - b.maxSize) ||
+    (b.evidence - a.evidence) ||
+    (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected };
+}
+
+/**
+ * v4 — the pure chooser (used by the builder AND re-run by the verifier). Delegates to diagnoseAxesV4 so
+ * guard logic lives in ONE place. Returns the chosen axisId or null (a leaf / no valid axis).
+ */
+export function chooseAxisByInfoGainV4(axisStats = {}, cfg = {}) { return diagnoseAxesV4(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4 };
