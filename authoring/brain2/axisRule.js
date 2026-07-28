@@ -368,4 +368,69 @@ export function diagnoseAxesV9(axisStats = {}, { S, minExactRatio = 0.5, maxOpti
 /** v9 — the pure chooser (builder + verifier). */
 export function chooseAxisByInfoGainV9(axisStats = {}, cfg = {}) { return diagnoseAxesV9(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7, chooseAxisByInfoGainV8, AXIS_RULE_ID_V8, diagnoseAxesV8, chooseAxisByInfoGainV9, AXIS_RULE_ID_V9, diagnoseAxesV9 };
+// ===========================================================================================
+// v10 — the SEPARATION + FREEZE (consultation round-10). Two things that were entangled in v9 are now
+// SEPARATE, because they have different lifecycles:
+//   • ACCEPTANCE GATES = SAFETY (correctness). Decide WHAT MAY be chosen. NOT frozen — may be strengthened at
+//     any time. `acceptanceGates` below. (partition invariant · reduction>0 · options cap → display mode ·
+//     all-singleton → display mode · min_exact_option_ratio. The semantic-type + evidence-basis gates live in
+//     authoringGates.js, phase A, where values are visible.)
+//   • RANKING RULE = QUALITY. Orders ONLY among the already-accepted axes. FROZEN as `AXIS_SELECTOR_VERSION`.
+//     `rankAxesV10` below. Proven QUALITY-not-safety by the control experiment (btree.control-random): under a
+//     random accepted-axis choice every PER-NODE safety invariant holds and in_candidate_pool/with_expansion
+//     stay 100%. surface_reachable@cap DOES vary with order — but that is a DISPLAY debt (GAP-7 not built),
+//     NOT a commitment the ranking carries; the ق2 breach exists in every order. So the freeze is
+//     UNCONDITIONAL, and surface_reachable@cap is a REGRESSION baseline, never a reopen threshold (which would
+//     pressure tuning the ranking to compensate for a missing display layer). See ADR-0058.
+// v10 is BEHAVIORALLY identical to v9 — this is a code/contract separation + a freeze, not a rule change.
+export const AXIS_SELECTOR_VERSION = "v10";
+
+/** SAFETY gates — decide which axes are branchable / display-mode / rejected. Counts only. NOT frozen. */
+export function acceptanceGates(axisStats = {}, { S, minExactRatio = 0.5, maxOptions = null } = {}) {
+  const branchable = [], displayMode = [], rejected = [];
+  if (!Number.isInteger(S) || S <= 0) return { branchable, displayMode, rejected };
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const confirms = (stat && stat.confirms) || sizes.map(() => true);
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`acceptanceGates: partition invariant Σsᵢ+u₀=S broken on "${ax}" — Σsᵢ(${sumS})>S(${S})`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0;
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; }
+    if (Number.isInteger(maxOptions) && k > maxOptions) { displayMode.push({ ax, reason: `options-cap ${k}>${maxOptions} → ق20 display mode (selector/grid), not a branch`, mode: "grid" }); continue; }
+    if (Math.max(...sizes) < 2) { displayMode.push({ ax, reason: "all-singleton → ق20 display mode (grid), not a branch", mode: "grid" }); continue; }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    let confDenom = 0, confSingletons = 0;
+    for (let i = 0; i < k; i++) { if (!confirms[i]) continue; confDenom += sizes[i]; if (sizes[i] === 1) confSingletons++; }
+    const mirror_singleton_share = confDenom > 0 ? Number((confSingletons / confDenom).toFixed(3)) : 0;
+    branchable.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0, mirror_singleton_share, published_options: k });
+  }
+  return { branchable, displayMode, rejected };
+}
+
+/**
+ * QUALITY ranking — FROZEN (AXIS_SELECTOR_VERSION). Orders ONLY the already-accepted axes; carries no safety.
+ * Inputs: [{ax, penalized, k, maxSize, evidence}]. Output: the same list sorted.
+ * Tie-break: penalized ↑ (min expected residual) → k ↑ (fewer options) → maxSize ↑ (more balanced) →
+ * evidence ↓ (better grounded) → axis id ↑ (deterministic last resort). DO NOT edit without a reopen artifact.
+ */
+export function rankAxesV10(branchable = []) {
+  return [...branchable].sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+}
+
+/** v10 = gates (safety) ∘ frozen ranking (quality). Behaviorally identical to v9. */
+export function diagnoseAxesV10(axisStats = {}, cfg = {}) {
+  const { branchable, displayMode, rejected } = acceptanceGates(axisStats, cfg);
+  const ranked = rankAxesV10(branchable);
+  const signals = branchable.map((b) => ({ ax: b.ax, mirror_singleton_share: b.mirror_singleton_share, published_options: b.published_options }));
+  return { chosen: ranked.length ? ranked[0].ax : null, ranked, rejected, displayMode, signals };
+}
+
+/** v10 — the pure chooser (builder + verifier). */
+export function chooseAxisByInfoGainV10(axisStats = {}, cfg = {}) { return diagnoseAxesV10(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7, chooseAxisByInfoGainV8, AXIS_RULE_ID_V8, diagnoseAxesV8, chooseAxisByInfoGainV9, AXIS_RULE_ID_V9, diagnoseAxesV9, AXIS_SELECTOR_VERSION, acceptanceGates, rankAxesV10, diagnoseAxesV10, chooseAxisByInfoGainV10 };

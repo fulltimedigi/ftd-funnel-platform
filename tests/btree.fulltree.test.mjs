@@ -12,7 +12,7 @@ import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracl
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { oracleHash } from "../engine/kernel/authoringOracle/hash.js";
 import { buildTree, buildFullTree, RULE_V7, RULE_V8, RULE_V9 } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV9 } from "../authoring/brain2/axisRule.js";
+import { chooseAxisByInfoGainV10 } from "../authoring/brain2/axisRule.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,7 +41,7 @@ function statsAtNode(poolRef) {
 }
 
 check("SC1. AXIS RULE v9 (score + display-mode routing for all-singleton/over-cap, counts-only) re-runs from transcript to the SAME axis", () => {
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV9(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, maxOptions: MAXOPT }), axisId, `rule picks "${axisId}" at a node`);
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV10(statsAtNode(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, maxOptions: MAXOPT }), axisId, `rule picks "${axisId}" at a node`);
 });
 
 check("SC8. u₀-REACHABILITY — no exact candidate is dropped by branching (v5 invariant, server-side)", () => {

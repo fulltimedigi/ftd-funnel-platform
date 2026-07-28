@@ -120,7 +120,17 @@ where it's tracked. Reviewed whenever the deploy shape or the render path change
 The full oracle-authored tree (4-b, ADR-0051) measures TWO reach numbers: `surface_reachable@cap`
 (today's truth — a leaf surfaces `leaf_total_cap` SKUs) and `surface_reachable_with_expansion` (what the
 ق20 oversized-leaf **comparison grid** would surface — every candidate in the leaf). On oudfactory they are
-**60/80 (75%)** vs **80/80 (100%)** — a **display commitment of 20 SKUs**. Those 20 are all `family_buried`
+**~61/80 (76%)** vs **80/80 (100%)** — a **display commitment of ~19 SKUs**. Those are all `family_buried`
 (beyond the leaf cap), **0 `variant_unreachable`**. The gap closes only when the oversized-leaf grid is built
 in the render layer (untouched here); **`with_expansion` must NOT be claimed as achieved until then** — a
 candidate is never *hidden* (it is in a leaf), only capped in the primary surface. Tracked as a render task.
+
+**Upgraded to a PUBLISH BLOCKER (round-10, ADR-0058).** The control experiment (`tests/btree.control-random.test.mjs`)
+showed `surface_reachable@cap` is **< 100% in every axis order** (oud 58–62/80; a worst-case fixture as low as
+10/20) — i.e. **18–22 SKUs are not surfaced today, in all orderings**. That is a ق2 (reachability) shortfall
+whose cause is **this missing grid, not the axis-ranking rule** (the frozen ranking even gives the *lowest*
+surface on the worst-case). Therefore, exactly like the SKU-witness pattern: **a funnel that promises reach its
+display cannot deliver is NOT PUBLISHED while GAP-7 is open — GAP-7 blocks PUBLISH, never measurement, and
+never the freeze of the axis selector.** Tying the axis-selector's reopening to `surface_reachable@cap` is
+**forbidden** (it would pressure tuning the ranking to compensate for a missing display layer). `surface@cap`
+is a **regression baseline** only (`tests/btree.axis-selector-freeze.test.mjs`).

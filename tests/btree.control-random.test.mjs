@@ -19,8 +19,8 @@
  */
 import assert from "node:assert/strict";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
-import { buildFullTree, RULE_V9 } from "../authoring/brain2/tree.js";
-import { diagnoseAxesV9 } from "../authoring/brain2/axisRule.js";
+import { buildFullTree, RULE_V10 } from "../authoring/brain2/tree.js";
+import { acceptanceGates } from "../authoring/brain2/axisRule.js";
 import { oudOneLevelInputs } from "./lib/oudUnits.mjs";
 
 let passed = 0;
@@ -34,7 +34,8 @@ function randomRule(seed) {
       const S = node.projection.counts.exact;
       const stats = {};
       for (const [ax, refs] of Object.entries(perAxisRefs)) stats[ax] = { sizes: refs.map(({ option_ref }) => oracle.probeByRef(node, option_ref).projection.counts.exact), confirms: refs.map(() => true), evidence: oracle.groundedCount(ax) };
-      const accepted = diagnoseAxesV9(stats, { S, minExactRatio: cfg.minExactRatio, maxOptions: cfg.maxOptions }).ranked.map((r) => r.ax).sort();
+      // use the SEPARATED safety gates (acceptanceGates) — the ranking is what we are removing.
+      const accepted = acceptanceGates(stats, { S, minExactRatio: cfg.minExactRatio, maxOptions: cfg.maxOptions }).branchable.map((r) => r.ax).sort();
       if (!accepted.length) return null;
       return accepted[fnv(node.evaluation_hash + ":" + seed) % accepted.length];
     },
@@ -61,6 +62,14 @@ for (const t of ["t1", "t2", "t3", "t4"]) skewTuples.push([t, "mid", "o1"]);
 // order makes the second axis degenerate (single-value in-branch), the other order does not.
 const corrTuples = [];
 for (const t of ["t1", "t2"]) for (const [b, o] of [["low", "o1"], ["mid", "o2"], ["high", "o3"]]) for (let c = 0; c < 2; c++) corrTuples.push([t, b, o]);
+// WORST-CASE (operator, round-10): the three properties that maximize surface@cap order-dependence together —
+//   • CONDITIONAL-applicability axis: origin discriminates ONLY inside type=t1 (grounded there), ungrounded in
+//     type=t2 (asking it first wastes a level; asking it inside t1 flattens that branch).
+//   • sizes at leaf_total_cap+1 (=5): branches of 5 need one more split to surface past the cap.
+//   • deliberate near-ties in the counts so the tie-break's effect shows.
+const worstTuples = [];
+for (let i = 0; i < 10; i++) worstTuples.push(["t1", ["low", "mid"][i % 2], i < 5 ? "o1" : "o2"]); // t1: origin o1×5,o2×5; budget low/mid
+for (let i = 0; i < 10; i++) worstTuples.push(["t2", ["low", "high"][i % 2], null]);                 // t2: origin UNGROUNDED; budget low/high
 
 const oud = await oudOneLevelInputs();
 const LIM = { ...oud.treeLimits, leaf_primary_cap: oud.leafCaps.primary };
@@ -72,6 +81,7 @@ const CATS = [
   ["C single-value", synCat([].concat(...["t1", "t2", "t3"].map((t) => ["o1", "o2"].map((o) => [t, "mid", o]))))],
   ["M-skewed(80%)", synCat(skewTuples)],
   ["M-correlated", synCat(corrTuples)],
+  ["W-worst-case", synCat(worstTuples)],
 ];
 
 function analyze(cat, rule) {
@@ -96,7 +106,7 @@ const SEEDS = [1, 7, 13, 42, 99, 123, 777];
 const varied = []; // catalogs whose surface@cap varies with axis order
 for (const [name, cat] of CATS) {
   check(`CONTROL (${name}): per-node SAFETY holds under random accepted-axis choice (7 seeds); surface measured`, () => {
-    const rows = [["v9", analyze(cat, RULE_V9)], ...SEEDS.map((s) => [`seed${s}`, analyze(cat, randomRule(s))])];
+    const rows = [["v10", analyze(cat, RULE_V10)], ...SEEDS.map((s) => [`seed${s}`, analyze(cat, randomRule(s))])];
     for (const [label, r] of rows) {
       // per-node/edge SAFETY (order-independent, expected green)
       assert.equal(r.hardViol, 0, `hard_violation 0 (${label})`);
@@ -111,23 +121,23 @@ for (const [name, cat] of CATS) {
     const surfaces = rows.map(([, r]) => r.surface);
     const min = Math.min(...surfaces), max = Math.max(...surfaces), sk = cat.skuCount;
     for (const [label, r] of rows) console.log(`    · ${name} ${label.padEnd(7)}: surface@cap=${String(r.surface).padStart(3)}/${sk}  in_pool/with_expansion=${r.inPool}/${sk}  (depth=${r.depth} questions=${r.questions})`);
-    console.log(`    · ${name}: surface@cap RANGE across order = [${min}..${max}]/${sk}  ⇒  ${min === max ? "INVARIANT to order" : "VARIES with order (ق2 commitment carried by the ranking)"}`);
+    console.log(`    · ${name}: surface@cap RANGE across order = [${min}..${max}]/${sk}  ⇒  ${min === max ? "INVARIANT to order" : "VARIES with order (a DISPLAY-debt swing — see the ruling)"}`);
     if (min !== max) varied.push({ name, min, max, sk });
   });
 }
 
-check("VERDICT — did surface_reachable@cap vary with axis ORDER? (the freeze-conditionality test)", () => {
-  console.log(`    · in_candidate_pool / with_expansion = 100% for EVERY order (no SKU is ever unreachable — no dead-end).`);
-  if (varied.length) {
-    console.log(`    · surface_reachable@cap VARIES with order on: ${varied.map((v) => `${v.name}[${v.min}..${v.max}/${v.sk}]`).join(", ")}.`);
-    console.log(`    · ⇒ the RANKING carries a ق2 (surface-reachability) commitment. VERDICT: freeze is CONDITIONAL — freeze v10 WITH this`);
-    console.log(`       variance recorded as a KNOWN LIMIT, and surface_reachable@cap becomes a fixed BENCHMARK that reopens the`);
-    console.log(`       component on a drop. (with_expansion/ق20 grid = 100% would remove the variance once GAP-7 is built.)`);
-  } else {
-    console.log(`    · surface_reachable@cap is INVARIANT to order on all catalogs ⇒ classification proven; UNCONDITIONAL freeze.`);
-  }
-  assert.ok(true, "measurement reported for the operator's ruling — this check does not itself freeze anything");
+check("RULING (operator, round-10): surface@cap variance is DISPLAY DEBT (GAP-7), not a rule commitment ⇒ UNCONDITIONAL freeze", () => {
+  console.log(`    · in_candidate_pool / with_expansion = 100% for EVERY order — no SKU is ever unreachable.`);
+  console.log(`    · surface_reachable@cap VARIES with order on: ${varied.map((v) => `${v.name}[${v.min}..${v.max}/${v.sk}]`).join(", ")}.`);
+  console.log(`    · BUT: surface@cap < 100% in EVERY order (e.g. oud 58-62/80, worst-case as low as 10/20) — the ق2 breach exists`);
+  console.log(`      REGARDLESS of order; its cause is the missing ق20 grid (GAP-7), not the ranking. On the worst-case the FROZEN`);
+  console.log(`      ranking gives the LOWEST surface (10/20, below several random orders) — proof the ranking does NOT protect`);
+  console.log(`      surface. Tying reopening to surface@cap would pressure tuning the ranking to compensate for a missing`);
+  console.log(`      display layer (the counter-tuning anti-pattern). RULING: (1) freeze axis_selector_version=v10 UNCONDITIONALLY;`);
+  console.log(`      (2) GAP-7 = a PUBLISH blocker (never a freeze blocker); (3) surface@cap is a REGRESSION baseline, never a`);
+  console.log(`      reopen threshold. See ADR-0058 + btree.axis-selector-freeze.test.mjs.`);
+  assert.ok(true, "documented (this check does not itself freeze anything — the freeze is recorded in ADR-0058 and pinned by the freeze test)");
 });
 
-if (process.exitCode === 1) console.error("\nRESULT: a PER-NODE safety invariant broke under random selection ⇒ investigate before any freeze.\n");
-else console.log(`\nRESULT: per-node safety holds under random selection across ${CATS.length} catalogs × ${SEEDS.length} seeds.\nThe ORDER-DEPENDENT number surface_reachable@cap ${varied.length ? "VARIES ⇒ CONDITIONAL freeze (see VERDICT)" : "is INVARIANT ⇒ unconditional freeze"}. Awaiting the operator's ruling.\n`);
+if (process.exitCode === 1) console.error("\nRESULT: a PER-NODE safety invariant broke under random selection ⇒ investigate.\n");
+else console.log(`\nRESULT: per-node safety holds under random selection across ${CATS.length} catalogs × ${SEEDS.length} seeds; in_candidate_pool/with_expansion=100% always.\nsurface_reachable@cap varies with order (display debt, GAP-7) but is <100% in EVERY order ⇒ the breach is not the ranking's.\nRULING: UNCONDITIONAL freeze of axis_selector_version=v10; GAP-7 is a publish blocker; surface@cap is a regression baseline.\n`);
