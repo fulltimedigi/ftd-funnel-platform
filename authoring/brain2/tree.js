@@ -10,7 +10,7 @@
  * `RULE_V1` (most-options) and `RULE_V2` (max-info-gain) are both counts-only; the builder is rule-agnostic.
  */
 
-import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6 } from "./axisRule.js";
+import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, AXIS_RULE_ID_V7, diagnoseAxesV7 } from "./axisRule.js";
 
 export const RULE_V1 = {
   id: AXIS_RULE_ID,
@@ -137,6 +137,27 @@ export const RULE_V6 = {
   },
 };
 
+// v7 — current LAW (round-7). Ranking unchanged ((Σsᵢ²+u₀²)/S). The mirror guard is the single infallible
+// bound (reject only an all-singleton "disguised grid"); the minority-mirror signal is REPORTED per chosen
+// axis (cfg.signalSink), not gated. Decisive-mirror rejections go to cfg.rejectionSink as gate-failure signals.
+export const RULE_V7 = {
+  id: AXIS_RULE_ID_V7,
+  pick(node, perAxisRefs, oracle, cfg = {}) {
+    const S = node.projection.counts.exact;
+    const stats = {};
+    for (const [ax, refs] of Object.entries(perAxisRefs)) {
+      stats[ax] = {
+        sizes: refs.map(({ option_ref }) => oracle.probeByRef(node, option_ref).projection.counts.exact),
+        evidence: oracle.groundedCount(ax),
+      };
+    }
+    const d = diagnoseAxesV7(stats, { S, minExactRatio: cfg.minExactRatio });
+    if (cfg.rejectionSink) for (const r of d.rejected) if (r.reason.startsWith("mirror")) cfg.rejectionSink.push({ node_hash: node.evaluation_hash, axis: r.ax, reason: r.reason, S });
+    if (cfg.signalSink && d.chosen) { const sig = d.signals.find((s) => s.ax === d.chosen); if (sig) cfg.signalSink.push({ node_hash: node.evaluation_hash, axis: d.chosen, mirror_singleton_share: sig.mirror_singleton_share, S }); }
+    return d.chosen;
+  },
+};
+
 /**
  * buildFullTree — the WHOLE tree (round-3 full-tree rulings). Branching ends for a REASON (semantic stops),
  * bounded by policy hard limits (a safety net that FAILS the build on exceed — never a silent truncation).
@@ -145,14 +166,15 @@ export const RULE_V6 = {
  *   • semantic stop 2: no axis passes the exact-ratio gate ⇒ leaf.
  *   • hard limits (policy): max_tree_depth · max_nodes · max_oracle_calls_per_funnel ⇒ throw on exceed.
  */
-export function buildFullTree(oracle, { limits = {}, rule = RULE_V6 } = {}) {
+export function buildFullTree(oracle, { limits = {}, rule = RULE_V7 } = {}) {
   const leafPrimaryCap = limits.leaf_primary_cap ?? 1;
   const minExactRatio = limits.min_exact_option_ratio ?? 0.5;
   const mirrorDensityMax = limits.mirror_option_density_max ?? 0.5; // v4 legacy (RULE_V4 only)
   const mirrorSingletonShareMax = limits.mirror_singleton_share_max ?? 0.2; // v5 legacy (RULE_V5 only)
   const exemptBound = leafPrimaryCap + 1; // v5 legacy exemption (RULE_V5 only)
-  const leafTotalCap = limits.leaf_total_cap ?? 4; // v6 mirror anchor: residual < cap; exempt when S ≤ cap
-  const guardRejections = []; // v6: mirror rejections reported as axis gate-failure signals
+  const leafTotalCap = limits.leaf_total_cap ?? 4; // v6 legacy mirror anchor (RULE_V6 only)
+  const guardRejections = []; // decisive-mirror rejections reported as axis gate-failure signals
+  const mirrorSignals = []; // v7: reported minority-mirror share per chosen axis (NOT a gate)
   const maxDepth = limits.max_tree_depth ?? 6;
   const maxNodes = limits.max_nodes ?? 5000;
   const maxCalls = limits.max_oracle_calls_per_funnel ?? 100000;
@@ -176,7 +198,7 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V6 } = {}) {
     for (const ax of axes) { if (used.has(ax)) continue; const refs = oracle.enumerate(node, ax); if (refs.length) perAxisRefs[ax] = refs; }
     if (!Object.keys(perAxisRefs).length) { leaves.push(node); return; }
 
-    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio, mirrorDensityMax, mirrorSingletonShareMax, exemptBound, leafTotalCap, rejectionSink: guardRejections });
+    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio, mirrorDensityMax, mirrorSingletonShareMax, exemptBound, leafTotalCap, rejectionSink: guardRejections, signalSink: mirrorSignals });
     if (!chosen) { leaves.push(node); return; } // semantic stop 2: no axis passes the guards (gate/mirror/reduction)
 
     internalChoices.push({ node, axisId: chosen });
@@ -197,7 +219,7 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V6 } = {}) {
 
   expand(root, new Set(), 0);
   const maxObservedDepth = Math.max(...[...meta.values()].map((m) => m.depth));
-  return { root, nodes, internalChoices, leaves, meta, ruleId: rule.id, depth: maxObservedDepth, guardRejections };
+  return { root, nodes, internalChoices, leaves, meta, ruleId: rule.id, depth: maxObservedDepth, guardRejections, mirrorSignals };
 }
 
-export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3, RULE_V4, RULE_V5, RULE_V6 };
+export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3, RULE_V4, RULE_V5, RULE_V6, RULE_V7 };

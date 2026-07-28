@@ -226,4 +226,51 @@ export function diagnoseAxesV6(axisStats = {}, { S, minExactRatio = 0.5, leafTot
 /** v6 — the pure chooser (builder + verifier). */
 export function chooseAxisByInfoGainV6(axisStats = {}, cfg = {}) { return diagnoseAxesV6(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6 };
+// v7 — the mirror guard is reduced to the ONE infallible counts-only bound (consultation round-6→7). Mirror
+// is a SEMANTIC property (are the axis values product identities?) the counts-only brain cannot see, so any
+// numeric threshold is either over-aggressive or blind. The only case counts can decide WITHOUT error is the
+// DECISIVE mirror: every published option isolates a single item (max sᵢ < 2) ⇒ a disguised grid — showing
+// the grid is always more honest, at any S (so there is NO small-pool exemption). Everything softer (a
+// MINORITY of singletons) is a REPORTED signal (mirror_singleton_share, measured on GROUNDED options only —
+// an unknown is not a revealing option), escalated to the authoring gates where the values ARE visible.
+//
+// TWO DENOMINATORS, kept distinct (each stated: what it measures · its denominator · why that denominator):
+//   • RANKING residual = (Σsᵢ² + u₀²)/S — "how much pool is expected to remain?"; the unknown IS a real
+//     residual bucket, so it belongs in the numerator and the denominator is the whole node pool S. (v5 form.)
+//   • MIRROR signal = (#singleton options)/Σsᵢ — "do the PUBLISHED options isolate individuals?"; an unknown
+//     is not a published, identity-revealing option, so the denominator is the GROUNDED pool Σsᵢ, not S.
+// v6's Σsᵢ²/S<leaf_total_cap guard was doubly broken (hybrid denominator underscored sparse-grounding axes;
+// threshold contradicted leaf_primary_cap; size-weighted ⇒ blind to a minority mirror) — corrected here.
+export const AXIS_RULE_ID_V7 = "max-info-gain@v7";
+
+export function diagnoseAxesV7(axisStats = {}, { S, minExactRatio = 0.5 } = {}) {
+  const rejected = [], signals = [];
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected, signals };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`diagnoseAxesV7: partition invariant Σsᵢ+u₀=S broken on axis "${ax}" — Σsᵢ (${sumS}) > S (${S})`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0; // RANKING residual (Σsᵢ²+u₀²)/S
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; } // reduction>0 strictly
+    // DECISIVE mirror bound (no free number, no exemption): reject only when NO option isolates >1 item.
+    if (Math.max(...sizes) < 2) { rejected.push({ ax, reason: "mirror:all-singleton (disguised grid)" }); continue; }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    // REPORTED (not a gate): minority-mirror signal, measured on the GROUNDED pool only.
+    const mirror_singleton_share = sumS > 0 ? Number((sizes.filter((n) => n === 1).length / sumS).toFixed(3)) : 0;
+    signals.push({ ax, mirror_singleton_share });
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0, mirror_singleton_share });
+  }
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected, signals };
+}
+
+/** v7 — the pure chooser (builder + verifier). */
+export function chooseAxisByInfoGainV7(axisStats = {}, cfg = {}) { return diagnoseAxesV7(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7 };

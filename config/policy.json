@@ -23,7 +23,8 @@
   },
   "authoring_tree": {
     "_comment": "Full-tree build limits (4-b). SEMANTIC stops (exact_pool<=leaf_primary_cap; no axis passes the gate) end branching for a REASON (ق12). The min_exact_option_ratio gate rejects a mostly-compromise (weakly-grounded) axis for BRANCHING — below it the axis is descriptive, not a question. The hard limits are a SAFETY NET only: exceeding them FAILS the build explicitly (never a silent truncation).",
-    "axis_rule_id": "max-info-gain@v6",
+    "axis_rule_id": "max-info-gain@v7",
+    "_v7_mirror_note": "v7 (round-7) reduces the mirror GUARD to the single infallible counts-only bound: reject an axis for branching ONLY when no published option isolates >1 item (max sᵢ < 2 — a disguised grid); no threshold, no small-pool exemption (a grid is always more honest). The minority-mirror case is a REPORTED signal, not a gate: mirror_singleton_share = (#singleton options)/Σsᵢ (measured on GROUNDED options only — an unknown is not a revealing option), surfaced per chosen axis (tree.mirrorSignals) and escalated to the authoring gates where the VALUES are visible (mirror is a semantic property the counts-only brain cannot judge). Two denominators kept distinct: RANKING residual = (Σsᵢ²+u₀²)/S (unknown is a real bucket); MIRROR share = /Σsᵢ (unknown is not an option). This retires the v6 Σsᵢ²/S<leaf_total_cap guard, which was doubly broken (hybrid denominator underscored sparse-grounding axes like oud `origin`; threshold contradicted leaf_primary_cap; size-weighted ⇒ blind to a minority mirror). leaf_total_cap/mirror_singleton_share_max/mirror_option_density_max are retained as v6/v5/v4 legacy only.",
     "min_exact_option_ratio": 0.5,
     "mirror_singleton_share_max": 0.2,
     "mirror_option_density_max": 0.5,

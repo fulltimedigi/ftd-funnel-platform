@@ -18,14 +18,13 @@ import { dirname, join } from "node:path";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { buildFullTree } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV6 } from "../authoring/brain2/axisRule.js";
+import { chooseAxisByInfoGainV7 } from "../authoring/brain2/axisRule.js";
 
 let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
 const pol = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "config", "policy.json"), "utf8"));
 const LIMITS = { ...pol.authoring_tree, leaf_primary_cap: pol.surface.leaf_primary_cap };
 const MINR = pol.authoring_tree.min_exact_option_ratio;
-const TOTAL = pol.surface.leaf_total_cap; // v6 mirror anchor
 
 const CONTRACTS = [
   { axis_id: "type", type: "nominal", mode: "NEVER_RELAX", priority: 1 },
@@ -41,17 +40,14 @@ function catalog(tuples) {
   return { units, resolvedContracts: CONTRACTS, context: { structural_catalog_version: "syn", policy_version: "syn", kernel_version: "k_1" }, skusByFamily };
 }
 
-// Catalogs are sized so a DISCRIMINATING axis has buckets big enough (≥ leaf_total_cap avg) to survive v6's
-// derived mirror guard (reject expected residual Σsᵢ²/S < leaf_total_cap) — otherwise an all-small-bucket
-// axis is (correctly, per the operator's "all-size-2 ⇒ reject") gated as a mirror and the tree is a grid.
-// A: ONE DOMINANT axis — type 2 values × 8 (buckets [8,8]); budget & origin single-value (gated). Expect type only.
-const A = catalog([...Array(16)].map((_, i) => [`t${i % 2}`, "mid", "o1"]));
-// B: EQUAL axes — type×budget×origin all discriminate; ×4 copies keep buckets ≥4 through the levels.
-const Bt = []; for (const t of ["t1", "t2"]) for (const b of ["low", "high"]) for (const o of ["o1", "o2"]) for (let c = 0; c < 4; c++) Bt.push([t, b, o]);
-const B = catalog(Bt);
-// C: a SINGLE-VALUE axis (budget = "mid" only) alongside discriminating type/origin (×4 copies) — budget must NOT be chosen.
-const Ct = []; for (const t of ["t1", "t2"]) for (const o of ["o1", "o2"]) for (let c = 0; c < 4; c++) Ct.push([t, "mid", o]);
-const C = catalog(Ct);
+// Original small distributions (v7's decisive mirror bound only rejects an ALL-singleton axis, so all-size-2
+// / all-size-3 axes are accepted — v7 is not over-aggressive, unlike the retired v6 residual guard).
+// A: ONE DOMINANT axis (type 8 values ×2; budget & origin single-value) — expect type branches, others gated.
+const A = catalog([...Array(16)].map((_, i) => [`t${i % 8}`, "mid", "o1"]));
+// B: EQUAL axes (type×budget×origin all discriminate) — expect a multi-level tree, no collapse.
+const B = catalog([].concat(...["t1", "t2"].map((t) => [].concat(...["low", "mid", "high"].map((b) => ["o1", "o2"].map((o) => [t, b, o]))))));
+// C: a SINGLE-VALUE axis (budget = "mid" only) alongside discriminating type/origin — budget must NOT be chosen.
+const C = catalog([].concat(...["t1", "t2", "t3"].map((t) => ["o1", "o2"].map((o) => [t, "mid", o]))));
 const CATS = [["A one-dominant", A], ["B equal-axes", B], ["C single-value-axis", C]];
 
 function verify7(name, cat) {
@@ -70,7 +66,7 @@ function verify7(name, cat) {
   assert.ok(tree.internalChoices.length >= 1, "tree is not trivial (at least one branch)");
   // SC1 axis rule re-run (v5, from transcript counts + node exact pool + axis grounding evidence)
   const statsAt = (poolRef) => { const t = oracle.transcript().filter((e) => e.transition_kind === "PROBE" && e.parent_pool_ref === poolRef); const byAxis = {}; for (const e of t) (byAxis[e.axis_id] ||= new Map()).set(e.option_ref, e.exact_count); return Object.fromEntries(Object.entries(byAxis).map(([a, m]) => [a, { sizes: [...m.values()], evidence: oracle.groundedCount(a) }])); };
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV6(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, leafTotalCap: TOTAL }), axisId, "SC1 rule re-run");
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV7(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR }), axisId, "SC1 rule re-run");
   // v5 u₀-reachability: no exact candidate is dropped by branching (all three catalogs use RELAXABLE softs)
   assert.ok(oracle.verifyReachability(tree.nodes).ok, "u₀-reachability: every exact candidate stays reachable");
   // SC2 accumulation
