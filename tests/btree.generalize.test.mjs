@@ -18,13 +18,14 @@ import { dirname, join } from "node:path";
 import { AuthoringOracle } from "../engine/kernel/authoringOracle/authoringOracle.js";
 import { enumerateQualifiedOptions } from "../engine/kernel/authoringOracle/enumerate.js";
 import { buildFullTree } from "../authoring/brain2/tree.js";
-import { chooseAxisByInfoGainV7 } from "../authoring/brain2/axisRule.js";
+import { chooseAxisByInfoGainV8 } from "../authoring/brain2/axisRule.js";
 
 let passed = 0;
 const check = (n, f) => { try { f(); passed++; console.log(`  ✓ ${n}`); } catch (e) { console.error(`  ✗ ${n}\n    ${e.message}`); process.exitCode = 1; } };
 const pol = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "config", "policy.json"), "utf8"));
 const LIMITS = { ...pol.authoring_tree, leaf_primary_cap: pol.surface.leaf_primary_cap };
 const MINR = pol.authoring_tree.min_exact_option_ratio;
+const MAXOPT = pol.authoring_tree.max_published_options_per_question;
 
 const CONTRACTS = [
   { axis_id: "type", type: "nominal", mode: "NEVER_RELAX", priority: 1 },
@@ -66,7 +67,7 @@ function verify7(name, cat) {
   assert.ok(tree.internalChoices.length >= 1, "tree is not trivial (at least one branch)");
   // SC1 axis rule re-run (v5, from transcript counts + node exact pool + axis grounding evidence)
   const statsAt = (poolRef) => { const t = oracle.transcript().filter((e) => e.transition_kind === "PROBE" && e.parent_pool_ref === poolRef); const byAxis = {}; for (const e of t) (byAxis[e.axis_id] ||= new Map()).set(e.option_ref, e.exact_count); return Object.fromEntries(Object.entries(byAxis).map(([a, m]) => [a, { sizes: [...m.values()], evidence: oracle.groundedCount(a) }])); };
-  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV7(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR }), axisId, "SC1 rule re-run");
+  for (const { node, axisId } of tree.internalChoices) assert.equal(chooseAxisByInfoGainV8(statsAt(node.pools.eligible_ref), { S: node.projection.counts.exact, minExactRatio: MINR, maxOptions: MAXOPT }), axisId, "SC1 rule re-run");
   // v5 u₀-reachability: no exact candidate is dropped by branching (all three catalogs use RELAXABLE softs)
   assert.ok(oracle.verifyReachability(tree.nodes).ok, "u₀-reachability: every exact candidate stays reachable");
   // SC2 accumulation

@@ -10,7 +10,7 @@
  * `RULE_V1` (most-options) and `RULE_V2` (max-info-gain) are both counts-only; the builder is rule-agnostic.
  */
 
-import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, AXIS_RULE_ID_V7, diagnoseAxesV7 } from "./axisRule.js";
+import { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, AXIS_RULE_ID_V7, diagnoseAxesV7, AXIS_RULE_ID_V8, diagnoseAxesV8 } from "./axisRule.js";
 
 export const RULE_V1 = {
   id: AXIS_RULE_ID,
@@ -158,6 +158,29 @@ export const RULE_V7 = {
   },
 };
 
+// v8 — current LAW (round-8). Ranking unchanged. Adds the OPTIONS CAP (a question with too many options is
+// routed to a ق20 display mode, not branched) and the CORRECTED mirror share (value-confirming options only).
+// Semantic mirror relations live in authoringGates.js (phase A). The counts-only brain here defaults every
+// option's `confirms` to true (no "don't care" option exists in the current model — a phase-A follow-up).
+export const RULE_V8 = {
+  id: AXIS_RULE_ID_V8,
+  pick(node, perAxisRefs, oracle, cfg = {}) {
+    const S = node.projection.counts.exact;
+    const stats = {};
+    for (const [ax, refs] of Object.entries(perAxisRefs)) {
+      stats[ax] = {
+        sizes: refs.map(({ option_ref }) => oracle.probeByRef(node, option_ref).projection.counts.exact),
+        confirms: refs.map(() => true),
+        evidence: oracle.groundedCount(ax),
+      };
+    }
+    const d = diagnoseAxesV8(stats, { S, minExactRatio: cfg.minExactRatio, maxOptions: cfg.maxOptions });
+    if (cfg.rejectionSink) for (const r of d.rejected) if (r.reason.startsWith("mirror") || r.reason.startsWith("options-cap")) cfg.rejectionSink.push({ node_hash: node.evaluation_hash, axis: r.ax, reason: r.reason, S });
+    if (cfg.signalSink && d.chosen) { const sig = d.signals.find((s) => s.ax === d.chosen); if (sig) cfg.signalSink.push({ node_hash: node.evaluation_hash, axis: d.chosen, mirror_singleton_share: sig.mirror_singleton_share, published_options: sig.published_options, S }); }
+    return d.chosen;
+  },
+};
+
 /**
  * buildFullTree — the WHOLE tree (round-3 full-tree rulings). Branching ends for a REASON (semantic stops),
  * bounded by policy hard limits (a safety net that FAILS the build on exceed — never a silent truncation).
@@ -166,15 +189,16 @@ export const RULE_V7 = {
  *   • semantic stop 2: no axis passes the exact-ratio gate ⇒ leaf.
  *   • hard limits (policy): max_tree_depth · max_nodes · max_oracle_calls_per_funnel ⇒ throw on exceed.
  */
-export function buildFullTree(oracle, { limits = {}, rule = RULE_V7 } = {}) {
+export function buildFullTree(oracle, { limits = {}, rule = RULE_V8 } = {}) {
   const leafPrimaryCap = limits.leaf_primary_cap ?? 1;
   const minExactRatio = limits.min_exact_option_ratio ?? 0.5;
   const mirrorDensityMax = limits.mirror_option_density_max ?? 0.5; // v4 legacy (RULE_V4 only)
   const mirrorSingletonShareMax = limits.mirror_singleton_share_max ?? 0.2; // v5 legacy (RULE_V5 only)
   const exemptBound = leafPrimaryCap + 1; // v5 legacy exemption (RULE_V5 only)
   const leafTotalCap = limits.leaf_total_cap ?? 4; // v6 legacy mirror anchor (RULE_V6 only)
-  const guardRejections = []; // decisive-mirror rejections reported as axis gate-failure signals
-  const mirrorSignals = []; // v7: reported minority-mirror share per chosen axis (NOT a gate)
+  const maxOptions = limits.max_published_options_per_question ?? null; // v8 options cap (derived from display)
+  const guardRejections = []; // decisive-mirror + options-cap rejections reported as axis gate-failure signals
+  const mirrorSignals = []; // reported minority-mirror share + published option count per chosen axis (NOT a gate)
   const maxDepth = limits.max_tree_depth ?? 6;
   const maxNodes = limits.max_nodes ?? 5000;
   const maxCalls = limits.max_oracle_calls_per_funnel ?? 100000;
@@ -198,7 +222,7 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V7 } = {}) {
     for (const ax of axes) { if (used.has(ax)) continue; const refs = oracle.enumerate(node, ax); if (refs.length) perAxisRefs[ax] = refs; }
     if (!Object.keys(perAxisRefs).length) { leaves.push(node); return; }
 
-    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio, mirrorDensityMax, mirrorSingletonShareMax, exemptBound, leafTotalCap, rejectionSink: guardRejections, signalSink: mirrorSignals });
+    const chosen = rule.pick(node, perAxisRefs, oracle, { minExactRatio, mirrorDensityMax, mirrorSingletonShareMax, exemptBound, leafTotalCap, maxOptions, rejectionSink: guardRejections, signalSink: mirrorSignals });
     if (!chosen) { leaves.push(node); return; } // semantic stop 2: no axis passes the guards (gate/mirror/reduction)
 
     internalChoices.push({ node, axisId: chosen });
@@ -222,4 +246,4 @@ export function buildFullTree(oracle, { limits = {}, rule = RULE_V7 } = {}) {
   return { root, nodes, internalChoices, leaves, meta, ruleId: rule.id, depth: maxObservedDepth, guardRejections, mirrorSignals };
 }
 
-export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3, RULE_V4, RULE_V5, RULE_V6, RULE_V7 };
+export default { buildTree, buildFullTree, RULE_V1, RULE_V2, RULE_V3, RULE_V4, RULE_V5, RULE_V6, RULE_V7, RULE_V8 };

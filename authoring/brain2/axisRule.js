@@ -273,4 +273,54 @@ export function diagnoseAxesV7(axisStats = {}, { S, minExactRatio = 0.5 } = {}) 
 /** v7 — the pure chooser (builder + verifier). */
 export function chooseAxisByInfoGainV7(axisStats = {}, cfg = {}) { return diagnoseAxesV7(axisStats, cfg).chosen; }
 
-export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7 };
+// v8 — mirror is BEHAVIORAL (one question that isolates candidates by itself), judged in layers, each in its
+// right place (consultation round-8). The counts-only brain keeps only the two error-free counting bounds and
+// the corrected signal; the semantic relations move to the authoring gates (authoringGates.js) where values
+// are visible. Changes vs v7:
+//   • OPTIONS CAP (the bound v7 was missing): a question with more published options than one display can hold
+//     is unusable regardless of mirror classification ⇒ not branched (routed to a ق20 display-mode decision).
+//     Threshold derived from the display contract (policy.max_published_options_per_question), not a free
+//     number. THIS is what actually stops a wide-catalog mirror the decisive bound lets through.
+//   • MIRROR SHARE corrected: measured over VALUE-CONFIRMING options only (u₀ AND any "don't care" option are
+//     excluded — they confirm no value), so a big don't-care bucket cannot mask a mirror. Ranking keeps both.
+//   • Decisive bound kept as-is (no option ≥2 ⇒ reject): zero false positives, but LARGE false negatives on
+//     wide catalogs — hence the options cap + authoring gates are the real defense (recorded in the ADR).
+export const AXIS_RULE_ID_V8 = "max-info-gain@v8";
+
+export function diagnoseAxesV8(axisStats = {}, { S, minExactRatio = 0.5, maxOptions = null } = {}) {
+  const rejected = [], signals = [];
+  if (!Number.isInteger(S) || S <= 0) return { chosen: null, ranked: [], rejected, signals };
+  const survivors = [];
+  for (const [ax, stat] of Object.entries(axisStats)) {
+    const sizes = (stat && stat.sizes) || [];
+    const confirms = (stat && stat.confirms) || sizes.map(() => true); // default: every option confirms a value
+    const k = sizes.length;
+    if (!k) { rejected.push({ ax, reason: "no-options" }); continue; }
+    const sumS = sizes.reduce((a, b) => a + b, 0);
+    const u0 = S - sumS;
+    if (u0 < 0) throw new Error(`diagnoseAxesV8: partition invariant Σsᵢ+u₀=S broken on axis "${ax}" — Σsᵢ (${sumS}) > S (${S})`);
+    const penalized = sizes.reduce((a, b) => a + b * b, 0) + u0 * u0; // RANKING: all options + u₀ are real buckets
+    if (S * S - penalized <= 0) { rejected.push({ ax, reason: "no-split" }); continue; } // reduction>0 strictly
+    // OPTIONS CAP (derived, the missing bound): too many options to show in one question ⇒ not a branch.
+    if (Number.isInteger(maxOptions) && k > maxOptions) { rejected.push({ ax, reason: `options-cap ${k}>${maxOptions} (route to ق20 display mode, not a branch)` }); continue; }
+    // DECISIVE mirror bound (zero false positives; large false negatives — see ADR). No option isolates >1.
+    if (Math.max(...sizes) < 2) { rejected.push({ ax, reason: "mirror:all-singleton (disguised grid)" }); continue; }
+    const ratio = sizes.filter((n) => n > 0).length / k;
+    if (ratio < minExactRatio) { rejected.push({ ax, reason: `mostly-compromise ${ratio.toFixed(2)}<${minExactRatio}` }); continue; }
+    // MIRROR SIGNAL (reported) — over VALUE-CONFIRMING options only (excludes u₀ AND "don't care"): a big
+    // don't-care bucket must NOT dilute the share and mask a mirror in the remaining options.
+    let confDenom = 0, confSingletons = 0;
+    for (let i = 0; i < k; i++) { if (!confirms[i]) continue; confDenom += sizes[i]; if (sizes[i] === 1) confSingletons++; }
+    const mirror_singleton_share = confDenom > 0 ? Number((confSingletons / confDenom).toFixed(3)) : 0;
+    signals.push({ ax, mirror_singleton_share, published_options: k });
+    survivors.push({ ax, penalized, k, maxSize: Math.max(...sizes), evidence: Number(stat.evidence) || 0, mirror_singleton_share, published_options: k });
+  }
+  survivors.sort((a, b) =>
+    (a.penalized - b.penalized) || (a.k - b.k) || (a.maxSize - b.maxSize) || (b.evidence - a.evidence) || (a.ax < b.ax ? -1 : a.ax > b.ax ? 1 : 0));
+  return { chosen: survivors.length ? survivors[0].ax : null, ranked: survivors, rejected, signals };
+}
+
+/** v8 — the pure chooser (builder + verifier). */
+export function chooseAxisByInfoGainV8(axisStats = {}, cfg = {}) { return diagnoseAxesV8(axisStats, cfg).chosen; }
+
+export default { chooseAxis, AXIS_RULE_ID, chooseAxisByInfoGain, AXIS_RULE_ID_V2, chooseAxisByInfoGainV3, AXIS_RULE_ID_V3, chooseAxisByInfoGainV4, AXIS_RULE_ID_V4, diagnoseAxesV4, chooseAxisByInfoGainV5, AXIS_RULE_ID_V5, diagnoseAxesV5, chooseAxisByInfoGainV6, AXIS_RULE_ID_V6, diagnoseAxesV6, chooseAxisByInfoGainV7, AXIS_RULE_ID_V7, diagnoseAxesV7, chooseAxisByInfoGainV8, AXIS_RULE_ID_V8, diagnoseAxesV8 };
