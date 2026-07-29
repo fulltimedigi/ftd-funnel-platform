@@ -71,6 +71,11 @@ function rankOf(constraint, value) {
   return order.indexOf(String(value));
 }
 
+/** An ordinal axis whose ROLE is a ceiling (ق13 budget_ceiling): "≤ answered band", not equality. */
+function isCeiling(constraint) {
+  return constraint.role === "budget_ceiling" || constraint.direction === "at_most";
+}
+
 /**
  * THE typed three-valued predicate. `answer` is what the shopper picked on this constraint;
  * `uv` is unitValue(unit, constraint). Returns { state, magnitude } (magnitude 0 unless VIOLATED).
@@ -98,6 +103,10 @@ export function status(constraint, answer, uv) {
     case "ordinal": {
       const ra = rankOf(constraint, answer), rv = rankOf(constraint, uv.value);
       if (ra < 0 || rv < 0) return { state: UNKNOWN, magnitude: 0 };
+      // budget_ceiling ROLE (ق13): the answer is a CEILING, not an equality target — a unit whose band is AT OR
+      // BELOW the answered band SATISFIES (cheaper is fine); only OVER-ceiling overshoots. This unifies ask-time
+      // (the tree question) with certify-time (the variant ceiling, ADR-0063) — one source of truth.
+      if (isCeiling(constraint)) return rv <= ra ? { state: SAT, magnitude: 0 } : { state: VIOLATED, magnitude: rv - ra };
       return ra === rv ? { state: SAT, magnitude: 0 } : { state: VIOLATED, magnitude: Math.abs(ra - rv) };
     }
     case "price": {

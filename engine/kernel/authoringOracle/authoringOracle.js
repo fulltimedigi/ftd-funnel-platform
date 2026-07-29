@@ -29,7 +29,7 @@ export class AuthoringOracle {
     // RESOLVED → kernel constraints (id = axis_id). The `resolved` predicate rides into the hash (C2).
     this._constraints = resolvedContracts.map((c) => ({
       id: c.axis_id, type: c.type, mode: c.mode, priority: c.priority || 0,
-      order: c.order || undefined, resolved: c.resolved || undefined,
+      order: c.order || undefined, resolved: c.resolved || undefined, role: c.role || undefined, direction: c.direction || undefined,
       descendants: c.descendants || undefined, requireProof: !!c.requireProof, strict: !!c.strict,
     }));
     this._context = context;
@@ -125,6 +125,12 @@ export class AuthoringOracle {
   /** SERVER-ONLY: the qualified-option COUNT for an axis at a node (for re-running the counts-only rule). */
   optionCount(node, axisId) { const a = this._session.answersOf(node); return enumerateQualifiedOptions(this._units, this._constraints, a, axisId).length; }
   axisIds() { return this._constraints.map((c) => String(c.id)); }
+  // BRANCHABLE axes exclude a budget_ceiling ROLE (ق13): a ceiling does NOT partition the pool (a family
+  // qualifies for every band ≤ its cheapest — overlapping sets), so it is a LEAF-LEVEL filter (variant ceiling,
+  // ADR-0063 / brain's variant-level budget), never an info-gain branch. This is what keeps the partition
+  // invariant (Σsᵢ+u₀=S) sound while the kernel matches the ceiling at certify-time.
+  ceilingAxisIds() { return this._constraints.filter((c) => c.role === "budget_ceiling" || c.direction === "at_most").map((c) => String(c.id)); }
+  branchableAxisIds() { const ceil = new Set(this.ceilingAxisIds()); return this.axisIds().filter((id) => !ceil.has(id)); }
   /**
    * SERVER-ONLY: the axis EVIDENCE DEGREE — how many units carry a GROUNDED value on the axis (a count,
    * never identities). This is the v4 tie-break signal (a better-evidenced axis wins an exact tie). It is a
